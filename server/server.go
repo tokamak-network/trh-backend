@@ -2,17 +2,20 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Server struct {
-	router *gin.Engine
+	router     *gin.Engine
+	postgresDB *gorm.DB
 }
 
-func NewServer() *Server {
-	router := gin.Default()
+func NewServer(db *gorm.DB) *Server {
+	app := gin.Default()
 
 	return &Server{
-		router: router,
+		router:     app,
+		postgresDB: db,
 	}
 }
 

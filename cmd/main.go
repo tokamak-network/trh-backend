@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"trh-backend/db"
 	"trh-backend/server"
 
 	"github.com/joho/godotenv"
@@ -21,8 +22,15 @@ func main() {
 		port = "8000"
 	}
 
-	server := server.NewServer()
+	postgresUser := os.Getenv("POSTGRES_USER")
+	postgresHost := os.Getenv("POSTGRES_HOST")
+	postgresPassword := os.Getenv("POSTGRES_PASSWORD")
+	postgresDatabase := os.Getenv("POSTGRES_DB")
+	postgresPort := os.Getenv("POSTGRES_PORT")
+
+	postgresDB := db.Init(postgresUser, postgresHost, postgresPassword, postgresDatabase, postgresPort)
+
+	server := server.NewServer(postgresDB)
 
 	server.Start(port)
-
 }
