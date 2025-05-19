@@ -1,4 +1,4 @@
-package server
+package servers
 
 import (
 	"github.com/gin-gonic/gin"
@@ -6,19 +6,19 @@ import (
 )
 
 type Server struct {
-	router     *gin.Engine
+	Router     *gin.Engine
 	postgresDB *gorm.DB
+}
+
+func (s *Server) Start(port string) error {
+	return s.Router.Run(":" + port)
 }
 
 func NewServer(db *gorm.DB) *Server {
 	app := gin.Default()
 
 	return &Server{
-		router:     app,
+		Router:     app,
 		postgresDB: db,
 	}
-}
-
-func (s *Server) Start(port string) error {
-	return s.router.Run(":" + port)
 }

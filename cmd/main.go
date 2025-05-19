@@ -3,8 +3,9 @@ package main
 import (
 	"log"
 	"os"
-	"trh-backend/db"
-	"trh-backend/server"
+	"trh-backend/internal/infrastructure/postgres/connection"
+	"trh-backend/internal/interfaces/api/routes"
+	"trh-backend/internal/interfaces/api/servers"
 
 	"github.com/joho/godotenv"
 )
@@ -28,9 +29,15 @@ func main() {
 	postgresDatabase := os.Getenv("POSTGRES_DB")
 	postgresPort := os.Getenv("POSTGRES_PORT")
 
-	postgresDB := db.Init(postgresUser, postgresHost, postgresPassword, postgresDatabase, postgresPort)
+	postgresDB := connection.Init(postgresUser, postgresHost, postgresPassword, postgresDatabase, postgresPort)
 
-	server := server.NewServer(postgresDB)
+	server := servers.NewServer(postgresDB)
 
-	server.Start(port)
+	routes.SetupRoutes(server)
+
+	err = server.Start(port)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 }
