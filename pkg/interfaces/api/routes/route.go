@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"trh-backend/internal/interfaces/api/handlers"
-	"trh-backend/internal/interfaces/api/servers"
+	"trh-backend/pkg/interfaces/api/handlers"
+	"trh-backend/pkg/interfaces/api/servers"
 
 	"github.com/gin-gonic/gin"
 )

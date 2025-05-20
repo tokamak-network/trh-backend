@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"trh-backend/internal/interfaces/api/servers"
+	"trh-backend/pkg/interfaces/api/servers"
 
 	"github.com/gin-gonic/gin"
 )

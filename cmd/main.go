@@ -3,9 +3,9 @@ package main
 import (
 	"log"
 	"os"
-	"trh-backend/internal/infrastructure/postgres/connection"
-	"trh-backend/internal/interfaces/api/routes"
-	"trh-backend/internal/interfaces/api/servers"
+	"trh-backend/pkg/infrastructure/postgres/connection"
+	"trh-backend/pkg/interfaces/api/routes"
+	"trh-backend/pkg/interfaces/api/servers"
 
 	"github.com/joho/godotenv"
 )
