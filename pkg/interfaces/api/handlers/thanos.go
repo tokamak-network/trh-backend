@@ -3,15 +3,16 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-	"trh-backend/pkg/domain/repositories"
+	"trh-backend/pkg/application/services"
 	postgresRepositories "trh-backend/pkg/infrastructure/postgres/repositories"
 	"trh-backend/pkg/interfaces/api/dtos"
 	"trh-backend/pkg/interfaces/api/servers"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ThanosHandler struct {
-	StackRepository repositories.StackRepository
+	StackService *services.StackService
 }
 
 func (h *ThanosHandler) DeployThanos(c *gin.Context) {
@@ -21,7 +22,7 @@ func (h *ThanosHandler) DeployThanos(c *gin.Context) {
 		return
 	}
 
-	stack, err := h.StackRepository.CreateStack(request)
+	stack, err := h.StackService.DeployStack(request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -36,12 +37,17 @@ func (h *ThanosHandler) DestroyThanos(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
+	err := h.StackService.DestroyStack(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "OK"})
 }
 
 func NewThanosHandler(server *servers.Server) *ThanosHandler {
 	stackRepository := postgresRepositories.NewStackPostgresRepository(server.PostgresDB)
 	return &ThanosHandler{
-		StackRepository: stackRepository,
+		StackService: services.NewStackService(stackRepository),
 	}
 }
