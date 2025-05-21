@@ -7,7 +7,7 @@ import (
 
 type Server struct {
 	Router     *gin.Engine
-	postgresDB *gorm.DB
+	PostgresDB *gorm.DB
 }
 
 func (s *Server) Start(port string) error {
@@ -19,6 +19,6 @@ func NewServer(db *gorm.DB) *Server {
 
 	return &Server{
 		Router:     app,
-		postgresDB: db,
+		PostgresDB: db,
 	}
 }

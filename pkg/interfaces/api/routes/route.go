@@ -1,20 +1,31 @@
 package routes
 
 import (
+	"github.com/gin-gonic/gin"
 	"trh-backend/pkg/interfaces/api/handlers"
 	"trh-backend/pkg/interfaces/api/servers"
-
-	"github.com/gin-gonic/gin"
 )
 
 func SetupRoutes(server *servers.Server) {
 	apiV1 := server.Router.Group("/api/v1")
+	setupV1Routes(apiV1, server)
 
-	groupHealth := apiV1.Group("/health")
-	GroupHealth(groupHealth, server)
+	healthGroup := server.Router.Group("/health")
+	setupHealthRoutes(healthGroup)
 }
 
-func GroupHealth(group *gin.RouterGroup, server *servers.Server) {
-	handler := handlers.NewHealthHandler(server)
-	group.GET("", handler.GetHealth)
+func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
+	stacks := router.Group("/stacks")
+	setupThanosRoutes(stacks.Group("/thanos"), server)
+}
+
+func setupHealthRoutes(router *gin.RouterGroup) {
+	handler := handlers.NewHealthHandler()
+	router.GET("", handler.GetHealth)
+}
+
+func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server) {
+	handler := handlers.NewThanosHandler(server)
+	router.POST("", handler.DeployThanos)
+	router.DELETE("/:id", handler.DestroyThanos)
 }

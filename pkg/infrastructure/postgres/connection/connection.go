@@ -6,6 +6,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"trh-backend/pkg/infrastructure/postgres/schemas"
 )
 
 func Init(
@@ -27,6 +28,8 @@ func Init(
 	if err != nil {
 		panic(err.Error())
 	}
+
+	db.AutoMigrate(&schemas.Stack{}, &schemas.Deployment{}, &schemas.Integration{})
 
 	return db
 }

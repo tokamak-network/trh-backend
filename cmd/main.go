@@ -3,11 +3,11 @@ package main
 import (
 	"log"
 	"os"
+
+	"github.com/joho/godotenv"
 	"trh-backend/pkg/infrastructure/postgres/connection"
 	"trh-backend/pkg/interfaces/api/routes"
 	"trh-backend/pkg/interfaces/api/servers"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -29,14 +29,19 @@ func main() {
 	postgresDatabase := os.Getenv("POSTGRES_DB")
 	postgresPort := os.Getenv("POSTGRES_PORT")
 
-	postgresDB := connection.Init(postgresUser, postgresHost, postgresPassword, postgresDatabase, postgresPort)
+	postgresDB := connection.Init(
+		postgresUser,
+		postgresHost,
+		postgresPassword,
+		postgresDatabase,
+		postgresPort,
+	)
 
 	server := servers.NewServer(postgresDB)
 
 	routes.SetupRoutes(server)
 
 	err = server.Start(port)
-
 	if err != nil {
 		log.Fatal(err)
 	}
