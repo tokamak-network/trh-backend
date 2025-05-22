@@ -1,4 +1,4 @@
-package schemas
+package entities
 
 type DeploymentNetwork string
 

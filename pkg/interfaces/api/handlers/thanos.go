@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"trh-backend/pkg/application/services"
-	postgresRepositories "trh-backend/pkg/infrastructure/postgres/repositories"
+	thanosDomainServices "trh-backend/pkg/domain/services"
 	"trh-backend/pkg/interfaces/api/dtos"
 	"trh-backend/pkg/interfaces/api/servers"
 
@@ -12,7 +12,7 @@ import (
 )
 
 type ThanosHandler struct {
-	StackService *services.StackService
+	ThanosService *services.ThanosService
 }
 
 func (h *ThanosHandler) DeployThanos(c *gin.Context) {
@@ -22,13 +22,13 @@ func (h *ThanosHandler) DeployThanos(c *gin.Context) {
 		return
 	}
 
-	stack, err := h.StackService.DeployStack(request)
+	stackId, err := h.ThanosService.DeployThanosStack(request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "OK", "stack": stack})
+	c.JSON(http.StatusOK, gin.H{"message": "OK", "stackId": stackId})
 }
 
 func (h *ThanosHandler) DestroyThanos(c *gin.Context) {
@@ -37,7 +37,7 @@ func (h *ThanosHandler) DestroyThanos(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	err := h.StackService.DestroyStack(id)
+	err := h.ThanosService.DestroyThanosStack(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -46,8 +46,8 @@ func (h *ThanosHandler) DestroyThanos(c *gin.Context) {
 }
 
 func NewThanosHandler(server *servers.Server) *ThanosHandler {
-	stackRepository := postgresRepositories.NewStackPostgresRepository(server.PostgresDB)
+	thanosDomainService := thanosDomainServices.NewThanosDomainService()
 	return &ThanosHandler{
-		StackService: services.NewStackService(stackRepository),
+		ThanosService: services.NewThanosService(server.PostgresDB, thanosDomainService),
 	}
 }

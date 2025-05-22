@@ -1,14 +1,11 @@
 package repositories
 
 import (
-	"encoding/json"
+	"trh-backend/pkg/domain/entities"
+	"trh-backend/pkg/infrastructure/postgres/schemas"
 
-	"github.com/google/uuid"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
-	"trh-backend/internal/utils"
-	"trh-backend/pkg/infrastructure/postgres/schemas"
-	"trh-backend/pkg/interfaces/api/dtos"
 )
 
 type StackPostgresRepository struct {
@@ -20,33 +17,32 @@ func NewStackPostgresRepository(db *gorm.DB) *StackPostgresRepository {
 }
 
 func (r *StackPostgresRepository) CreateStack(
-	stack dtos.DeployThanosRequest,
-) (schemas.Stack, error) {
-	deploymentId := uuid.New()
-	deploymentPath := utils.GetDeploymentPath("thanos", stack.Network, deploymentId.String())
-	stackJson, err := json.Marshal(stack)
-	if err != nil {
-		return schemas.Stack{}, err
-	}
+	stack *entities.StackEntity,
+) error {
 	newStack := schemas.Stack{
-		ID:             deploymentId,
-		Name:           "thanos",
-		Status:         schemas.StatusActive,
+		ID:             stack.ID,
+		Name:           stack.Name,
 		Network:        stack.Network,
-		DeploymentPath: deploymentPath,
-		Config:         datatypes.JSON(stackJson),
+		Config:         datatypes.JSON(stack.Config),
+		DeploymentPath: stack.DeploymentPath,
+		Status:         stack.Status,
 	}
-	err = r.db.Create(&newStack).Error
+	err := r.db.Create(&newStack).Error
 	if err != nil {
-		return schemas.Stack{}, err
+		return err
 	}
-	return newStack, nil
+	return nil
 }
 
-func (r *StackPostgresRepository) DeleteStack(id string) error {
+func (r *StackPostgresRepository) DeleteStack(
+	id string,
+) error {
 	return r.db.Delete(&schemas.Stack{}, id).Error
 }
 
-func (r *StackPostgresRepository) UpdateStatus(id string, status schemas.Status) error {
+func (r *StackPostgresRepository) UpdateStatus(
+	id string,
+	status entities.Status,
+) error {
 	return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("status", status).Error
 }

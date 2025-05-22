@@ -2,14 +2,22 @@ package utils
 
 import (
 	"path"
+	"trh-backend/pkg/domain/entities"
 
-	"trh-backend/pkg/infrastructure/postgres/schemas"
+	"github.com/google/uuid"
 )
 
 func GetDeploymentPath(
 	stack string,
-	network schemas.DeploymentNetwork,
+	network entities.DeploymentNetwork,
 	deploymentID string,
 ) string {
 	return path.Join("storage", "deployments", stack, string(network), deploymentID)
+}
+
+func GetDeploymentLogPath(
+	stackID uuid.UUID,
+	deploymentID uuid.UUID,
+) string {
+	return path.Join("storage", "logs", stackID.String(), deploymentID.String(), "logs.txt")
 }
