@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"encoding/json"
 	"trh-backend/pkg/domain/entities"
 	"trh-backend/pkg/infrastructure/postgres/schemas"
 
@@ -45,4 +46,22 @@ func (r *StackPostgresRepository) UpdateStatus(
 	status entities.Status,
 ) error {
 	return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("status", status).Error
+}
+
+func (r *StackPostgresRepository) GetStack(
+	id string,
+) (*entities.StackEntity, error) {
+	var stack schemas.Stack
+	err := r.db.Where("id = ?", id).First(&stack).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entities.StackEntity{
+		ID:             stack.ID,
+		Name:           stack.Name,
+		Network:        stack.Network,
+		Config:         json.RawMessage(stack.Config),
+		DeploymentPath: stack.DeploymentPath,
+		Status:         stack.Status,
+	}, nil
 }

@@ -13,3 +13,8 @@ type DeploymentEntity struct {
 	Status        DeploymentStatus `json:"status"`
 	LogPath       string           `json:"log_path"`
 }
+
+type DeploymentStatusWithID struct {
+	DeploymentID uuid.UUID
+	Status       DeploymentStatus
+}

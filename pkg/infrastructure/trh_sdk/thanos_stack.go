@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// TODO: This is a mock implementation of the ThanosStack interface.
+// We should use the actual implementation of the ThanosStack interface.
 type ThanosStack interface {
 	DeployInfrastructure() error
 	DestroyInfrastructure() error
