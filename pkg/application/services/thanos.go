@@ -2,16 +2,21 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
+	"trh-backend/internal/consts"
 	"trh-backend/internal/utils"
 	"trh-backend/pkg/domain/entities"
 	"trh-backend/pkg/domain/services"
 	postgresRepositories "trh-backend/pkg/infrastructure/postgres/repositories"
-	trh_sdk "trh-backend/pkg/infrastructure/trh_sdk"
+	trh_sdk_infrastructure "trh-backend/pkg/infrastructure/trh_sdk"
 	"trh-backend/pkg/interfaces/api/dtos"
 
 	"github.com/google/uuid"
+	trh_sdk_aws "github.com/tokamak-network/trh-sdk/pkg/cloud-provider/aws"
+	trh_sdk_types "github.com/tokamak-network/trh-sdk/pkg/types"
+	trh_sdk_utils "github.com/tokamak-network/trh-sdk/pkg/utils"
 	"gorm.io/gorm"
 )
 
@@ -142,7 +147,7 @@ func (s *ThanosService) deployStack(
 ) {
 	defer close(statusChan)
 
-	thanosStack := trh_sdk.NewThanosStack()
+	thanosStack := trh_sdk_infrastructure.NewThanosStack()
 
 	// Deploy L1 Contracts
 	statusChan <- entities.DeploymentStatusWithID{
@@ -181,4 +186,62 @@ func (s *ThanosService) deployStack(
 		DeploymentID: infrastructureDeploymentID,
 		Status:       entities.DeploymentStatusCompleted,
 	}
+}
+
+func (s *ThanosService) ValidateThanosRequest(request dtos.DeployThanosRequest) error {
+	if request.Network == entities.DeploymentNetworkLocalDevnet {
+		return errors.New("local devnet is not supported yet")
+	}
+
+	// Validate L1 RPC URL
+	if !trh_sdk_utils.IsValidL1RPC(request.L1RpcUrl) {
+		fmt.Printf("invalid l1RpcUrl %s", request.L1RpcUrl)
+		return errors.New("invalid l1RpcUrl")
+	}
+
+	// Validate L1 Beacon URL
+	if !trh_sdk_utils.IsValidBeaconURL(request.L1BeaconUrl) {
+		fmt.Printf("invalid l1BeaconUrl %s", request.L1BeaconUrl)
+		return errors.New("invalid l1BeaconUrl")
+	}
+
+	// Validate AWS Access Key
+	if !trh_sdk_utils.IsValidAWSAccessKey(request.AwsAccessKey) {
+		fmt.Printf("invalid awsAccessKey %s", request.AwsAccessKey)
+		return errors.New("invalid awsAccessKey")
+	}
+
+	// Validate AWS Secret Key
+	if !trh_sdk_utils.IsValidAWSSecretKey(request.AwsSecretAccessKey) {
+		fmt.Printf("invalid awsSecretKey %s", request.AwsSecretAccessKey)
+		return errors.New("invalid awsSecretKey")
+	}
+
+	// Validate AWS Region
+	if !trh_sdk_aws.IsAvailableRegion(request.AwsAccessKey, request.AwsSecretAccessKey, request.AwsRegion) {
+		fmt.Printf("invalid awsRegion %s", request.AwsRegion)
+		return errors.New("invalid awsRegion")
+	}
+
+	// Validate Chain Config
+	chainID, err := utils.GetChainIDFromRPC(request.L1RpcUrl)
+	if err != nil {
+		fmt.Printf("invalid chainId %s", err)
+		return errors.New("invalid chainId")
+	}
+	chainConfig := trh_sdk_types.ChainConfiguration{
+		BatchSubmissionFrequency: uint64(request.BatchSubmissionFrequency),
+		OutputRootFrequency:      uint64(request.OutputRootFrequency),
+		ChallengePeriod:          uint64(request.ChallengePeriod),
+		L2BlockTime:              uint64(request.L2BlockTime),
+		L1BlockTime:              consts.L1_BLOCK_TIME,
+	}
+
+	err = chainConfig.Validate(chainID)
+	if err != nil {
+		fmt.Printf("invalid chainConfig %s", err)
+		return err
+	}
+
+	return nil
 }

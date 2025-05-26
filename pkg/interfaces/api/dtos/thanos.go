@@ -16,7 +16,7 @@ type DeployThanosRequest struct {
 	ProposerAccount          string                     `json:"proposerAccount"          binding:"required" validate:"eth_address"`
 	AwsAccessKey             string                     `json:"awsAccessKey"             binding:"required"`
 	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey"       binding:"required"`
-	AwsRegion                string                     `json:"awsRegion"                                                                                biknding:"required"`
+	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
 	ChainName                string                     `json:"chainName"                binding:"required"`
 }
 
