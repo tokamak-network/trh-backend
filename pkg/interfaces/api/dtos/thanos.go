@@ -19,7 +19,6 @@ type DeployThanosRequest struct {
 	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
 	ChainName                string                     `json:"chainName"                binding:"required"`
 	DeploymentPath           string                     `json:"deploymentPath"`
-	LogPath                  string                     `json:"logPath"`
 }
 
 type DeployL1ContractsRequest struct {
@@ -35,6 +34,17 @@ type DeployL1ContractsRequest struct {
 	ProposerAccount          string                     `json:"proposerAccount"          binding:"required" validate:"eth_address"`
 	DeploymentPath           string                     `json:"deploymentPath"           binding:"required"`
 	LogPath                  string                     `json:"logPath"                  binding:"required"`
+}
+
+type DeployThanosAWSInfraRequest struct {
+	ChainName          string `json:"chainName" binding:"required"`
+	Network            string `json:"network" binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
+	L1BeaconUrl        string `json:"l1BeaconUrl" binding:"required" validate:"url"`
+	AwsAccessKey       string `json:"awsAccessKey" binding:"required"`
+	AwsSecretAccessKey string `json:"awsSecretAccessKey" binding:"required"`
+	AwsRegion          string `json:"awsRegion" binding:"required"`
+	DeploymentPath     string `json:"deploymentPath" binding:"required"`
+	LogPath            string `json:"logPath" binding:"required"`
 }
 
 type DeployThanosResponse struct {

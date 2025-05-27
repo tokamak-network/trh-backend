@@ -4,16 +4,23 @@ import (
 	"log"
 	"os"
 
-	"github.com/joho/godotenv"
+	"trh-backend/internal/logger"
 	"trh-backend/pkg/infrastructure/postgres/connection"
 	"trh-backend/pkg/interfaces/api/routes"
 	"trh-backend/pkg/interfaces/api/servers"
+
+	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 func main() {
+
+	// Initialize logger
+	logger.Init()
+
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Println("Failed to load environment.")
+		logger.Error("Failed to load environment.", zap.Error(err))
 		return
 	}
 
@@ -43,6 +50,7 @@ func main() {
 
 	err = server.Start(port)
 	if err != nil {
+		logger.Error("Failed to start server", zap.Error(err))
 		log.Fatal(err)
 	}
 }

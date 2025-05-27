@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
+	"regexp"
 	"trh-backend/internal/consts"
+	"trh-backend/internal/logger"
 	"trh-backend/internal/utils"
 	"trh-backend/pkg/domain/entities"
 	"trh-backend/pkg/domain/services"
@@ -13,11 +14,17 @@ import (
 	trh_sdk_infrastructure "trh-backend/pkg/infrastructure/trh_sdk"
 	"trh-backend/pkg/interfaces/api/dtos"
 
+	"go.uber.org/zap"
+
 	"github.com/google/uuid"
 	trh_sdk_aws "github.com/tokamak-network/trh-sdk/pkg/cloud-provider/aws"
 	trh_sdk_types "github.com/tokamak-network/trh-sdk/pkg/types"
 	trh_sdk_utils "github.com/tokamak-network/trh-sdk/pkg/utils"
 	"gorm.io/gorm"
+)
+
+var (
+	chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]*$`)
 )
 
 type ThanosService struct {
@@ -97,16 +104,23 @@ func (s *ThanosService) DeployThanosStackWithSDK(
 	stackRepo *postgresRepositories.StackPostgresRepository,
 	deploymentRepo *postgresRepositories.DeploymentPostgresRepository,
 ) error {
-	fmt.Println("Deploying Thanos Stack with SDK")
+	logger.Info("Deploying Thanos Stack with SDK")
 	// Get the stack config
 	stack, err := stackRepo.GetStack(stackId.String())
 	if err != nil {
 		return err
 	}
+
 	l1ContractDeployment, err := deploymentRepo.GetDeployment(l1ContractDeploymentID.String())
 	if err != nil {
 		return err
 	}
+
+	infrastructureDeployment, err := deploymentRepo.GetDeployment(infrastructureDeploymentID.String())
+	if err != nil {
+		return err
+	}
+
 	stackConfig := dtos.DeployThanosRequest{}
 	deploymentPath := stack.DeploymentPath
 	err = json.Unmarshal(stack.Config, &stackConfig)
@@ -114,10 +128,9 @@ func (s *ThanosService) DeployThanosStackWithSDK(
 		return err
 	}
 	stackConfig.DeploymentPath = deploymentPath
-	stackConfig.LogPath = l1ContractDeployment.LogPath
 
 	// Update the status of stack to deploying
-	fmt.Println("Updating stack status to creating")
+	logger.Info("Updating stack status to creating")
 	if err := stackRepo.UpdateStatus(stackId.String(), entities.StatusCreating); err != nil {
 		return err
 	}
@@ -126,8 +139,8 @@ func (s *ThanosService) DeployThanosStackWithSDK(
 	deploymentStatusChan := make(chan entities.DeploymentStatusWithID)
 
 	// Start the deployment process in a goroutine
-	fmt.Println("Starting deployment process")
-	go s.deployStack(deploymentStatusChan, l1ContractDeploymentID, infrastructureDeploymentID, stackConfig)
+	logger.Info("Starting deployment process")
+	go s.deployStack(deploymentStatusChan, l1ContractDeployment, infrastructureDeployment, stackConfig)
 
 	// Process deployment status updates
 	var lastError error
@@ -141,9 +154,9 @@ func (s *ThanosService) DeployThanosStackWithSDK(
 	}
 
 	// Update stack status to active regardless of deployment outcome
-	fmt.Println("Updating stack status to active")
+	logger.Info("Updating stack status to active")
 	if err := stackRepo.UpdateStatus(stackId.String(), entities.StatusActive); err != nil {
-		fmt.Println("Error updating stack status to active:", err)
+		logger.Error("Error updating stack status to active:", zap.Error(err))
 		if lastError == nil {
 			lastError = err
 		}
@@ -154,8 +167,8 @@ func (s *ThanosService) DeployThanosStackWithSDK(
 
 func (s *ThanosService) deployStack(
 	statusChan chan entities.DeploymentStatusWithID,
-	l1ContractDeploymentID uuid.UUID,
-	infrastructureDeploymentID uuid.UUID,
+	l1ContractDeployment *entities.DeploymentEntity,
+	infrastructureDeployment *entities.DeploymentEntity,
 	stackConfig dtos.DeployThanosRequest,
 ) {
 	defer close(statusChan)
@@ -164,7 +177,7 @@ func (s *ThanosService) deployStack(
 
 	// Deploy L1 Contracts
 	statusChan <- entities.DeploymentStatusWithID{
-		DeploymentID: l1ContractDeploymentID,
+		DeploymentID: l1ContractDeployment.ID,
 		Status:       entities.DeploymentStatusInProgress,
 	}
 
@@ -180,38 +193,49 @@ func (s *ThanosService) deployStack(
 		BatcherAccount:           stackConfig.BatcherAccount,
 		ProposerAccount:          stackConfig.ProposerAccount,
 		DeploymentPath:           stackConfig.DeploymentPath,
-		LogPath:                  stackConfig.LogPath,
+		LogPath:                  l1ContractDeployment.LogPath,
 	}
 
 	if err := thanosStack.DeployL1Contracts(&deployL1ContractsRequest); err != nil {
 		statusChan <- entities.DeploymentStatusWithID{
-			DeploymentID: l1ContractDeploymentID,
+			DeploymentID: l1ContractDeployment.ID,
 			Status:       entities.DeploymentStatusFailed,
 		}
 		return
 	}
 
 	statusChan <- entities.DeploymentStatusWithID{
-		DeploymentID: l1ContractDeploymentID,
+		DeploymentID: l1ContractDeployment.ID,
 		Status:       entities.DeploymentStatusCompleted,
 	}
 
 	// Deploy Infrastructure
 	statusChan <- entities.DeploymentStatusWithID{
-		DeploymentID: infrastructureDeploymentID,
+		DeploymentID: infrastructureDeployment.ID,
 		Status:       entities.DeploymentStatusInProgress,
 	}
 
-	if err := thanosStack.DeployInfrastructure(); err != nil {
+	deployThanosAWSInfraRequest := dtos.DeployThanosAWSInfraRequest{
+		ChainName:          stackConfig.ChainName,
+		Network:            string(stackConfig.Network),
+		L1BeaconUrl:        stackConfig.L1BeaconUrl,
+		AwsAccessKey:       stackConfig.AwsAccessKey,
+		AwsSecretAccessKey: stackConfig.AwsSecretAccessKey,
+		AwsRegion:          stackConfig.AwsRegion,
+		DeploymentPath:     stackConfig.DeploymentPath,
+		LogPath:            infrastructureDeployment.LogPath,
+	}
+
+	if err := thanosStack.DeployAWSInfrastructure(&deployThanosAWSInfraRequest); err != nil {
 		statusChan <- entities.DeploymentStatusWithID{
-			DeploymentID: infrastructureDeploymentID,
+			DeploymentID: infrastructureDeployment.ID,
 			Status:       entities.DeploymentStatusFailed,
 		}
 		return
 	}
 
 	statusChan <- entities.DeploymentStatusWithID{
-		DeploymentID: infrastructureDeploymentID,
+		DeploymentID: infrastructureDeployment.ID,
 		Status:       entities.DeploymentStatusCompleted,
 	}
 }
@@ -221,40 +245,46 @@ func (s *ThanosService) ValidateThanosRequest(request dtos.DeployThanosRequest) 
 		return errors.New("local devnet is not supported yet")
 	}
 
+	// Validate Chain Name
+	if !chainNameRegex.MatchString(request.ChainName) {
+		logger.Error("invalid chainName", zap.String("chainName", request.ChainName))
+		return errors.New("invalid chain name, chain name must contain only letters (a-z, A-Z), numbers (0-9), spaces. Special characters are not allowed")
+	}
+
 	// Validate L1 RPC URL
 	if !trh_sdk_utils.IsValidL1RPC(request.L1RpcUrl) {
-		fmt.Printf("invalid l1RpcUrl %s", request.L1RpcUrl)
+		logger.Error("invalid l1RpcUrl", zap.String("l1RpcUrl", request.L1RpcUrl))
 		return errors.New("invalid l1RpcUrl")
 	}
 
 	// Validate L1 Beacon URL
 	if !trh_sdk_utils.IsValidBeaconURL(request.L1BeaconUrl) {
-		fmt.Printf("invalid l1BeaconUrl %s", request.L1BeaconUrl)
+		logger.Error("invalid l1BeaconUrl", zap.String("l1BeaconUrl", request.L1BeaconUrl))
 		return errors.New("invalid l1BeaconUrl")
 	}
 
 	// Validate AWS Access Key
 	if !trh_sdk_utils.IsValidAWSAccessKey(request.AwsAccessKey) {
-		fmt.Printf("invalid awsAccessKey %s", request.AwsAccessKey)
+		logger.Error("invalid awsAccessKey", zap.String("awsAccessKey", request.AwsAccessKey))
 		return errors.New("invalid awsAccessKey")
 	}
 
 	// Validate AWS Secret Key
 	if !trh_sdk_utils.IsValidAWSSecretKey(request.AwsSecretAccessKey) {
-		fmt.Printf("invalid awsSecretKey %s", request.AwsSecretAccessKey)
+		logger.Error("invalid awsSecretKey", zap.String("awsSecretAccessKey", request.AwsSecretAccessKey))
 		return errors.New("invalid awsSecretKey")
 	}
 
 	// Validate AWS Region
 	if !trh_sdk_aws.IsAvailableRegion(request.AwsAccessKey, request.AwsSecretAccessKey, request.AwsRegion) {
-		fmt.Printf("invalid awsRegion %s", request.AwsRegion)
+		logger.Error("invalid awsRegion", zap.String("awsRegion", request.AwsRegion))
 		return errors.New("invalid awsRegion")
 	}
 
 	// Validate Chain Config
 	chainID, err := utils.GetChainIDFromRPC(request.L1RpcUrl)
 	if err != nil {
-		fmt.Printf("invalid chainId %s", err)
+		logger.Error("invalid chainId", zap.String("chainId", err.Error()))
 		return errors.New("invalid chainId")
 	}
 	chainConfig := trh_sdk_types.ChainConfiguration{
@@ -267,7 +297,7 @@ func (s *ThanosService) ValidateThanosRequest(request dtos.DeployThanosRequest) 
 
 	err = chainConfig.Validate(chainID)
 	if err != nil {
-		fmt.Printf("invalid chainConfig %s", err)
+		logger.Error("invalid chainConfig", zap.String("chainConfig", err.Error()))
 		return err
 	}
 

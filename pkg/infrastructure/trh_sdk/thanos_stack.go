@@ -5,7 +5,8 @@ import (
 	"errors"
 	"math/rand"
 	"time"
-
+	"trh-backend/internal/consts"
+	"trh-backend/internal/logger"
 	"trh-backend/pkg/interfaces/api/dtos"
 
 	trh_sdk_logging "github.com/tokamak-network/trh-sdk/pkg/logging"
@@ -16,8 +17,8 @@ import (
 // TODO: This is a mock implementation of the ThanosStack interface.
 // We should use the actual implementation of the ThanosStack interface.
 type ThanosStack interface {
-	DeployInfrastructure() error
-	DestroyInfrastructure() error
+	DeployAWSInfrastructure(req *dtos.DeployThanosAWSInfraRequest) error
+	DestroyAWSInfrastructure() error
 	DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error
 }
 
@@ -28,17 +29,38 @@ func NewThanosStack() ThanosStack {
 	return &ThanosStackImpl{}
 }
 
-func (t *ThanosStackImpl) DeployInfrastructure() error {
-	time.Sleep(10 * time.Second)
+func (t *ThanosStackImpl) DeployAWSInfrastructure(req *dtos.DeployThanosAWSInfraRequest) error {
+	trh_logger := trh_sdk_logging.InitLogger(req.LogPath)
 
-	// Randomly return error or success
-	if rand.Float32() < 0.5 {
-		return errors.New("random deployment failure")
+	logger.Info("Deploying AWS Infrastructure...")
+
+	awsConfig := trh_sdk_types.AWSConfig{
+		AccessKey: req.AwsAccessKey,
+		SecretKey: req.AwsSecretAccessKey,
+		Region:    req.AwsRegion,
 	}
+
+	s, err := trh_sdk_thanos.NewThanosStack(trh_logger, string(req.Network), true, req.DeploymentPath, &awsConfig)
+	if err != nil {
+		return err
+	}
+
+	deployInfraInput := trh_sdk_thanos.DeployInfraInput{
+		ChainName:   req.ChainName,
+		L1BeaconURL: req.L1BeaconUrl,
+	}
+
+	err = s.Deploy(context.Background(), consts.AWS, &deployInfraInput)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("AWS Infrastructure deployed successfully")
+
 	return nil
 }
 
-func (t *ThanosStackImpl) DestroyInfrastructure() error {
+func (t *ThanosStackImpl) DestroyAWSInfrastructure() error {
 	time.Sleep(10 * time.Second)
 
 	// Randomly return error or success
@@ -49,8 +71,9 @@ func (t *ThanosStackImpl) DestroyInfrastructure() error {
 }
 
 func (t *ThanosStackImpl) DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error {
-	logger := trh_sdk_logging.InitLogger(req.LogPath)
-	s, err := trh_sdk_thanos.NewThanosStack(logger, string(req.Network), true, req.DeploymentPath, nil)
+	logger.Info("Deploying L1 Contracts...")
+	trh_logger := trh_sdk_logging.InitLogger(req.LogPath)
+	s, err := trh_sdk_thanos.NewThanosStack(trh_logger, string(req.Network), true, req.DeploymentPath, nil)
 	if err != nil {
 		return err
 	}
@@ -79,5 +102,7 @@ func (t *ThanosStackImpl) DeployL1Contracts(req *dtos.DeployL1ContractsRequest) 
 	if err != nil {
 		return err
 	}
+
+	logger.Info("L1 Contracts deployed successfully")
 	return nil
 }
