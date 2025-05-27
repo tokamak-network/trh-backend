@@ -35,3 +35,11 @@ func (r *DeploymentPostgresRepository) UpdateDeploymentStatus(id string, status 
 func (r *DeploymentPostgresRepository) DeleteDeployment(id string) error {
 	return r.db.Delete(&schemas.Deployment{}, id).Error
 }
+
+func (r *DeploymentPostgresRepository) GetDeployment(id string) (*entities.DeploymentEntity, error) {
+	var deployment schemas.Deployment
+	if err := r.db.Where("id = ?", id).First(&deployment).Error; err != nil {
+		return nil, err
+	}
+	return &entities.DeploymentEntity{ID: deployment.ID, StackID: deployment.StackID, IntegrationID: deployment.IntegrationID, Step: deployment.Step, Name: deployment.Name, Status: deployment.Status, LogPath: deployment.LogPath}, nil
+}

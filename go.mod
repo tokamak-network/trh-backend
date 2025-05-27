@@ -5,10 +5,11 @@ go 1.23.0
 toolchain go1.23.9
 
 require (
+	github.com/ethereum/go-ethereum v1.15.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/tokamak-network/trh-sdk v0.0.0-20250526074036-60a126303abc
+	github.com/tokamak-network/trh-sdk v0.0.0-20250526151455-4abaf3ee6ee4
 	gorm.io/datatypes v1.2.5
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.26.1
@@ -50,7 +51,6 @@ require (
 	github.com/deckarep/golang-set/v2 v2.7.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.3 // indirect
-	github.com/ethereum/go-ethereum v1.15.2 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect

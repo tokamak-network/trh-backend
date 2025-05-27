@@ -98,11 +98,23 @@ func (s *ThanosService) DeployThanosStackWithSDK(
 	deploymentRepo *postgresRepositories.DeploymentPostgresRepository,
 ) error {
 	fmt.Println("Deploying Thanos Stack with SDK")
-	// Check if stack exists
-	_, err := stackRepo.GetStack(stackId.String())
+	// Get the stack config
+	stack, err := stackRepo.GetStack(stackId.String())
 	if err != nil {
 		return err
 	}
+	l1ContractDeployment, err := deploymentRepo.GetDeployment(l1ContractDeploymentID.String())
+	if err != nil {
+		return err
+	}
+	stackConfig := dtos.DeployThanosRequest{}
+	deploymentPath := stack.DeploymentPath
+	err = json.Unmarshal(stack.Config, &stackConfig)
+	if err != nil {
+		return err
+	}
+	stackConfig.DeploymentPath = deploymentPath
+	stackConfig.LogPath = l1ContractDeployment.LogPath
 
 	// Update the status of stack to deploying
 	fmt.Println("Updating stack status to creating")
@@ -115,7 +127,7 @@ func (s *ThanosService) DeployThanosStackWithSDK(
 
 	// Start the deployment process in a goroutine
 	fmt.Println("Starting deployment process")
-	go s.deployStack(deploymentStatusChan, l1ContractDeploymentID, infrastructureDeploymentID)
+	go s.deployStack(deploymentStatusChan, l1ContractDeploymentID, infrastructureDeploymentID, stackConfig)
 
 	// Process deployment status updates
 	var lastError error
@@ -144,6 +156,7 @@ func (s *ThanosService) deployStack(
 	statusChan chan entities.DeploymentStatusWithID,
 	l1ContractDeploymentID uuid.UUID,
 	infrastructureDeploymentID uuid.UUID,
+	stackConfig dtos.DeployThanosRequest,
 ) {
 	defer close(statusChan)
 
@@ -155,7 +168,22 @@ func (s *ThanosService) deployStack(
 		Status:       entities.DeploymentStatusInProgress,
 	}
 
-	if err := thanosStack.DeployL1Contracts(); err != nil {
+	deployL1ContractsRequest := dtos.DeployL1ContractsRequest{
+		Network:                  stackConfig.Network,
+		L1RpcUrl:                 stackConfig.L1RpcUrl,
+		L2BlockTime:              stackConfig.L2BlockTime,
+		BatchSubmissionFrequency: stackConfig.BatchSubmissionFrequency,
+		OutputRootFrequency:      stackConfig.OutputRootFrequency,
+		ChallengePeriod:          stackConfig.ChallengePeriod,
+		AdminAccount:             stackConfig.AdminAccount,
+		SequencerAccount:         stackConfig.SequencerAccount,
+		BatcherAccount:           stackConfig.BatcherAccount,
+		ProposerAccount:          stackConfig.ProposerAccount,
+		DeploymentPath:           stackConfig.DeploymentPath,
+		LogPath:                  stackConfig.LogPath,
+	}
+
+	if err := thanosStack.DeployL1Contracts(&deployL1ContractsRequest); err != nil {
 		statusChan <- entities.DeploymentStatusWithID{
 			DeploymentID: l1ContractDeploymentID,
 			Status:       entities.DeploymentStatusFailed,
