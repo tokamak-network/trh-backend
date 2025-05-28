@@ -71,7 +71,7 @@ func (s *ThanosService) CreateThanosStack(request dtos.DeployThanosRequest) (uui
 		return uuid.Nil, err
 	}
 
-	deployments, err := s.ThanosDomainService.GetThanosStackDeployments(stackId, &request)
+	deployments, err := s.ThanosDomainService.GetThanosStackDeployments(stackId, &request, deploymentPath)
 	if err != nil {
 		return uuid.Nil, err
 	}

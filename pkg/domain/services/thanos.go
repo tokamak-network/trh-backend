@@ -16,7 +16,7 @@ func NewThanosDomainService() *ThanosDomainService {
 	return &ThanosDomainService{}
 }
 
-func (s *ThanosDomainService) GetThanosStackDeployments(stackId uuid.UUID, config *dtos.DeployThanosRequest) ([]entities.DeploymentEntity, error) {
+func (s *ThanosDomainService) GetThanosStackDeployments(stackId uuid.UUID, config *dtos.DeployThanosRequest, deploymentPath string) ([]entities.DeploymentEntity, error) {
 	deployments := []entities.DeploymentEntity{}
 	l1ContractDeploymentID := uuid.New()
 	l1ContractDeploymentLogPath := utils.GetDeploymentLogPath(stackId, l1ContractDeploymentID)
@@ -31,7 +31,7 @@ func (s *ThanosDomainService) GetThanosStackDeployments(stackId uuid.UUID, confi
 		SequencerAccount:         config.SequencerAccount,
 		BatcherAccount:           config.BatcherAccount,
 		ProposerAccount:          config.ProposerAccount,
-		DeploymentPath:           config.DeploymentPath,
+		DeploymentPath:           deploymentPath,
 		LogPath:                  l1ContractDeploymentLogPath,
 	})
 	if err != nil {
