@@ -38,14 +38,15 @@ func (s *ThanosDomainService) GetThanosStackDeployments(stackId uuid.UUID, confi
 		return nil, err
 	}
 	l1ContractDeployment := entities.DeploymentEntity{
-		ID:            l1ContractDeploymentID,
-		StackID:       &stackId,
-		IntegrationID: nil,
-		Step:          1,
-		Name:          "thanos-l1-contract-deployment",
-		Status:        entities.DeploymentStatusPending,
-		LogPath:       l1ContractDeploymentLogPath,
-		Config:        l1ContractDeploymentConfig,
+		ID:             l1ContractDeploymentID,
+		StackID:        &stackId,
+		IntegrationID:  nil,
+		Step:           1,
+		Name:           "thanos-l1-contract-deployment",
+		Status:         entities.DeploymentStatusPending,
+		LogPath:        l1ContractDeploymentLogPath,
+		Config:         l1ContractDeploymentConfig,
+		DeploymentPath: deploymentPath,
 	}
 	deployments = append(deployments, l1ContractDeployment)
 
@@ -58,21 +59,22 @@ func (s *ThanosDomainService) GetThanosStackDeployments(stackId uuid.UUID, confi
 		AwsAccessKey:       config.AwsAccessKey,
 		AwsSecretAccessKey: config.AwsSecretAccessKey,
 		AwsRegion:          config.AwsRegion,
-		DeploymentPath:     config.DeploymentPath,
+		DeploymentPath:     deploymentPath,
 		LogPath:            thanosInfrastructureDeploymentLogPath,
 	})
 	if err != nil {
 		return nil, err
 	}
 	thanosInfrastructureDeployment := entities.DeploymentEntity{
-		ID:            thanosInfrastructureDeploymentID,
-		StackID:       &stackId,
-		IntegrationID: nil,
-		Step:          2,
-		Name:          "thanos-infrastructure-deployment",
-		Status:        entities.DeploymentStatusPending,
-		LogPath:       thanosInfrastructureDeploymentLogPath,
-		Config:        thanosInfrastructureDeploymentConfig,
+		ID:             thanosInfrastructureDeploymentID,
+		StackID:        &stackId,
+		IntegrationID:  nil,
+		Step:           2,
+		Name:           "thanos-infrastructure-deployment",
+		Status:         entities.DeploymentStatusPending,
+		LogPath:        thanosInfrastructureDeploymentLogPath,
+		Config:         thanosInfrastructureDeploymentConfig,
+		DeploymentPath: deploymentPath,
 	}
 	deployments = append(deployments, thanosInfrastructureDeployment)
 

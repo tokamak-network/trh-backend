@@ -6,14 +6,15 @@ import (
 )
 
 type DeploymentEntity struct {
-	ID            uuid.UUID
-	StackID       *uuid.UUID
-	IntegrationID *uuid.UUID
-	Step          int
-	Name          string
-	Status        DeploymentStatus
-	LogPath       string
-	Config        datatypes.JSON
+	ID             uuid.UUID
+	StackID        *uuid.UUID
+	IntegrationID  *uuid.UUID
+	Step           int
+	Name           string
+	Status         DeploymentStatus
+	LogPath        string
+	DeploymentPath string
+	Config         datatypes.JSON
 }
 
 type DeploymentStatusWithID struct {
