@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/tokamak-network/trh-sdk v0.0.0-20250528080239-245172856534
+	github.com/tokamak-network/trh-sdk v0.0.0-20250528170643-6a1f90495529
 	go.uber.org/zap v1.27.0
 	gorm.io/datatypes v1.2.5
 	gorm.io/driver/postgres v1.5.11
