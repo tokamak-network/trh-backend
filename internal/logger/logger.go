@@ -8,10 +8,11 @@ import (
 var Logger *zap.Logger
 
 func Init() {
-	config := zap.NewProductionConfig()
+	config := zap.NewDevelopmentConfig()
 	config.EncoderConfig.TimeKey = "timestamp"
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.StacktraceKey = ""
+	config.Encoding = "console"
 
 	var err error
 	Logger, err = config.Build()
