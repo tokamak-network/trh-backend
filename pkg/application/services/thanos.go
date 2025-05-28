@@ -52,7 +52,7 @@ func (s *ThanosService) CreateThanosStack(request dtos.DeployThanosRequest) (uui
 		Network:        request.Network,
 		Config:         config,
 		DeploymentPath: deploymentPath,
-		Status:         entities.StatusActive,
+		Status:         entities.StatusInactive,
 	}
 
 	tx := s.db.Begin()
@@ -93,8 +93,38 @@ func (s *ThanosService) CreateThanosStack(request dtos.DeployThanosRequest) (uui
 	if err != nil {
 		return uuid.Nil, err
 	}
+	logger.Info("Stack created", zap.String("stackId", stackId.String()))
+	go func() {
+		logger.Info("Updating stack status to creating", zap.String("stackId", stackId.String()))
+		mainStackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
+		mainDeploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
+		err = mainStackRepo.UpdateStatus(stackId.String(), entities.StatusCreating)
+		if err != nil {
+			logger.Error("failed to update stack status",
+				zap.String("stackId", stackId.String()),
+				zap.Error(err))
+			return
+		}
+		if err := s.DeployThanosStack(stackId, mainStackRepo, mainDeploymentRepo); err != nil {
+			logger.Error("failed to deploy thanos stack",
+				zap.String("stackId", stackId.String()),
+				zap.Error(err))
 
-	go s.DeployThanosStack(stackId, stackRepo, deploymentRepo)
+			// Update stack status to failed
+			if updateErr := mainStackRepo.UpdateStatus(stackId.String(), entities.StatusActive); updateErr != nil {
+				logger.Error("failed to update stack status",
+					zap.String("stackId", stackId.String()),
+					zap.Error(updateErr))
+			}
+		} else {
+			// Update stack status to active on success
+			if updateErr := mainStackRepo.UpdateStatus(stackId.String(), entities.StatusActive); updateErr != nil {
+				logger.Error("failed to update stack status",
+					zap.String("stackId", stackId.String()),
+					zap.Error(updateErr))
+			}
+		}
+	}()
 
 	return stackId, nil
 }
@@ -143,6 +173,7 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 	}()
 
 	for _, deployment := range deployments {
+		logger.Info("Deployment", zap.String("deploymentId", deployment.ID.String()), zap.String("status", string(deployment.Status)))
 		if deployment.Status == entities.DeploymentStatusCompleted {
 			continue
 		}
@@ -158,7 +189,7 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 				DeploymentID: deployment.ID,
 				Status:       entities.DeploymentStatusInProgress,
 			}
-			go s.DeployL1Contracts(statusChan, deployment.ID, dtos.DeployL1ContractsRequest{
+			err = s.DeployL1Contracts(statusChan, deployment.ID, dtos.DeployL1ContractsRequest{
 				Network:                  deploymentConfig.Network,
 				L1RpcUrl:                 deploymentConfig.L1RpcUrl,
 				L2BlockTime:              deploymentConfig.L2BlockTime,
@@ -172,12 +203,15 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 				DeploymentPath:           deploymentConfig.DeploymentPath,
 				LogPath:                  deployment.LogPath,
 			})
+			if err != nil {
+				return err
+			}
 		} else if deployment.Step == 2 {
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
 				Status:       entities.DeploymentStatusInProgress,
 			}
-			go s.DeployThanosAWSInfra(statusChan, deployment.ID, dtos.DeployThanosAWSInfraRequest{
+			err = s.DeployThanosAWSInfra(statusChan, deployment.ID, dtos.DeployThanosAWSInfraRequest{
 				ChainName:          deploymentConfig.ChainName,
 				Network:            string(deploymentConfig.Network),
 				L1BeaconUrl:        deploymentConfig.L1BeaconUrl,
@@ -187,6 +221,9 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 				DeploymentPath:     deploymentConfig.DeploymentPath,
 				LogPath:            deployment.LogPath,
 			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 
