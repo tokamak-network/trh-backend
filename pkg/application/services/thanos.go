@@ -94,39 +94,44 @@ func (s *ThanosService) CreateThanosStack(request dtos.DeployThanosRequest) (uui
 		return uuid.Nil, err
 	}
 	logger.Info("Stack created", zap.String("stackId", stackId.String()))
-	go func() {
-		logger.Info("Updating stack status to creating", zap.String("stackId", stackId.String()))
-		mainStackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
-		mainDeploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
-		err = mainStackRepo.UpdateStatus(stackId.String(), entities.StatusCreating)
-		if err != nil {
-			logger.Error("failed to update stack status",
-				zap.String("stackId", stackId.String()),
-				zap.Error(err))
-			return
-		}
-		if err := s.DeployThanosStack(stackId, mainStackRepo, mainDeploymentRepo); err != nil {
-			logger.Error("failed to deploy thanos stack",
-				zap.String("stackId", stackId.String()),
-				zap.Error(err))
-
-			// Update stack status to failed
-			if updateErr := mainStackRepo.UpdateStatus(stackId.String(), entities.StatusActive); updateErr != nil {
-				logger.Error("failed to update stack status",
-					zap.String("stackId", stackId.String()),
-					zap.Error(updateErr))
-			}
-		} else {
-			// Update stack status to active on success
-			if updateErr := mainStackRepo.UpdateStatus(stackId.String(), entities.StatusActive); updateErr != nil {
-				logger.Error("failed to update stack status",
-					zap.String("stackId", stackId.String()),
-					zap.Error(updateErr))
-			}
-		}
-	}()
+	go s.handleStackDeployment(stackId)
 
 	return stackId, nil
+}
+
+// New helper method to handle deployment logic
+func (s *ThanosService) handleStackDeployment(stackId uuid.UUID) {
+	logger.Info("Updating stack status to creating", zap.String("stackId", stackId.String()))
+	mainStackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
+	mainDeploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
+
+	err := mainStackRepo.UpdateStatus(stackId.String(), entities.StatusCreating)
+	if err != nil {
+		logger.Error("failed to update stack status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
+
+	if err := s.DeployThanosStack(stackId, mainStackRepo, mainDeploymentRepo); err != nil {
+		logger.Error("failed to deploy thanos stack",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+
+		// Update stack status to failed
+		if updateErr := mainStackRepo.UpdateStatus(stackId.String(), entities.StatusActive); updateErr != nil {
+			logger.Error("failed to update stack status",
+				zap.String("stackId", stackId.String()),
+				zap.Error(updateErr))
+		}
+	} else {
+		// Update stack status to active on success
+		if updateErr := mainStackRepo.UpdateStatus(stackId.String(), entities.StatusActive); updateErr != nil {
+			logger.Error("failed to update stack status",
+				zap.String("stackId", stackId.String()),
+				zap.Error(updateErr))
+		}
+	}
 }
 
 func (s *ThanosService) DestroyThanosStack(id string) error {
@@ -204,6 +209,7 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 				LogPath:                  deployment.LogPath,
 			})
 			if err != nil {
+				logger.Error("failed to deploy l1 contracts", zap.String("deploymentId", deployment.ID.String()), zap.Error(err))
 				return err
 			}
 		} else if deployment.Step == 2 {
@@ -222,6 +228,7 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 				LogPath:            deployment.LogPath,
 			})
 			if err != nil {
+				logger.Error("failed to deploy thanos aws infra", zap.String("deploymentId", deployment.ID.String()), zap.Error(err))
 				return err
 			}
 		}
@@ -323,5 +330,10 @@ func (s *ThanosService) ValidateThanosRequest(request dtos.DeployThanosRequest) 
 		return err
 	}
 
+	return nil
+}
+
+func (s *ThanosService) ResumeThanosStack(stackId uuid.UUID) error {
+	go s.handleStackDeployment(stackId)
 	return nil
 }

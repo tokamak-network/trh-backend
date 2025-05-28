@@ -9,6 +9,7 @@ import (
 	"trh-backend/pkg/interfaces/api/servers"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type ThanosHandler struct {
@@ -43,6 +44,20 @@ func (h *ThanosHandler) DestroyThanos(c *gin.Context) {
 		return
 	}
 	err := h.ThanosService.DestroyThanosStack(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
+func (h *ThanosHandler) ResumeThanos(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	err := h.ThanosService.ResumeThanosStack(uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
