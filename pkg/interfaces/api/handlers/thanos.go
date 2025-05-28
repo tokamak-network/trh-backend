@@ -27,7 +27,7 @@ func (h *ThanosHandler) DeployThanos(c *gin.Context) {
 		return
 	}
 
-	stackId, err := h.ThanosService.DeployThanosStack(request)
+	stackId, err := h.ThanosService.CreateThanosStack(request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

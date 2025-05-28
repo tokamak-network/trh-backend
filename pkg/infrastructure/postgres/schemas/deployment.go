@@ -6,6 +6,7 @@ import (
 	"trh-backend/pkg/domain/entities"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -18,6 +19,7 @@ type Deployment struct {
 	Step          int                       `gorm:"column:step;not null"`
 	Name          string                    `gorm:"column:name"`
 	Status        entities.DeploymentStatus `gorm:"column:status;not null"`
+	Config        datatypes.JSON            `gorm:"type:jsonb;not null;column:config"`
 	LogPath       string                    `gorm:"column:log_path"`
 	CreatedAt     time.Time                 `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt     time.Time                 `gorm:"autoUpdateTime;column:updated_at"`
