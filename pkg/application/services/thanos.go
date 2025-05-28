@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -140,8 +139,6 @@ func (s *ThanosService) DestroyThanosStack(id string) error {
 }
 
 func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgresRepositories.StackPostgresRepository, deploymentRepo *postgresRepositories.DeploymentPostgresRepository) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	statusChan := make(chan entities.DeploymentStatusWithID)
 	defer close(statusChan)
@@ -163,37 +160,45 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 	// Start a goroutine to handle status updates
 	errChan := make(chan error, 1)
 	go func() {
-		for i := 0; i < len(deployments); i++ {
-			select {
-			case <-ctx.Done():
+		for status := range statusChan {
+			if err := deploymentRepo.UpdateDeploymentStatus(status.DeploymentID.String(), status.Status); err != nil {
+				errChan <- fmt.Errorf("failed to update deployment status: %w", err)
 				return
-			case status := <-statusChan:
-				if err := deploymentRepo.UpdateDeploymentStatus(status.DeploymentID.String(), status.Status); err != nil {
-					errChan <- fmt.Errorf("failed to update deployment status: %w", err)
-					return
+			}
+			// If we've processed all deployments successfully, send nil to errChan
+			if status.Status == entities.DeploymentStatusCompleted {
+				select {
+				case errChan <- nil:
+				default:
 				}
 			}
 		}
-		errChan <- nil
 	}()
 
 	for _, deployment := range deployments {
-		logger.Info("Deployment", zap.String("deploymentId", deployment.ID.String()), zap.String("status", string(deployment.Status)))
+		logger.Info("Processing deployment",
+			zap.String("deploymentId", deployment.ID.String()),
+			zap.String("status", string(deployment.Status)),
+			zap.Int("step", deployment.Step))
+
+		// Skip already completed deployments
 		if deployment.Status == entities.DeploymentStatusCompleted {
 			continue
 		}
-		if deployment.Status == entities.DeploymentStatusInProgress {
-			return fmt.Errorf("deployment %s is still in progress", deployment.ID)
-		}
+
 		deploymentConfig := dtos.DeployThanosRequest{}
 		if err := json.Unmarshal(deployment.Config, &deploymentConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal deployment config: %w", err)
 		}
+
+		// Update status to in-progress before starting deployment
+		statusChan <- entities.DeploymentStatusWithID{
+			DeploymentID: deployment.ID,
+			Status:       entities.DeploymentStatusInProgress,
+		}
+
+		var err error
 		if deployment.Step == 1 {
-			statusChan <- entities.DeploymentStatusWithID{
-				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentStatusInProgress,
-			}
 			err = s.DeployL1Contracts(statusChan, deployment.ID, dtos.DeployL1ContractsRequest{
 				Network:                  deploymentConfig.Network,
 				L1RpcUrl:                 deploymentConfig.L1RpcUrl,
@@ -208,15 +213,7 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 				DeploymentPath:           deploymentConfig.DeploymentPath,
 				LogPath:                  deployment.LogPath,
 			})
-			if err != nil {
-				logger.Error("failed to deploy l1 contracts", zap.String("deploymentId", deployment.ID.String()), zap.Error(err))
-				return err
-			}
 		} else if deployment.Step == 2 {
-			statusChan <- entities.DeploymentStatusWithID{
-				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentStatusInProgress,
-			}
 			err = s.DeployThanosAWSInfra(statusChan, deployment.ID, dtos.DeployThanosAWSInfraRequest{
 				ChainName:          deploymentConfig.ChainName,
 				Network:            string(deploymentConfig.Network),
@@ -227,13 +224,18 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 				DeploymentPath:     deploymentConfig.DeploymentPath,
 				LogPath:            deployment.LogPath,
 			})
-			if err != nil {
-				logger.Error("failed to deploy thanos aws infra", zap.String("deploymentId", deployment.ID.String()), zap.Error(err))
-				return err
-			}
+		}
+
+		if err != nil {
+			logger.Error("deployment failed",
+				zap.String("deploymentId", deployment.ID.String()),
+				zap.Int("step", deployment.Step),
+				zap.Error(err))
+			return err
 		}
 	}
 
+	// Wait for final status update
 	return <-errChan
 }
 
