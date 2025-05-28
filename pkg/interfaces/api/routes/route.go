@@ -1,9 +1,10 @@
 package routes
 
 import (
-	"github.com/gin-gonic/gin"
 	"trh-backend/pkg/interfaces/api/handlers"
 	"trh-backend/pkg/interfaces/api/servers"
+
+	"github.com/gin-gonic/gin"
 )
 
 func SetupRoutes(server *servers.Server) {
@@ -27,5 +28,6 @@ func setupHealthRoutes(router *gin.RouterGroup) {
 func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server) {
 	handler := handlers.NewThanosHandler(server)
 	router.POST("", handler.DeployThanos)
+	router.POST("/:id/resume", handler.ResumeThanos)
 	router.DELETE("/:id", handler.DestroyThanos)
 }
