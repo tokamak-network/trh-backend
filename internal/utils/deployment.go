@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"os"
 	"path"
 	"trh-backend/pkg/domain/entities"
 
@@ -12,12 +13,14 @@ func GetDeploymentPath(
 	network entities.DeploymentNetwork,
 	deploymentID string,
 ) string {
-	return path.Join("storage", "deployments", stack, string(network), deploymentID)
+	rootDir, _ := os.Getwd()
+	return path.Join(rootDir, "storage", "deployments", stack, string(network), deploymentID)
 }
 
 func GetDeploymentLogPath(
 	stackID uuid.UUID,
 	deploymentID uuid.UUID,
 ) string {
-	return path.Join("storage", "logs", stackID.String(), deploymentID.String(), "logs.txt")
+	rootDir, _ := os.Getwd()
+	return path.Join(rootDir, "storage", "logs", stackID.String(), deploymentID.String(), "logs.txt")
 }

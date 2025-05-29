@@ -11,11 +11,15 @@ const (
 type Status string
 
 const (
-	StatusActive      Status = "Active"
-	StatusInactive    Status = "Inactive"
-	StatusCreating    Status = "Creating"
-	StatusUpdating    Status = "Updating"
-	StatusTerminating Status = "Terminating"
+	StatusPending           Status = "Pending"
+	StatusDeployed          Status = "Deployed"
+	StatusDeploying         Status = "Deploying"
+	StatusUpdating          Status = "Updating"
+	StatusTerminating       Status = "Terminating"
+	StatusTerminated        Status = "Terminated"
+	StatusFailedToDeploy    Status = "FailedToDeploy"
+	StatusFailedToUpdate    Status = "FailedToUpdate"
+	StatusFailedToTerminate Status = "FailedToTerminate"
 )
 
 type DeploymentStatus string
