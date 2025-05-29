@@ -2,9 +2,6 @@ package trh_sdk
 
 import (
 	"context"
-	"errors"
-	"math/rand"
-	"time"
 	"trh-backend/internal/consts"
 	"trh-backend/internal/logger"
 	"trh-backend/pkg/interfaces/api/dtos"
@@ -18,7 +15,7 @@ import (
 // We should use the actual implementation of the ThanosStack interface.
 type ThanosStack interface {
 	DeployAWSInfrastructure(req *dtos.DeployThanosAWSInfraRequest) error
-	DestroyAWSInfrastructure() error
+	DestroyAWSInfrastructure(req *dtos.TerminateThanosRequest) error
 	DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error
 }
 
@@ -60,13 +57,28 @@ func (t *ThanosStackImpl) DeployAWSInfrastructure(req *dtos.DeployThanosAWSInfra
 	return nil
 }
 
-func (t *ThanosStackImpl) DestroyAWSInfrastructure() error {
-	time.Sleep(10 * time.Second)
+func (t *ThanosStackImpl) DestroyAWSInfrastructure(req *dtos.TerminateThanosRequest) error {
+	trh_logger := trh_sdk_logging.InitLogger(req.LogPath)
 
-	// Randomly return error or success
-	if rand.Float32() < 0.5 {
-		return errors.New("random deployment failure")
+	logger.Info("Destroying AWS Infrastructure...")
+
+	awsConfig := trh_sdk_types.AWSConfig{
+		AccessKey: req.AwsAccessKey,
+		SecretKey: req.AwsSecretAccessKey,
+		Region:    req.AwsRegion,
 	}
+	s, err := trh_sdk_thanos.NewThanosStack(trh_logger, string(req.Network), true, req.DeploymentPath, &awsConfig)
+	if err != nil {
+		return err
+	}
+
+	err = s.Destroy(context.Background())
+	if err != nil {
+		return err
+	}
+
+	logger.Info("AWS Infrastructure destroyed successfully")
+
 	return nil
 }
 

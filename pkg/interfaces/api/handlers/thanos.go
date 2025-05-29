@@ -37,13 +37,13 @@ func (h *ThanosHandler) DeployThanos(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "OK", "stackId": stackId})
 }
 
-func (h *ThanosHandler) DestroyThanos(c *gin.Context) {
+func (h *ThanosHandler) TerminateThanos(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	err := h.ThanosService.DestroyThanosStack(id)
+	err := h.ThanosService.TerminateThanosStack(uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

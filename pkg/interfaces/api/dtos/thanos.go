@@ -47,6 +47,15 @@ type DeployThanosAWSInfraRequest struct {
 	LogPath            string `json:"logPath" binding:"required"`
 }
 
+type TerminateThanosRequest struct {
+	Network            string `json:"network" binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
+	AwsAccessKey       string `json:"awsAccessKey" binding:"required"`
+	AwsSecretAccessKey string `json:"awsSecretAccessKey" binding:"required"`
+	AwsRegion          string `json:"awsRegion" binding:"required"`
+	DeploymentPath     string `json:"deploymentPath" binding:"required"`
+	LogPath            string `json:"logPath" binding:"required"`
+}
+
 type DeployThanosResponse struct {
 	Id string `json:"id"`
 }

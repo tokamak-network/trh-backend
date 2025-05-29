@@ -133,11 +133,6 @@ func (s *ThanosService) handleStackDeployment(stackId uuid.UUID) {
 	}
 }
 
-func (s *ThanosService) DestroyThanosStack(id string) error {
-	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
-	return stackRepo.DeleteStack(id)
-}
-
 func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgresRepositories.StackPostgresRepository, deploymentRepo *postgresRepositories.DeploymentPostgresRepository) error {
 
 	statusChan := make(chan entities.DeploymentStatusWithID)
@@ -338,4 +333,78 @@ func (s *ThanosService) ValidateThanosRequest(request dtos.DeployThanosRequest) 
 func (s *ThanosService) ResumeThanosStack(stackId uuid.UUID) error {
 	go s.handleStackDeployment(stackId)
 	return nil
+}
+
+func (s *ThanosService) TerminateThanosStack(stackId uuid.UUID) error {
+	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
+
+	// Check if stack exists
+	_, err := stackRepo.GetStack(stackId.String())
+	if err != nil {
+		return fmt.Errorf("failed to get stack: %w", err)
+	}
+
+	// Update stack status to terminating
+	err = stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminating)
+	if err != nil {
+		return fmt.Errorf("failed to update stack status: %w", err)
+	}
+
+	go s.handleStackTermination(stackId)
+
+	return nil
+}
+
+func (s *ThanosService) handleStackTermination(stackId uuid.UUID) {
+	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
+	deploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
+	// Check if stack exists
+	stack, err := stackRepo.GetStack(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return
+	}
+
+	// Check if stack is in a valid state to be terminated
+	if stack.Status == entities.StatusDeploying || stack.Status == entities.StatusUpdating || stack.Status == entities.StatusTerminating {
+		logger.Error("The stack is still deploying, updating or terminating, please wait for it to finish", zap.String("stackId", stackId.String()))
+		return
+	}
+
+	// Update stack status to terminating
+	stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminating)
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		return
+	}
+	logPath := utils.GetDestroyLogPath(stack.ID)
+
+	thanosStack := trh_sdk_infrastructure.NewThanosStack()
+	if err := thanosStack.DestroyAWSInfrastructure(&dtos.TerminateThanosRequest{
+		Network:            string(stack.Network),
+		AwsAccessKey:       stackConfig.AwsAccessKey,
+		AwsSecretAccessKey: stackConfig.AwsSecretAccessKey,
+		AwsRegion:          stackConfig.AwsRegion,
+		DeploymentPath:     stackConfig.DeploymentPath,
+		LogPath:            logPath,
+	}); err != nil {
+		stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate)
+		logger.Error("failed to destroy AWS infrastructure", zap.String("stackId", stackId.String()), zap.Error(err))
+		return
+	}
+
+	stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminated)
+	deployments, err := deploymentRepo.GetDeploymentsByStackID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get deployments", zap.String("stackId", stackId.String()), zap.Error(err))
+		return
+	}
+
+	for _, deployment := range deployments {
+		deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentStatus(entities.StatusPending))
+	}
+
+	logger.Info("AWS infrastructure destroyed successfully", zap.String("stackId", stackId.String()))
 }
