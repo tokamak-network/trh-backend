@@ -339,15 +339,15 @@ func (s *ThanosService) TerminateThanosStack(stackId uuid.UUID) error {
 	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
 
 	// Check if stack exists
-	_, err := stackRepo.GetStack(stackId.String())
+	stack, err := stackRepo.GetStack(stackId.String())
 	if err != nil {
 		return fmt.Errorf("failed to get stack: %w", err)
 	}
 
-	// Update stack status to terminating
-	err = stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminating)
-	if err != nil {
-		return fmt.Errorf("failed to update stack status: %w", err)
+	// Check if stack is in a valid state to be terminated
+	if stack.Status == entities.StatusDeploying || stack.Status == entities.StatusUpdating || stack.Status == entities.StatusTerminating {
+		logger.Error("The stack is still deploying, updating or terminating, please wait for it to finish", zap.String("stackId", stackId.String()))
+		return fmt.Errorf("the stack is still deploying, updating or terminating, please wait for it to finish")
 	}
 
 	go s.handleStackTermination(stackId)
@@ -362,12 +362,6 @@ func (s *ThanosService) handleStackTermination(stackId uuid.UUID) {
 	stack, err := stackRepo.GetStack(stackId.String())
 	if err != nil {
 		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
-		return
-	}
-
-	// Check if stack is in a valid state to be terminated
-	if stack.Status == entities.StatusDeploying || stack.Status == entities.StatusUpdating || stack.Status == entities.StatusTerminating {
-		logger.Error("The stack is still deploying, updating or terminating, please wait for it to finish", zap.String("stackId", stackId.String()))
 		return
 	}
 
