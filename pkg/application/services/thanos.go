@@ -358,6 +358,7 @@ func (s *ThanosService) TerminateThanosStack(stackId uuid.UUID) error {
 func (s *ThanosService) handleStackTermination(stackId uuid.UUID) {
 	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
 	deploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
+
 	// Check if stack exists
 	stack, err := stackRepo.GetStack(stackId.String())
 	if err != nil {
@@ -366,38 +367,72 @@ func (s *ThanosService) handleStackTermination(stackId uuid.UUID) {
 	}
 
 	// Update stack status to terminating
-	stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminating)
+	if err := stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminating); err != nil {
+		logger.Error("failed to update stack status to terminating",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
 
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		logger.Error("failed to unmarshal stack config",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		if updateErr := stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate); updateErr != nil {
+			logger.Error("failed to update stack status after unmarshal error",
+				zap.String("stackId", stackId.String()),
+				zap.Error(updateErr))
+		}
 		return
 	}
-	logPath := utils.GetDestroyLogPath(stack.ID)
 
+	logPath := utils.GetDestroyLogPath(stack.ID)
 	thanosStack := trh_sdk_infrastructure.NewThanosStack()
+
 	if err := thanosStack.DestroyAWSInfrastructure(&dtos.TerminateThanosRequest{
 		Network:            string(stack.Network),
 		AwsAccessKey:       stackConfig.AwsAccessKey,
 		AwsSecretAccessKey: stackConfig.AwsSecretAccessKey,
 		AwsRegion:          stackConfig.AwsRegion,
-		DeploymentPath:     stackConfig.DeploymentPath,
+		DeploymentPath:     stack.DeploymentPath,
 		LogPath:            logPath,
 	}); err != nil {
-		stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate)
-		logger.Error("failed to destroy AWS infrastructure", zap.String("stackId", stackId.String()), zap.Error(err))
+		logger.Error("failed to destroy AWS infrastructure",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		if updateErr := stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate); updateErr != nil {
+			logger.Error("failed to update stack status after destroy error",
+				zap.String("stackId", stackId.String()),
+				zap.Error(updateErr))
+		}
 		return
 	}
 
-	stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminated)
+	if err := stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminated); err != nil {
+		logger.Error("failed to update stack status to terminated",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
+
 	deployments, err := deploymentRepo.GetDeploymentsByStackID(stackId.String())
 	if err != nil {
-		logger.Error("failed to get deployments", zap.String("stackId", stackId.String()), zap.Error(err))
+		logger.Error("failed to get deployments",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
 		return
 	}
 
 	for _, deployment := range deployments {
-		deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentStatus(entities.StatusPending))
+		if err := deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentStatus(entities.StatusPending)); err != nil {
+			logger.Error("failed to update deployment status",
+				zap.String("deploymentId", deployment.ID.String()),
+				zap.String("stackId", stackId.String()),
+				zap.Error(err))
+			// Continue updating other deployments even if one fails
+			continue
+		}
 	}
 
 	logger.Info("AWS infrastructure destroyed successfully", zap.String("stackId", stackId.String()))
