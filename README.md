@@ -6,7 +6,7 @@ This is the backend service for the TRH application. It is built using Go and ut
 
 ### Prerequisites
 
-- Go 1.23 or later
+- Go 1.22.6 which is compatible with the version of TRH SDK
 - PostgreSQL
 
 ### Installation
@@ -27,6 +27,10 @@ This is the backend service for the TRH application. It is built using Go and ut
 ### Running the Application
 
 1. Ensure your PostgreSQL server is running and accessible.
+   You can use the docker compose file to start a local postgres server.
+   ```bash
+   docker compose up -d
+   ```
 
 2. Run the application:
    ```bash
@@ -34,12 +38,6 @@ This is the backend service for the TRH application. It is built using Go and ut
    ```
 
 3. The server will start on the port specified in the `.env` file (default is 8000).
-
-### Project Structure
-
-- `server/`: Contains the main server code.
-- `go.mod` and `go.sum`: Go module files for dependency management.
-- `.env` and `.env.example`: Environment configuration files.
 
 ### Contributing
 
