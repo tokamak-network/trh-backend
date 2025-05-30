@@ -138,7 +138,7 @@ func (s *ThanosService) DeployThanosStack(stackId uuid.UUID, stackRepo *postgres
 	statusChan := make(chan entities.DeploymentStatusWithID)
 	defer close(statusChan)
 
-	_, err := stackRepo.GetStack(stackId.String())
+	_, err := stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		return fmt.Errorf("failed to get stack: %w", err)
 	}
@@ -339,7 +339,7 @@ func (s *ThanosService) TerminateThanosStack(stackId uuid.UUID) error {
 	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
 
 	// Check if stack exists
-	stack, err := stackRepo.GetStack(stackId.String())
+	stack, err := stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		return fmt.Errorf("failed to get stack: %w", err)
 	}
@@ -360,7 +360,7 @@ func (s *ThanosService) handleStackTermination(stackId uuid.UUID) {
 	deploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
 
 	// Check if stack exists
-	stack, err := stackRepo.GetStack(stackId.String())
+	stack, err := stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
 		return
@@ -436,4 +436,34 @@ func (s *ThanosService) handleStackTermination(stackId uuid.UUID) {
 	}
 
 	logger.Info("AWS infrastructure destroyed successfully", zap.String("stackId", stackId.String()))
+}
+
+func (s *ThanosService) GetAllStacks() ([]*entities.StackEntity, error) {
+	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
+	return stackRepo.GetAllStacks()
+}
+
+func (s *ThanosService) GetStackStatus(stackId uuid.UUID) (entities.Status, error) {
+	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
+	return stackRepo.GetStackStatus(stackId.String())
+}
+
+func (s *ThanosService) GetStackDeployments(stackId uuid.UUID) ([]*entities.DeploymentEntity, error) {
+	deploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
+	return deploymentRepo.GetDeploymentsByStackID(stackId.String())
+}
+
+func (s *ThanosService) GetStackDeploymentStatus(deploymentId uuid.UUID) (entities.DeploymentStatus, error) {
+	deploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
+	return deploymentRepo.GetDeploymentStatus(deploymentId.String())
+}
+
+func (s *ThanosService) GetStackDeployment(stackId uuid.UUID, deploymentId uuid.UUID) (*entities.DeploymentEntity, error) {
+	deploymentRepo := postgresRepositories.NewDeploymentPostgresRepository(s.db)
+	return deploymentRepo.GetDeploymentByID(deploymentId.String())
+}
+
+func (s *ThanosService) GetStackByID(stackId uuid.UUID) (*entities.StackEntity, error) {
+	stackRepo := postgresRepositories.NewStackPostgresRepository(s.db)
+	return stackRepo.GetStackByID(stackId.String())
 }

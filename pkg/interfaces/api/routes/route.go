@@ -30,4 +30,10 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server) {
 	router.POST("", handler.DeployThanos)
 	router.POST("/:id/resume", handler.ResumeThanos)
 	router.DELETE("/:id", handler.TerminateThanos)
+	router.GET("", handler.GetAllStacks)
+	router.GET("/:id", handler.GetStackByID)
+	router.GET("/:id/status", handler.GetStackStatus)
+	router.GET("/:id/deployments", handler.GetStackDeployments)
+	router.GET("/:id/deployments/:deploymentId", handler.GetStackDeployment)
+	router.GET("/:id/deployments/:deploymentId/status", handler.GetStackDeploymentStatus)
 }

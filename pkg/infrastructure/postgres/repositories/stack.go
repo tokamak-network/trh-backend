@@ -48,7 +48,7 @@ func (r *StackPostgresRepository) UpdateStatus(
 	return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("status", status).Error
 }
 
-func (r *StackPostgresRepository) GetStack(
+func (r *StackPostgresRepository) GetStackByID(
 	id string,
 ) (*entities.StackEntity, error) {
 	var stack schemas.Stack
@@ -64,4 +64,35 @@ func (r *StackPostgresRepository) GetStack(
 		DeploymentPath: stack.DeploymentPath,
 		Status:         stack.Status,
 	}, nil
+}
+
+func (r *StackPostgresRepository) GetAllStacks() ([]*entities.StackEntity, error) {
+	var stacks []schemas.Stack
+	err := r.db.Find(&stacks).Error
+	if err != nil {
+		return nil, err
+	}
+	stacksEntities := make([]*entities.StackEntity, len(stacks))
+	for i, stack := range stacks {
+		stacksEntities[i] = &entities.StackEntity{
+			ID:             stack.ID,
+			Name:           stack.Name,
+			Network:        stack.Network,
+			Config:         json.RawMessage(stack.Config),
+			DeploymentPath: stack.DeploymentPath,
+			Status:         stack.Status,
+		}
+	}
+	return stacksEntities, nil
+}
+
+func (r *StackPostgresRepository) GetStackStatus(
+	id string,
+) (entities.Status, error) {
+	var stack schemas.Stack
+	err := r.db.Where("id = ?", id).First(&stack).Error
+	if err != nil {
+		return entities.StatusUnknown, err
+	}
+	return stack.Status, nil
 }

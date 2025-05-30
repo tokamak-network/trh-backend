@@ -37,7 +37,7 @@ func (r *DeploymentPostgresRepository) DeleteDeployment(id string) error {
 	return r.db.Delete(&schemas.Deployment{}, id).Error
 }
 
-func (r *DeploymentPostgresRepository) GetDeployment(id string) (*entities.DeploymentEntity, error) {
+func (r *DeploymentPostgresRepository) GetDeploymentByID(id string) (*entities.DeploymentEntity, error) {
 	var deployment schemas.Deployment
 	if err := r.db.Where("id = ?", id).First(&deployment).Error; err != nil {
 		return nil, err
@@ -55,4 +55,12 @@ func (r *DeploymentPostgresRepository) GetDeploymentsByStackID(stackID string) (
 		deploymentsEntities[i] = &entities.DeploymentEntity{ID: deployment.ID, StackID: deployment.StackID, IntegrationID: deployment.IntegrationID, Step: deployment.Step, Name: deployment.Name, Status: deployment.Status, LogPath: deployment.LogPath, Config: deployment.Config}
 	}
 	return deploymentsEntities, nil
+}
+
+func (r *DeploymentPostgresRepository) GetDeploymentStatus(id string) (entities.DeploymentStatus, error) {
+	var deployment schemas.Deployment
+	if err := r.db.Where("id = ?", id).First(&deployment).Error; err != nil {
+		return entities.DeploymentStatusUnknown, err
+	}
+	return deployment.Status, nil
 }

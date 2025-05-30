@@ -20,6 +20,7 @@ const (
 	StatusFailedToDeploy    Status = "FailedToDeploy"
 	StatusFailedToUpdate    Status = "FailedToUpdate"
 	StatusFailedToTerminate Status = "FailedToTerminate"
+	StatusUnknown           Status = "Unknown"
 )
 
 type DeploymentStatus string
@@ -30,4 +31,5 @@ const (
 	DeploymentStatusFailed     DeploymentStatus = "Failed"
 	DeploymentStatusStopped    DeploymentStatus = "Stopped"
 	DeploymentStatusCompleted  DeploymentStatus = "Completed"
+	DeploymentStatusUnknown    DeploymentStatus = "Unknown"
 )
