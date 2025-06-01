@@ -13,7 +13,7 @@ type StackPostgresRepository struct {
 	db *gorm.DB
 }
 
-func NewStackPostgresRepository(db *gorm.DB) *StackPostgresRepository {
+func NewStackRepository(db *gorm.DB) *StackPostgresRepository {
 	return &StackPostgresRepository{db: db}
 }
 

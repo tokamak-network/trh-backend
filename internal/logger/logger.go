@@ -56,3 +56,7 @@ func Debugf(msg string, args ...interface{}) {
 func Warnf(msg string, args ...interface{}) {
 	Logger.Sugar().Warnf(msg, args...)
 }
+
+func Fatalf(msg string, args ...interface{}) {
+	Logger.Sugar().Fatalf(msg, args...)
+}

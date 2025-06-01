@@ -11,7 +11,7 @@ type DeploymentPostgresRepository struct {
 	db *gorm.DB
 }
 
-func NewDeploymentPostgresRepository(db *gorm.DB) *DeploymentPostgresRepository {
+func NewDeploymentRepository(db *gorm.DB) *DeploymentPostgresRepository {
 	return &DeploymentPostgresRepository{db: db}
 }
 

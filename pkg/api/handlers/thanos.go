@@ -1,28 +1,28 @@
 package handlers
 
 import (
-	"github.com/tokamak-network/trh-backend/internal/utils"
-	"github.com/tokamak-network/trh-backend/pkg/application/services"
-	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/dtos"
-	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/servers"
+	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/api/servers"
+	postgresRepositories "github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/repositories"
+	"github.com/tokamak-network/trh-backend/pkg/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-type ThanosHandler struct {
-	ThanosService *services.ThanosService
+type ThanosDeploymentHandler struct {
+	ThanosDeploymentService *services.ThanosDeployment
 }
 
-func (h *ThanosHandler) DeployThanos(c *gin.Context) {
+func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 	var request dtos.DeployThanosRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.ThanosService.ValidateThanosRequest(request); err != nil {
+	if err := request.Validate(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -32,7 +32,7 @@ func (h *ThanosHandler) DeployThanos(c *gin.Context) {
 	request.BatcherAccount = utils.TrimPrivateKey(request.BatcherAccount)
 	request.ProposerAccount = utils.TrimPrivateKey(request.ProposerAccount)
 
-	stackId, err := h.ThanosService.CreateThanosStack(request)
+	stackId, err := h.ThanosDeploymentService.CreateThanosStack(request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -41,13 +41,13 @@ func (h *ThanosHandler) DeployThanos(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "OK", "stackId": stackId})
 }
 
-func (h *ThanosHandler) TerminateThanos(c *gin.Context) {
+func (h *ThanosDeploymentHandler) Terminate(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	err := h.ThanosService.TerminateThanosStack(uuid.MustParse(id))
+	err := h.ThanosDeploymentService.TerminateThanosStack(uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -55,13 +55,13 @@ func (h *ThanosHandler) TerminateThanos(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "OK"})
 }
 
-func (h *ThanosHandler) ResumeThanos(c *gin.Context) {
+func (h *ThanosDeploymentHandler) ResumeThanos(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	err := h.ThanosService.ResumeThanosStack(uuid.MustParse(id))
+	err := h.ThanosDeploymentService.ResumeThanosStack(uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -69,8 +69,8 @@ func (h *ThanosHandler) ResumeThanos(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "OK"})
 }
 
-func (h *ThanosHandler) GetAllStacks(c *gin.Context) {
-	stacks, err := h.ThanosService.GetAllStacks()
+func (h *ThanosDeploymentHandler) GetAllStacks(c *gin.Context) {
+	stacks, err := h.ThanosDeploymentService.GetAllStacks()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -78,13 +78,13 @@ func (h *ThanosHandler) GetAllStacks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"stacks": stacks})
 }
 
-func (h *ThanosHandler) GetStackStatus(c *gin.Context) {
+func (h *ThanosDeploymentHandler) GetStackStatus(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	status, err := h.ThanosService.GetStackStatus(uuid.MustParse(id))
+	status, err := h.ThanosDeploymentService.GetStackStatus(uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -92,13 +92,13 @@ func (h *ThanosHandler) GetStackStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": status})
 }
 
-func (h *ThanosHandler) GetStackDeployments(c *gin.Context) {
+func (h *ThanosDeploymentHandler) GetStackDeployments(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	deployments, err := h.ThanosService.GetStackDeployments(uuid.MustParse(id))
+	deployments, err := h.ThanosDeploymentService.GetStackDeployments(uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -106,7 +106,7 @@ func (h *ThanosHandler) GetStackDeployments(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"deployments": deployments})
 }
 
-func (h *ThanosHandler) GetStackDeployment(c *gin.Context) {
+func (h *ThanosDeploymentHandler) GetStackDeployment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
@@ -117,7 +117,7 @@ func (h *ThanosHandler) GetStackDeployment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "deploymentId is required"})
 		return
 	}
-	deployment, err := h.ThanosService.GetStackDeployment(uuid.MustParse(id), uuid.MustParse(deploymentId))
+	deployment, err := h.ThanosDeploymentService.GetStackDeployment(uuid.MustParse(id), uuid.MustParse(deploymentId))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -125,7 +125,7 @@ func (h *ThanosHandler) GetStackDeployment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"deployment": deployment})
 }
 
-func (h *ThanosHandler) GetStackDeploymentStatus(c *gin.Context) {
+func (h *ThanosDeploymentHandler) GetStackDeploymentStatus(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
@@ -136,7 +136,7 @@ func (h *ThanosHandler) GetStackDeploymentStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "deploymentId is required"})
 		return
 	}
-	status, err := h.ThanosService.GetStackDeploymentStatus(uuid.MustParse(deploymentId))
+	status, err := h.ThanosDeploymentService.GetStackDeploymentStatus(uuid.MustParse(deploymentId))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -144,22 +144,24 @@ func (h *ThanosHandler) GetStackDeploymentStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": status})
 }
 
-func (h *ThanosHandler) GetStackByID(c *gin.Context) {
+func (h *ThanosDeploymentHandler) GetStackByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	stack, err := h.ThanosService.GetStackByID(uuid.MustParse(id))
+	stack, err := h.ThanosDeploymentService.GetStackByID(uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"stack": stack})
+	c.JSON(http.StatusOK, gin.H{"stacks": stack})
 }
 
-func NewThanosHandler(server *servers.Server) *ThanosHandler {
-	return &ThanosHandler{
-		ThanosService: services.NewThanosService(server.PostgresDB, nil),
+func NewThanosHandler(server *servers.Server) *ThanosDeploymentHandler {
+	deploymentRepo := postgresRepositories.NewDeploymentRepository(server.PostgresDB)
+	stackRepo := postgresRepositories.NewStackRepository(server.PostgresDB)
+	return &ThanosDeploymentHandler{
+		ThanosDeploymentService: services.NewThanosService(server.PostgresDB, deploymentRepo, stackRepo),
 	}
 }

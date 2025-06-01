@@ -1,6 +1,21 @@
 package dtos
 
-import "github.com/tokamak-network/trh-backend/pkg/domain/entities"
+import (
+	"errors"
+	"github.com/tokamak-network/trh-backend/internal/consts"
+	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/internal/utils"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	trhSdkAws "github.com/tokamak-network/trh-sdk/pkg/cloud-provider/aws"
+	trhSdkTypes "github.com/tokamak-network/trh-sdk/pkg/types"
+	trhSdkUtils "github.com/tokamak-network/trh-sdk/pkg/utils"
+	"go.uber.org/zap"
+	"regexp"
+)
+
+var (
+	chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]*$`)
+)
 
 type DeployThanosRequest struct {
 	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
@@ -19,6 +34,70 @@ type DeployThanosRequest struct {
 	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
 	ChainName                string                     `json:"chainName"                binding:"required"`
 	DeploymentPath           string                     `json:"deploymentPath"`
+}
+
+func (request *DeployThanosRequest) Validate() error {
+	if request.Network == entities.DeploymentNetworkLocalDevnet {
+		return errors.New("local devnet is not supported yet")
+	}
+
+	// Validate Chain Name
+	if !chainNameRegex.MatchString(request.ChainName) {
+		logger.Error("invalid chainName", zap.String("chainName", request.ChainName))
+		return errors.New("invalid chain name, chain name must contain only letters (a-z, A-Z), numbers (0-9), spaces. Special characters are not allowed")
+	}
+
+	// Validate L1 RPC URL
+	if !trhSdkUtils.IsValidL1RPC(request.L1RpcUrl) {
+		logger.Error("invalid l1RpcUrl", zap.String("l1RpcUrl", request.L1RpcUrl))
+		return errors.New("invalid l1RpcUrl")
+	}
+
+	// Validate L1 Beacon URL
+	if !trhSdkUtils.IsValidBeaconURL(request.L1BeaconUrl) {
+		logger.Error("invalid l1BeaconUrl", zap.String("l1BeaconUrl", request.L1BeaconUrl))
+		return errors.New("invalid l1BeaconUrl")
+	}
+
+	// Validate AWS Access Key
+	if !trhSdkUtils.IsValidAWSAccessKey(request.AwsAccessKey) {
+		logger.Error("invalid awsAccessKey", zap.String("awsAccessKey", request.AwsAccessKey))
+		return errors.New("invalid awsAccessKey")
+	}
+
+	// Validate AWS Secret Key
+	if !trhSdkUtils.IsValidAWSSecretKey(request.AwsSecretAccessKey) {
+		logger.Error("invalid awsSecretKey", zap.String("awsSecretAccessKey", request.AwsSecretAccessKey))
+		return errors.New("invalid awsSecretKey")
+	}
+
+	// Validate AWS Region
+	if !trhSdkAws.IsAvailableRegion(request.AwsAccessKey, request.AwsSecretAccessKey, request.AwsRegion) {
+		logger.Error("invalid awsRegion", zap.String("awsRegion", request.AwsRegion))
+		return errors.New("invalid awsRegion")
+	}
+
+	// Validate Chain Config
+	chainID, err := utils.GetChainIDFromRPC(request.L1RpcUrl)
+	if err != nil {
+		logger.Error("invalid rpc", zap.String("chainId", err.Error()))
+		return errors.New("invalid rpc")
+	}
+	chainConfig := trhSdkTypes.ChainConfiguration{
+		BatchSubmissionFrequency: uint64(request.BatchSubmissionFrequency),
+		OutputRootFrequency:      uint64(request.OutputRootFrequency),
+		ChallengePeriod:          uint64(request.ChallengePeriod),
+		L2BlockTime:              uint64(request.L2BlockTime),
+		L1BlockTime:              consts.L1_BLOCK_TIME,
+	}
+
+	err = chainConfig.Validate(chainID)
+	if err != nil {
+		logger.Error("invalid chainConfig", zap.String("chainConfig", err.Error()))
+		return err
+	}
+
+	return nil
 }
 
 type DeployL1ContractsRequest struct {

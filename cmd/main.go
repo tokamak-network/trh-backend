@@ -1,9 +1,12 @@
 package main
 
 import (
+	"github.com/tokamak-network/trh-backend/pkg/api/routes"
+	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/connection"
 	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/routes"
@@ -20,7 +23,7 @@ func main() {
 
 	err := godotenv.Load(".env")
 	if err != nil {
-		logger.Errorf("Failed to load environment.", "err", err.Error())
+		logger.Errorf("Failed to load environment, err: %s", err)
 		return
 	}
 
