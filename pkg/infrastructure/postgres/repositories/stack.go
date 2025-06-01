@@ -2,8 +2,8 @@ package repositories
 
 import (
 	"encoding/json"
-	"trh-backend/pkg/domain/entities"
-	"trh-backend/pkg/infrastructure/postgres/schemas"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"

@@ -2,11 +2,12 @@ package connection
 
 import (
 	"fmt"
+	"github.com/tokamak-network/trh-backend/internal/logger"
 
+	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
-	"trh-backend/pkg/infrastructure/postgres/schemas"
+	gormLogger "gorm.io/gorm/logger"
 )
 
 func Init(
@@ -15,7 +16,7 @@ func Init(
 	postgresPassword string,
 	postgresDatabase string,
 	postgresPort string,
-) *gorm.DB {
+) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s TimeZone=UTC",
 		postgresHost,
 		postgresUser,
@@ -23,13 +24,18 @@ func Init(
 		postgresDatabase,
 		postgresPort)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: gormLogger.Default.LogMode(gormLogger.Warn),
 	})
 	if err != nil {
-		panic(err.Error())
+		logger.Errorf("Failed to connect to postgres database", "err", err)
+		return nil, err
 	}
 
-	db.AutoMigrate(&schemas.Stack{}, &schemas.Deployment{}, &schemas.Integration{})
+	err = db.AutoMigrate(&schemas.Stack{}, &schemas.Deployment{}, &schemas.Integration{})
+	if err != nil {
+		logger.Errorf("Failed to auto migrate DB schemas", "err", err.Error())
+		return nil, err
+	}
 
-	return db
+	return db, nil
 }

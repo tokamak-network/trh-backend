@@ -2,9 +2,9 @@ package trh_sdk
 
 import (
 	"context"
-	"trh-backend/internal/consts"
-	"trh-backend/internal/logger"
-	"trh-backend/pkg/interfaces/api/dtos"
+	"github.com/tokamak-network/trh-backend/internal/consts"
+	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/dtos"
 
 	trh_sdk_logging "github.com/tokamak-network/trh-sdk/pkg/logging"
 	trh_sdk_thanos "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
@@ -106,7 +106,6 @@ func (t *ThanosStackImpl) DeployL1Contracts(req *dtos.DeployL1ContractsRequest) 
 
 	contractDeploymentInput := trh_sdk_thanos.DeployContractsInput{
 		L1RPCurl:           req.L1RpcUrl,
-		FraudProof:         false,
 		ChainConfiguration: &chainConfig,
 		Operators:          &operators,
 	}

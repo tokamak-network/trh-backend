@@ -2,9 +2,9 @@ package services
 
 import (
 	"encoding/json"
-	"trh-backend/internal/utils"
-	"trh-backend/pkg/domain/entities"
-	"trh-backend/pkg/interfaces/api/dtos"
+	"github.com/tokamak-network/trh-backend/internal/utils"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/dtos"
 
 	"github.com/google/uuid"
 )

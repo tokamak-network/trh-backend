@@ -1,13 +1,11 @@
 package handlers
 
 import (
+	"github.com/tokamak-network/trh-backend/internal/utils"
+	"github.com/tokamak-network/trh-backend/pkg/application/services"
+	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/servers"
 	"net/http"
-
-	"trh-backend/internal/utils"
-	"trh-backend/pkg/application/services"
-	thanosDomainServices "trh-backend/pkg/domain/services"
-	"trh-backend/pkg/interfaces/api/dtos"
-	"trh-backend/pkg/interfaces/api/servers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -161,8 +159,7 @@ func (h *ThanosHandler) GetStackByID(c *gin.Context) {
 }
 
 func NewThanosHandler(server *servers.Server) *ThanosHandler {
-	thanosDomainService := thanosDomainServices.NewThanosDomainService()
 	return &ThanosHandler{
-		ThanosService: services.NewThanosService(server.PostgresDB, thanosDomainService),
+		ThanosService: services.NewThanosService(server.PostgresDB, nil),
 	}
 }

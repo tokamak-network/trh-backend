@@ -3,7 +3,7 @@ package schemas
 import (
 	"time"
 
-	"trh-backend/pkg/domain/entities"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"

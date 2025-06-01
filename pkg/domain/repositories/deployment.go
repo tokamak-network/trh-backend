@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	"trh-backend/pkg/domain/entities"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
 type DeploymentRepository interface {

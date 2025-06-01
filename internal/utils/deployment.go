@@ -1,10 +1,10 @@
 package utils
 
 import (
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"os"
 	"path"
 	"time"
-	"trh-backend/pkg/domain/entities"
 
 	"github.com/google/uuid"
 )

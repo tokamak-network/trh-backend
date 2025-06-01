@@ -1,6 +1,6 @@
 package dtos
 
-import "trh-backend/pkg/domain/entities"
+import "github.com/tokamak-network/trh-backend/pkg/domain/entities"
 
 type DeployThanosRequest struct {
 	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`

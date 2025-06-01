@@ -1,4 +1,4 @@
-module trh-backend
+module github.com/tokamak-network/trh-backend
 
 go 1.23.0
 
