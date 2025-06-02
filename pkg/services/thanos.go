@@ -94,7 +94,7 @@ func (s *ThanosDeployment) CreateThanosStack(request dtos.DeployThanosRequest) (
 func (s *ThanosDeployment) handleStackDeployment(stackId uuid.UUID) {
 	logger.Info("Updating stacks status to creating", zap.String("stackId", stackId.String()))
 
-	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeploying)
+	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeploying, "")
 	if err != nil {
 		logger.Error("failed to update stacks status",
 			zap.String("stackId", stackId.String()),
@@ -108,14 +108,14 @@ func (s *ThanosDeployment) handleStackDeployment(stackId uuid.UUID) {
 			zap.Error(err))
 
 		// Update stacks status to failed
-		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToDeploy); updateErr != nil {
+		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToDeploy, err.Error()); updateErr != nil {
 			logger.Error("failed to update stacks status",
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
 		}
 	} else {
 		// Update stacks status to active on success
-		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeployed); updateErr != nil {
+		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeployed, ""); updateErr != nil {
 			logger.Error("failed to update stacks status",
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
@@ -309,7 +309,7 @@ func (s *ThanosDeployment) handleStackTermination(stackId uuid.UUID) {
 	}
 
 	// Update stacks status to terminating
-	if err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminating); err != nil {
+	if err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminating, ""); err != nil {
 		logger.Error("failed to update stacks status to terminating",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
@@ -321,7 +321,7 @@ func (s *ThanosDeployment) handleStackTermination(stackId uuid.UUID) {
 		logger.Error("failed to unmarshal stacks config",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
-		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate); updateErr != nil {
+		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate, err.Error()); updateErr != nil {
 			logger.Error("failed to update stacks status after unmarshal error",
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
@@ -342,7 +342,7 @@ func (s *ThanosDeployment) handleStackTermination(stackId uuid.UUID) {
 		logger.Error("failed to destroy AWS infrastructure",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
-		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate); updateErr != nil {
+		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate, err.Error()); updateErr != nil {
 			logger.Error("failed to update stacks status after destroy error",
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
@@ -350,7 +350,7 @@ func (s *ThanosDeployment) handleStackTermination(stackId uuid.UUID) {
 		return
 	}
 
-	if err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminated); err != nil {
+	if err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminated, ""); err != nil {
 		logger.Error("failed to update stacks status to terminated",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))

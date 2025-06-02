@@ -44,8 +44,13 @@ func (r *StackPostgresRepository) DeleteStack(
 func (r *StackPostgresRepository) UpdateStatus(
 	id string,
 	status entities.Status,
+	reason string,
 ) error {
-	return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("status", status).Error
+	if reason == "" {
+		return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("status", status).Error
+	} else {
+		return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("status", status).Update("reason", reason).Error
+	}
 }
 
 func (r *StackPostgresRepository) GetStackByID(

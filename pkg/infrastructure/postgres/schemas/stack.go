@@ -14,6 +14,7 @@ type Stack struct {
 	ID             uuid.UUID                  `gorm:"type:uuid;primaryKey;default:gen_random_uuid();column:id"`
 	Name           string                     `gorm:"column:name"`
 	Status         entities.Status            `gorm:"not null;column:status"`
+	Reason         string                     `gorm:"column:reason"`
 	Network        entities.DeploymentNetwork `gorm:"not null;column:network"`
 	DeploymentPath string                     `gorm:"not null;column:deployment_path"`
 	Config         datatypes.JSON             `gorm:"type:jsonb;not null;column:config"`
