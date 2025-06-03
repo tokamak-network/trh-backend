@@ -162,6 +162,6 @@ func NewThanosHandler(server *servers.Server) *ThanosDeploymentHandler {
 	deploymentRepo := postgresRepositories.NewDeploymentRepository(server.PostgresDB)
 	stackRepo := postgresRepositories.NewStackRepository(server.PostgresDB)
 	return &ThanosDeploymentHandler{
-		ThanosDeploymentService: services.NewThanosService(server.PostgresDB, deploymentRepo, stackRepo),
+		ThanosDeploymentService: services.NewThanosService(deploymentRepo, stackRepo),
 	}
 }

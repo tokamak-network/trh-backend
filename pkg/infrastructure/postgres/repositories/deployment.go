@@ -7,37 +7,27 @@ import (
 	"gorm.io/gorm"
 )
 
-type DeploymentPostgresRepository struct {
+type DeploymentRepository struct {
 	db *gorm.DB
 }
 
-func NewDeploymentRepository(db *gorm.DB) *DeploymentPostgresRepository {
-	return &DeploymentPostgresRepository{db: db}
+func NewDeploymentRepository(db *gorm.DB) *DeploymentRepository {
+	return &DeploymentRepository{db: db}
 }
 
-func (r *DeploymentPostgresRepository) CreateDeployment(deployment *entities.DeploymentEntity) error {
-	newDeployment := schemas.Deployment{
-		ID:            deployment.ID,
-		StackID:       deployment.StackID,
-		IntegrationID: deployment.IntegrationID,
-		Step:          deployment.Step,
-		Name:          deployment.Name,
-		Status:        deployment.Status,
-		LogPath:       deployment.LogPath,
-		Config:        deployment.Config,
-	}
-	return r.db.Create(&newDeployment).Error
+func (r *DeploymentRepository) CreateDeployment(deployment *entities.DeploymentEntity) error {
+	return r.db.Create(ToDeploymentSchema(deployment)).Error
 }
 
-func (r *DeploymentPostgresRepository) UpdateDeploymentStatus(id string, status entities.DeploymentStatus) error {
+func (r *DeploymentRepository) UpdateDeploymentStatus(id string, status entities.DeploymentStatus) error {
 	return r.db.Model(&schemas.Deployment{}).Where("id = ?", id).Update("status", status).Error
 }
 
-func (r *DeploymentPostgresRepository) DeleteDeployment(id string) error {
+func (r *DeploymentRepository) DeleteDeployment(id string) error {
 	return r.db.Delete(&schemas.Deployment{}, id).Error
 }
 
-func (r *DeploymentPostgresRepository) GetDeploymentByID(id string) (*entities.DeploymentEntity, error) {
+func (r *DeploymentRepository) GetDeploymentByID(id string) (*entities.DeploymentEntity, error) {
 	var deployment schemas.Deployment
 	if err := r.db.Where("id = ?", id).First(&deployment).Error; err != nil {
 		return nil, err
@@ -45,7 +35,7 @@ func (r *DeploymentPostgresRepository) GetDeploymentByID(id string) (*entities.D
 	return &entities.DeploymentEntity{ID: deployment.ID, StackID: deployment.StackID, IntegrationID: deployment.IntegrationID, Step: deployment.Step, Name: deployment.Name, Status: deployment.Status, LogPath: deployment.LogPath, Config: deployment.Config}, nil
 }
 
-func (r *DeploymentPostgresRepository) GetDeploymentsByStackID(stackID string) ([]*entities.DeploymentEntity, error) {
+func (r *DeploymentRepository) GetDeploymentsByStackID(stackID string) ([]*entities.DeploymentEntity, error) {
 	var deployments []schemas.Deployment
 	if err := r.db.Where("stack_id = ?", stackID).Order("step asc").Find(&deployments).Error; err != nil {
 		return nil, err
@@ -57,10 +47,23 @@ func (r *DeploymentPostgresRepository) GetDeploymentsByStackID(stackID string) (
 	return deploymentsEntities, nil
 }
 
-func (r *DeploymentPostgresRepository) GetDeploymentStatus(id string) (entities.DeploymentStatus, error) {
+func (r *DeploymentRepository) GetDeploymentStatus(id string) (entities.DeploymentStatus, error) {
 	var deployment schemas.Deployment
 	if err := r.db.Where("id = ?", id).First(&deployment).Error; err != nil {
 		return entities.DeploymentStatusUnknown, err
 	}
 	return deployment.Status, nil
+}
+
+func ToDeploymentSchema(d *entities.DeploymentEntity) *schemas.Deployment {
+	return &schemas.Deployment{
+		ID:            d.ID,
+		StackID:       d.StackID,
+		IntegrationID: d.IntegrationID,
+		Step:          d.Step,
+		Name:          d.Name,
+		Status:        d.Status,
+		LogPath:       d.LogPath,
+		Config:        d.Config,
+	}
 }

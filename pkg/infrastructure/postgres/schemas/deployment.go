@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 type Deployment struct {
@@ -23,7 +22,7 @@ type Deployment struct {
 	LogPath       string                    `gorm:"column:log_path"`
 	CreatedAt     time.Time                 `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt     time.Time                 `gorm:"autoUpdateTime;column:updated_at"`
-	DeletedAt     gorm.DeletedAt            `gorm:"index;column:deleted_at"`
+	DeletedAt     time.Time                 `gorm:"autoUpdateTime;column:deleted_at"`
 }
 
 func (Deployment) TableName() string {

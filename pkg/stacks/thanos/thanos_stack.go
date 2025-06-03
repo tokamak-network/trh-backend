@@ -14,6 +14,7 @@ func DeployAWSInfrastructure(req *dtos.DeployThanosAWSInfraRequest) error {
 	l := trhSDKLogging.InitLogger(req.LogPath)
 
 	logger.Info("Deploying AWS Infrastructure...")
+	return nil
 
 	awsConfig := thanosTypes.AWSConfig{
 		AccessKey: req.AwsAccessKey,
@@ -69,6 +70,7 @@ func DestroyAWSInfrastructure(req *dtos.TerminateThanosRequest) error {
 
 func DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error {
 	logger.Info("Deploying L1 Contracts...")
+	return nil
 
 	trhLogger := trhSDKLogging.InitLogger(req.LogPath)
 	s, err := thanosStack.NewThanosStack(trhLogger, string(req.Network), true, req.DeploymentPath, nil)
