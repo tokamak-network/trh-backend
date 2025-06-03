@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"trh-backend/internal/utils"
 	"trh-backend/pkg/application/services"
 	thanosDomainServices "trh-backend/pkg/domain/services"
 	"trh-backend/pkg/interfaces/api/dtos"
@@ -27,6 +28,11 @@ func (h *ThanosHandler) DeployThanos(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	request.AdminAccount = utils.TrimPrivateKey(request.AdminAccount)
+	request.SequencerAccount = utils.TrimPrivateKey(request.SequencerAccount)
+	request.BatcherAccount = utils.TrimPrivateKey(request.BatcherAccount)
+	request.ProposerAccount = utils.TrimPrivateKey(request.ProposerAccount)
 
 	stackId, err := h.ThanosService.CreateThanosStack(request)
 	if err != nil {

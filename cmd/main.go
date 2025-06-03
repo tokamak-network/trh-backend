@@ -9,13 +9,13 @@ import (
 	"trh-backend/pkg/interfaces/api/routes"
 	"trh-backend/pkg/interfaces/api/servers"
 
+	"github.com/gin-contrib/cors"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
 func main() {
 
-	// Initialize logger
 	logger.Init()
 
 	err := godotenv.Load(".env")
@@ -45,6 +45,13 @@ func main() {
 	)
 
 	server := servers.NewServer(postgresDB)
+
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"*"}
+
+	server.Use(cors.New(config))
 
 	routes.SetupRoutes(server)
 
