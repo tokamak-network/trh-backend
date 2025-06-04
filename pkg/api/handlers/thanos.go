@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/tokamak-network/trh-backend/internal/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -56,7 +57,7 @@ func (h *ThanosDeploymentHandler) Terminate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "OK"})
 }
 
-func (h *ThanosDeploymentHandler) ResumeThanos(c *gin.Context) {
+func (h *ThanosDeploymentHandler) Resume(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
