@@ -1,15 +1,15 @@
 package handlers
 
 import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 	postgresRepositories "github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/repositories"
 	"github.com/tokamak-network/trh-backend/pkg/services"
 	"github.com/tokamak-network/trh-backend/pkg/taskmanager"
-	"net/http"
-
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type ThanosDeploymentHandler struct {
@@ -118,7 +118,10 @@ func (h *ThanosDeploymentHandler) GetStackDeployment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "deploymentId is required"})
 		return
 	}
-	deployment, err := h.ThanosDeploymentService.GetStackDeployment(uuid.MustParse(id), uuid.MustParse(deploymentId))
+	deployment, err := h.ThanosDeploymentService.GetStackDeployment(
+		uuid.MustParse(id),
+		uuid.MustParse(deploymentId),
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

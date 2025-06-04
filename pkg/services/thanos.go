@@ -3,14 +3,14 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	"go.uber.org/zap"
-
-	"github.com/google/uuid"
 )
 
 type DeploymentRepository interface {
@@ -58,7 +58,9 @@ func NewThanosService(
 	return thanosDeploymentSrv
 }
 
-func (s *ThanosStackDeploymentService) CreateThanosStack(request dtos.DeployThanosRequest) (uuid.UUID, error) {
+func (s *ThanosStackDeploymentService) CreateThanosStack(
+	request dtos.DeployThanosRequest,
+) (uuid.UUID, error) {
 	stackId := uuid.New()
 	deploymentPath := utils.GetDeploymentPath(s.name, request.Network, stackId.String())
 	request.DeploymentPath = deploymentPath
@@ -223,7 +225,11 @@ func (s *ThanosStackDeploymentService) deployThanosStack(stackId uuid.UUID) erro
 	return <-errChan
 }
 
-func (s *ThanosStackDeploymentService) deployL1Contracts(statusChan chan entities.DeploymentStatusWithID, deploymentID uuid.UUID, request dtos.DeployL1ContractsRequest) error {
+func (s *ThanosStackDeploymentService) deployL1Contracts(
+	statusChan chan entities.DeploymentStatusWithID,
+	deploymentID uuid.UUID,
+	request dtos.DeployL1ContractsRequest,
+) error {
 	if err := thanos.DeployL1Contracts(&request); err != nil {
 		statusChan <- entities.DeploymentStatusWithID{
 			DeploymentID: deploymentID,
@@ -238,7 +244,11 @@ func (s *ThanosStackDeploymentService) deployL1Contracts(statusChan chan entitie
 	return nil
 }
 
-func (s *ThanosStackDeploymentService) deployThanosAWSInfra(statusChan chan entities.DeploymentStatusWithID, deploymentID uuid.UUID, request dtos.DeployThanosAWSInfraRequest) error {
+func (s *ThanosStackDeploymentService) deployThanosAWSInfra(
+	statusChan chan entities.DeploymentStatusWithID,
+	deploymentID uuid.UUID,
+	request dtos.DeployThanosAWSInfraRequest,
+) error {
 	if err := thanos.DeployAWSInfrastructure(&request); err != nil {
 		statusChan <- entities.DeploymentStatusWithID{
 			DeploymentID: deploymentID,
@@ -268,9 +278,15 @@ func (s *ThanosStackDeploymentService) TerminateThanosStack(stackId uuid.UUID) e
 	}
 
 	// Check if stacks is in a valid state to be terminated
-	if stack.Status == entities.StatusDeploying || stack.Status == entities.StatusUpdating || stack.Status == entities.StatusTerminating {
-		logger.Error("The stacks is still deploying, updating or terminating, please wait for it to finish", zap.String("stackId", stackId.String()))
-		return fmt.Errorf("the stacks is still deploying, updating or terminating, please wait for it to finish")
+	if stack.Status == entities.StatusDeploying || stack.Status == entities.StatusUpdating ||
+		stack.Status == entities.StatusTerminating {
+		logger.Error(
+			"The stacks is still deploying, updating or terminating, please wait for it to finish",
+			zap.String("stackId", stackId.String()),
+		)
+		return fmt.Errorf(
+			"the stacks is still deploying, updating or terminating, please wait for it to finish",
+		)
 	}
 
 	s.taskManager.AddTask(func() {
@@ -284,7 +300,11 @@ func (s *ThanosStackDeploymentService) handleStackTermination(stackId uuid.UUID)
 	// Check if stacks exists
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
-		logger.Error("failed to get stacks", zap.String("stackId", stackId.String()), zap.Error(err))
+		logger.Error(
+			"failed to get stacks",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err),
+		)
 		return
 	}
 
@@ -356,7 +376,10 @@ func (s *ThanosStackDeploymentService) handleStackTermination(stackId uuid.UUID)
 		}
 	}
 
-	logger.Info("AWS infrastructure destroyed successfully", zap.String("stackId", stackId.String()))
+	logger.Info(
+		"AWS infrastructure destroyed successfully",
+		zap.String("stackId", stackId.String()),
+	)
 }
 
 func (s *ThanosStackDeploymentService) GetAllStacks() ([]*entities.StackEntity, error) {
@@ -367,23 +390,36 @@ func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (entiti
 	return s.stackRepo.GetStackStatus(stackId.String())
 }
 
-func (s *ThanosStackDeploymentService) GetStackDeployments(stackId uuid.UUID) ([]*entities.DeploymentEntity, error) {
+func (s *ThanosStackDeploymentService) GetStackDeployments(
+	stackId uuid.UUID,
+) ([]*entities.DeploymentEntity, error) {
 	return s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
 }
 
-func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(deploymentId uuid.UUID) (entities.DeploymentStatus, error) {
+func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(
+	deploymentId uuid.UUID,
+) (entities.DeploymentStatus, error) {
 	return s.deploymentRepo.GetDeploymentStatus(deploymentId.String())
 }
 
-func (s *ThanosStackDeploymentService) GetStackDeployment(_ uuid.UUID, deploymentId uuid.UUID) (*entities.DeploymentEntity, error) {
+func (s *ThanosStackDeploymentService) GetStackDeployment(
+	_ uuid.UUID,
+	deploymentId uuid.UUID,
+) (*entities.DeploymentEntity, error) {
 	return s.deploymentRepo.GetDeploymentByID(deploymentId.String())
 }
 
-func (s *ThanosStackDeploymentService) GetStackByID(stackId uuid.UUID) (*entities.StackEntity, error) {
+func (s *ThanosStackDeploymentService) GetStackByID(
+	stackId uuid.UUID,
+) (*entities.StackEntity, error) {
 	return s.stackRepo.GetStackByID(stackId.String())
 }
 
-func getThanosStackDeployments(stackId uuid.UUID, config *dtos.DeployThanosRequest, deploymentPath string) ([]*entities.DeploymentEntity, error) {
+func getThanosStackDeployments(
+	stackId uuid.UUID,
+	config *dtos.DeployThanosRequest,
+	deploymentPath string,
+) ([]*entities.DeploymentEntity, error) {
 	deployments := make([]*entities.DeploymentEntity, 0)
 	l1ContractDeploymentID := uuid.New()
 	l1ContractDeploymentLogPath := utils.GetDeploymentLogPath(stackId, l1ContractDeploymentID)
@@ -409,7 +445,6 @@ func getThanosStackDeployments(stackId uuid.UUID, config *dtos.DeployThanosReque
 		StackID:        &stackId,
 		IntegrationID:  nil,
 		Step:           1,
-		Name:           "thanos-l1-contract-deployment",
 		Status:         entities.DeploymentStatusPending,
 		LogPath:        l1ContractDeploymentLogPath,
 		Config:         l1ContractDeploymentConfig,
@@ -418,7 +453,10 @@ func getThanosStackDeployments(stackId uuid.UUID, config *dtos.DeployThanosReque
 	deployments = append(deployments, l1ContractDeployment)
 
 	thanosInfrastructureDeploymentID := uuid.New()
-	thanosInfrastructureDeploymentLogPath := utils.GetDeploymentLogPath(stackId, thanosInfrastructureDeploymentID)
+	thanosInfrastructureDeploymentLogPath := utils.GetDeploymentLogPath(
+		stackId,
+		thanosInfrastructureDeploymentID,
+	)
 	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
 		ChainName:          config.ChainName,
 		Network:            string(config.Network),
@@ -437,7 +475,6 @@ func getThanosStackDeployments(stackId uuid.UUID, config *dtos.DeployThanosReque
 		StackID:        &stackId,
 		IntegrationID:  nil,
 		Step:           2,
-		Name:           "thanos-infrastructure-deployment",
 		Status:         entities.DeploymentStatusPending,
 		LogPath:        thanosInfrastructureDeploymentLogPath,
 		Config:         thanosInfrastructureDeploymentConfig,

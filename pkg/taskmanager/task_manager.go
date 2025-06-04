@@ -2,9 +2,10 @@ package taskmanager
 
 import (
 	"context"
-	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"log"
 	"sync"
+
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
 type TaskManager struct {

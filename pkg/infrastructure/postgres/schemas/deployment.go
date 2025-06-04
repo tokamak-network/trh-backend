@@ -3,9 +3,8 @@ package schemas
 import (
 	"time"
 
-	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
-
 	"github.com/google/uuid"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"gorm.io/datatypes"
 )
 
@@ -16,7 +15,6 @@ type Deployment struct {
 	IntegrationID *uuid.UUID                `gorm:"column:integration_id;nullable;references:ID"`
 	Integration   Integration               `gorm:"foreignKey:IntegrationID"`
 	Step          int                       `gorm:"column:step;not null"`
-	Name          string                    `gorm:"column:name"`
 	Status        entities.DeploymentStatus `gorm:"column:status;not null"`
 	Config        datatypes.JSON            `gorm:"type:jsonb;not null;column:config"`
 	LogPath       string                    `gorm:"column:log_path"`

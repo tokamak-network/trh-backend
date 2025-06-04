@@ -2,8 +2,8 @@ package connection
 
 import (
 	"fmt"
-	"github.com/tokamak-network/trh-backend/internal/logger"
 
+	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

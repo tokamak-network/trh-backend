@@ -2,9 +2,9 @@ package repositories
 
 import (
 	"encoding/json"
+
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
-
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -35,7 +35,10 @@ func (r *StackRepository) CreateStack(
 	return nil
 }
 
-func (r *StackRepository) CreateStackByTx(stack *entities.StackEntity, deployments []*entities.DeploymentEntity) error {
+func (r *StackRepository) CreateStackByTx(
+	stack *entities.StackEntity,
+	deployments []*entities.DeploymentEntity,
+) error {
 	tx := r.db.Begin()
 	err := tx.Create(ToStackEntity(stack)).Error
 	if err != nil {

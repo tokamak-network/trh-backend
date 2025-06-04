@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"context"
+
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
@@ -14,7 +15,6 @@ func DeployAWSInfrastructure(req *dtos.DeployThanosAWSInfraRequest) error {
 	l := trhSDKLogging.InitLogger(req.LogPath)
 
 	logger.Info("Deploying AWS Infrastructure...")
-	return nil
 
 	awsConfig := thanosTypes.AWSConfig{
 		AccessKey: req.AwsAccessKey,
@@ -53,7 +53,13 @@ func DestroyAWSInfrastructure(req *dtos.TerminateThanosRequest) error {
 		SecretKey: req.AwsSecretAccessKey,
 		Region:    req.AwsRegion,
 	}
-	s, err := thanosStack.NewThanosStack(trhLogger, string(req.Network), true, req.DeploymentPath, &awsConfig)
+	s, err := thanosStack.NewThanosStack(
+		trhLogger,
+		string(req.Network),
+		true,
+		req.DeploymentPath,
+		&awsConfig,
+	)
 	if err != nil {
 		return err
 	}
@@ -70,10 +76,15 @@ func DestroyAWSInfrastructure(req *dtos.TerminateThanosRequest) error {
 
 func DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error {
 	logger.Info("Deploying L1 Contracts...")
-	return nil
 
 	trhLogger := trhSDKLogging.InitLogger(req.LogPath)
-	s, err := thanosStack.NewThanosStack(trhLogger, string(req.Network), true, req.DeploymentPath, nil)
+	s, err := thanosStack.NewThanosStack(
+		trhLogger,
+		string(req.Network),
+		true,
+		req.DeploymentPath,
+		nil,
+	)
 	if err != nil {
 		return err
 	}

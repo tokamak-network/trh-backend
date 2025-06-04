@@ -10,7 +10,6 @@ type DeploymentEntity struct {
 	StackID        *uuid.UUID
 	IntegrationID  *uuid.UUID
 	Step           int
-	Name           string
 	Status         DeploymentStatus
 	LogPath        string
 	DeploymentPath string

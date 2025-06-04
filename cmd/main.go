@@ -1,13 +1,13 @@
 package main
 
 import (
-	"github.com/tokamak-network/trh-backend/pkg/api/routes"
-	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
 	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/pkg/api/routes"
+	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/connection"
 	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/routes"
 	"github.com/tokamak-network/trh-backend/pkg/interfaces/api/servers"
@@ -46,7 +46,6 @@ func main() {
 		postgresDatabase,
 		postgresPort,
 	)
-
 	if err != nil {
 		logger.Fatal("Failed to connect to postgres", zap.Error(err))
 	}

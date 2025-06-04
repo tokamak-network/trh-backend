@@ -3,7 +3,6 @@ package repositories
 import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
-
 	"gorm.io/gorm"
 )
 
@@ -19,7 +18,10 @@ func (r *DeploymentRepository) CreateDeployment(deployment *entities.DeploymentE
 	return r.db.Create(ToDeploymentSchema(deployment)).Error
 }
 
-func (r *DeploymentRepository) UpdateDeploymentStatus(id string, status entities.DeploymentStatus) error {
+func (r *DeploymentRepository) UpdateDeploymentStatus(
+	id string,
+	status entities.DeploymentStatus,
+) error {
 	return r.db.Model(&schemas.Deployment{}).Where("id = ?", id).Update("status", status).Error
 }
 
@@ -32,17 +34,37 @@ func (r *DeploymentRepository) GetDeploymentByID(id string) (*entities.Deploymen
 	if err := r.db.Where("id = ?", id).First(&deployment).Error; err != nil {
 		return nil, err
 	}
-	return &entities.DeploymentEntity{ID: deployment.ID, StackID: deployment.StackID, IntegrationID: deployment.IntegrationID, Step: deployment.Step, Name: deployment.Name, Status: deployment.Status, LogPath: deployment.LogPath, Config: deployment.Config}, nil
+	return &entities.DeploymentEntity{
+		ID:            deployment.ID,
+		StackID:       deployment.StackID,
+		IntegrationID: deployment.IntegrationID,
+		Step:          deployment.Step,
+		Name:          deployment.Name,
+		Status:        deployment.Status,
+		LogPath:       deployment.LogPath,
+		Config:        deployment.Config,
+	}, nil
 }
 
-func (r *DeploymentRepository) GetDeploymentsByStackID(stackID string) ([]*entities.DeploymentEntity, error) {
+func (r *DeploymentRepository) GetDeploymentsByStackID(
+	stackID string,
+) ([]*entities.DeploymentEntity, error) {
 	var deployments []schemas.Deployment
 	if err := r.db.Where("stack_id = ?", stackID).Order("step asc").Find(&deployments).Error; err != nil {
 		return nil, err
 	}
 	deploymentsEntities := make([]*entities.DeploymentEntity, len(deployments))
 	for i, deployment := range deployments {
-		deploymentsEntities[i] = &entities.DeploymentEntity{ID: deployment.ID, StackID: deployment.StackID, IntegrationID: deployment.IntegrationID, Step: deployment.Step, Name: deployment.Name, Status: deployment.Status, LogPath: deployment.LogPath, Config: deployment.Config}
+		deploymentsEntities[i] = &entities.DeploymentEntity{
+			ID:            deployment.ID,
+			StackID:       deployment.StackID,
+			IntegrationID: deployment.IntegrationID,
+			Step:          deployment.Step,
+			Name:          deployment.Name,
+			Status:        deployment.Status,
+			LogPath:       deployment.LogPath,
+			Config:        deployment.Config,
+		}
 	}
 	return deploymentsEntities, nil
 }
@@ -61,7 +83,6 @@ func ToDeploymentSchema(d *entities.DeploymentEntity) *schemas.Deployment {
 		StackID:       d.StackID,
 		IntegrationID: d.IntegrationID,
 		Step:          d.Step,
-		Name:          d.Name,
 		Status:        d.Status,
 		LogPath:       d.LogPath,
 		Config:        d.Config,

@@ -2,6 +2,8 @@ package dtos
 
 import (
 	"errors"
+	"regexp"
+
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
@@ -10,12 +12,9 @@ import (
 	trhSdkTypes "github.com/tokamak-network/trh-sdk/pkg/types"
 	trhSdkUtils "github.com/tokamak-network/trh-sdk/pkg/utils"
 	"go.uber.org/zap"
-	"regexp"
 )
 
-var (
-	chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]*$`)
-)
+var chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]*$`)
 
 type DeployThanosRequest struct {
 	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
@@ -44,7 +43,9 @@ func (request *DeployThanosRequest) Validate() error {
 	// Validate Chain Name
 	if !chainNameRegex.MatchString(request.ChainName) {
 		logger.Error("invalid chainName", zap.String("chainName", request.ChainName))
-		return errors.New("invalid chain name, chain name must contain only letters (a-z, A-Z), numbers (0-9), spaces. Special characters are not allowed")
+		return errors.New(
+			"invalid chain name, chain name must contain only letters (a-z, A-Z), numbers (0-9), spaces. Special characters are not allowed",
+		)
 	}
 
 	// Validate L1 RPC URL
@@ -67,12 +68,19 @@ func (request *DeployThanosRequest) Validate() error {
 
 	// Validate AWS Secret Key
 	if !trhSdkUtils.IsValidAWSSecretKey(request.AwsSecretAccessKey) {
-		logger.Error("invalid awsSecretKey", zap.String("awsSecretAccessKey", request.AwsSecretAccessKey))
+		logger.Error(
+			"invalid awsSecretKey",
+			zap.String("awsSecretAccessKey", request.AwsSecretAccessKey),
+		)
 		return errors.New("invalid awsSecretKey")
 	}
 
 	// Validate AWS Region
-	if !trhSdkAws.IsAvailableRegion(request.AwsAccessKey, request.AwsSecretAccessKey, request.AwsRegion) {
+	if !trhSdkAws.IsAvailableRegion(
+		request.AwsAccessKey,
+		request.AwsSecretAccessKey,
+		request.AwsRegion,
+	) {
 		logger.Error("invalid awsRegion", zap.String("awsRegion", request.AwsRegion))
 		return errors.New("invalid awsRegion")
 	}
@@ -116,23 +124,23 @@ type DeployL1ContractsRequest struct {
 }
 
 type DeployThanosAWSInfraRequest struct {
-	ChainName          string `json:"chainName" binding:"required"`
-	Network            string `json:"network" binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
-	L1BeaconUrl        string `json:"l1BeaconUrl" binding:"required" validate:"url"`
-	AwsAccessKey       string `json:"awsAccessKey" binding:"required"`
+	ChainName          string `json:"chainName"          binding:"required"`
+	Network            string `json:"network"            binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
+	L1BeaconUrl        string `json:"l1BeaconUrl"        binding:"required" validate:"url"`
+	AwsAccessKey       string `json:"awsAccessKey"       binding:"required"`
 	AwsSecretAccessKey string `json:"awsSecretAccessKey" binding:"required"`
-	AwsRegion          string `json:"awsRegion" binding:"required"`
-	DeploymentPath     string `json:"deploymentPath" binding:"required"`
-	LogPath            string `json:"logPath" binding:"required"`
+	AwsRegion          string `json:"awsRegion"          binding:"required"`
+	DeploymentPath     string `json:"deploymentPath"     binding:"required"`
+	LogPath            string `json:"logPath"            binding:"required"`
 }
 
 type TerminateThanosRequest struct {
-	Network            string `json:"network" binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
-	AwsAccessKey       string `json:"awsAccessKey" binding:"required"`
+	Network            string `json:"network"            binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
+	AwsAccessKey       string `json:"awsAccessKey"       binding:"required"`
 	AwsSecretAccessKey string `json:"awsSecretAccessKey" binding:"required"`
-	AwsRegion          string `json:"awsRegion" binding:"required"`
-	DeploymentPath     string `json:"deploymentPath" binding:"required"`
-	LogPath            string `json:"logPath" binding:"required"`
+	AwsRegion          string `json:"awsRegion"          binding:"required"`
+	DeploymentPath     string `json:"deploymentPath"     binding:"required"`
+	LogPath            string `json:"logPath"            binding:"required"`
 }
 
 type DeployThanosResponse struct {
