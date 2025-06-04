@@ -3,11 +3,9 @@ package schemas
 import (
 	"time"
 
-	"trh-backend/pkg/domain/entities"
-
 	"github.com/google/uuid"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 type Deployment struct {
@@ -17,13 +15,12 @@ type Deployment struct {
 	IntegrationID *uuid.UUID                `gorm:"column:integration_id;nullable;references:ID"`
 	Integration   Integration               `gorm:"foreignKey:IntegrationID"`
 	Step          int                       `gorm:"column:step;not null"`
-	Name          string                    `gorm:"column:name"`
 	Status        entities.DeploymentStatus `gorm:"column:status;not null"`
 	Config        datatypes.JSON            `gorm:"type:jsonb;not null;column:config"`
 	LogPath       string                    `gorm:"column:log_path"`
 	CreatedAt     time.Time                 `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt     time.Time                 `gorm:"autoUpdateTime;column:updated_at"`
-	DeletedAt     gorm.DeletedAt            `gorm:"index;column:deleted_at"`
+	DeletedAt     time.Time                 `gorm:"autoUpdateTime;column:deleted_at"`
 }
 
 func (Deployment) TableName() string {

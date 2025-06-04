@@ -4,10 +4,10 @@ import (
 	"log"
 	"os"
 
-	"trh-backend/internal/logger"
-	"trh-backend/pkg/infrastructure/postgres/connection"
-	"trh-backend/pkg/interfaces/api/routes"
-	"trh-backend/pkg/interfaces/api/servers"
+	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/pkg/api/routes"
+	"github.com/tokamak-network/trh-backend/pkg/api/servers"
+	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/connection"
 
 	"github.com/gin-contrib/cors"
 	"github.com/joho/godotenv"
@@ -20,7 +20,7 @@ func main() {
 
 	err := godotenv.Load(".env")
 	if err != nil {
-		logger.Error("Failed to load environment.", zap.Error(err))
+		logger.Errorf("Failed to load environment, err: %s", err)
 		return
 	}
 
@@ -36,13 +36,16 @@ func main() {
 	postgresDatabase := os.Getenv("POSTGRES_DB")
 	postgresPort := os.Getenv("POSTGRES_PORT")
 
-	postgresDB := connection.Init(
+	postgresDB, err := connection.Init(
 		postgresUser,
 		postgresHost,
 		postgresPassword,
 		postgresDatabase,
 		postgresPort,
 	)
+	if err != nil {
+		logger.Fatal("Failed to connect to postgres", zap.Error(err))
+	}
 
 	server := servers.NewServer(postgresDB)
 	config := cors.DefaultConfig()

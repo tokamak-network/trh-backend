@@ -1,10 +1,9 @@
 package routes
 
 import (
-	"trh-backend/pkg/interfaces/api/handlers"
-	"trh-backend/pkg/interfaces/api/servers"
-
 	"github.com/gin-gonic/gin"
+	handlers2 "github.com/tokamak-network/trh-backend/pkg/api/handlers"
+	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 )
 
 func SetupRoutes(server *servers.Server) {
@@ -21,15 +20,15 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 }
 
 func setupHealthRoutes(router *gin.RouterGroup) {
-	handler := handlers.NewHealthHandler()
+	handler := handlers2.NewHealthHandler()
 	router.GET("", handler.GetHealth)
 }
 
 func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server) {
-	handler := handlers.NewThanosHandler(server)
-	router.POST("", handler.DeployThanos)
-	router.POST("/:id/resume", handler.ResumeThanos)
-	router.DELETE("/:id", handler.TerminateThanos)
+	handler := handlers2.NewThanosHandler(server)
+	router.POST("", handler.Deploy)
+	router.POST("/:id/resume", handler.Resume)
+	router.DELETE("/:id", handler.Terminate)
 	router.GET("", handler.GetAllStacks)
 	router.GET("/:id", handler.GetStackByID)
 	router.GET("/:id/status", handler.GetStackStatus)

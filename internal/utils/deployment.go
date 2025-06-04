@@ -4,9 +4,9 @@ import (
 	"os"
 	"path"
 	"time"
-	"trh-backend/pkg/domain/entities"
 
 	"github.com/google/uuid"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
 func GetDeploymentPath(
@@ -24,7 +24,14 @@ func GetDeploymentLogPath(
 ) string {
 	rootDir, _ := os.Getwd()
 	timestamp := time.Now().Format("2006-01-02-15-04-05")
-	return path.Join(rootDir, "storage", "logs", stackID.String(), deploymentID.String(), timestamp+"_logs.txt")
+	return path.Join(
+		rootDir,
+		"storage",
+		"logs",
+		stackID.String(),
+		deploymentID.String(),
+		timestamp+"_logs.txt",
+	)
 }
 
 func GetDestroyLogPath(

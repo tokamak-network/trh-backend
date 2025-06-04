@@ -40,3 +40,23 @@ func Warn(msg string, fields ...zap.Field) {
 func Fatal(msg string, fields ...zap.Field) {
 	Logger.Fatal(msg, fields...)
 }
+
+func Infof(msg string, args ...interface{}) {
+	Logger.Sugar().Infof(msg, args...)
+}
+
+func Errorf(msg string, args ...interface{}) {
+	Logger.Sugar().Errorf(msg, args...)
+}
+
+func Debugf(msg string, args ...interface{}) {
+	Logger.Sugar().Debugf(msg, args...)
+}
+
+func Warnf(msg string, args ...interface{}) {
+	Logger.Sugar().Warnf(msg, args...)
+}
+
+func Fatalf(msg string, args ...interface{}) {
+	Logger.Sugar().Fatalf(msg, args...)
+}
