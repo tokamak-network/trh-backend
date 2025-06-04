@@ -2,14 +2,13 @@ package taskmanager
 
 import (
 	"context"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"log"
 	"sync"
 )
 
-type Task func()
-
 type TaskManager struct {
-	tasks      chan Task
+	tasks      chan entities.Task
 	numWorkers int
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -19,7 +18,7 @@ type TaskManager struct {
 func NewTaskManager(numWorkers int, bufferSize int) *TaskManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &TaskManager{
-		tasks:      make(chan Task, bufferSize),
+		tasks:      make(chan entities.Task, bufferSize),
 		numWorkers: numWorkers,
 		ctx:        ctx,
 		cancel:     cancel,
@@ -45,7 +44,7 @@ func (tm *TaskManager) Start() {
 	}
 }
 
-func (tm *TaskManager) AddTask(task Task) {
+func (tm *TaskManager) AddTask(task entities.Task) {
 	tm.tasks <- task
 }
 

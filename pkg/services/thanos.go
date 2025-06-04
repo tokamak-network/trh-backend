@@ -7,31 +7,50 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
-	postgresRepositories "github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/repositories"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
-	"github.com/tokamak-network/trh-backend/pkg/taskmanager"
-
 	"go.uber.org/zap"
 
 	"github.com/google/uuid"
 )
 
-type ThanosDeployment struct {
+type DeploymentRepository interface {
+	GetDeploymentsByStackID(stackId string) ([]*entities.DeploymentEntity, error)
+	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentStatus) error
+	GetDeploymentByID(deploymentId string) (*entities.DeploymentEntity, error)
+	GetDeploymentStatus(deploymentId string) (entities.DeploymentStatus, error)
+}
+
+type StackRepository interface {
+	CreateStackByTx(stack *entities.StackEntity, deployments []*entities.DeploymentEntity) error
+	UpdateStatus(stackId string, status entities.Status, reason string) error
+	GetStackByID(stackId string) (*entities.StackEntity, error)
+	GetAllStacks() ([]*entities.StackEntity, error)
+	GetStackStatus(stackId string) (entities.Status, error)
+}
+
+type TaskManager interface {
+	Start()
+	AddTask(task entities.Task)
+	Stop()
+}
+
+type ThanosStackDeploymentService struct {
 	name           string
-	deploymentRepo *postgresRepositories.DeploymentRepository
-	stackRepo      *postgresRepositories.StackRepository
-	taskManager    *taskmanager.TaskManager
+	deploymentRepo DeploymentRepository
+	stackRepo      StackRepository
+	taskManager    TaskManager
 }
 
 func NewThanosService(
-	deploymentRepo *postgresRepositories.DeploymentRepository,
-	stackRepo *postgresRepositories.StackRepository,
-) *ThanosDeployment {
-	thanosDeploymentSrv := &ThanosDeployment{
+	deploymentRepo DeploymentRepository,
+	stackRepo StackRepository,
+	taskManager TaskManager,
+) *ThanosStackDeploymentService {
+	thanosDeploymentSrv := &ThanosStackDeploymentService{
 		name:           "Thanos",
 		deploymentRepo: deploymentRepo,
 		stackRepo:      stackRepo,
-		taskManager:    taskmanager.NewTaskManager(5, 20),
+		taskManager:    taskManager,
 	}
 
 	thanosDeploymentSrv.taskManager.Start()
@@ -39,7 +58,7 @@ func NewThanosService(
 	return thanosDeploymentSrv
 }
 
-func (s *ThanosDeployment) CreateThanosStack(request dtos.DeployThanosRequest) (uuid.UUID, error) {
+func (s *ThanosStackDeploymentService) CreateThanosStack(request dtos.DeployThanosRequest) (uuid.UUID, error) {
 	stackId := uuid.New()
 	deploymentPath := utils.GetDeploymentPath(s.name, request.Network, stackId.String())
 	request.DeploymentPath = deploymentPath
@@ -77,7 +96,7 @@ func (s *ThanosDeployment) CreateThanosStack(request dtos.DeployThanosRequest) (
 }
 
 // New helper method to handle deployment logic
-func (s *ThanosDeployment) handleStackDeployment(stackId uuid.UUID) {
+func (s *ThanosStackDeploymentService) handleStackDeployment(stackId uuid.UUID) {
 	logger.Info("Updating stacks status to creating", zap.String("stackId", stackId.String()))
 
 	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeploying, "")
@@ -109,7 +128,7 @@ func (s *ThanosDeployment) handleStackDeployment(stackId uuid.UUID) {
 	}
 }
 
-func (s *ThanosDeployment) deployThanosStack(stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) deployThanosStack(stackId uuid.UUID) error {
 	statusChan := make(chan entities.DeploymentStatusWithID)
 	defer close(statusChan)
 
@@ -204,7 +223,7 @@ func (s *ThanosDeployment) deployThanosStack(stackId uuid.UUID) error {
 	return <-errChan
 }
 
-func (s *ThanosDeployment) deployL1Contracts(statusChan chan entities.DeploymentStatusWithID, deploymentID uuid.UUID, request dtos.DeployL1ContractsRequest) error {
+func (s *ThanosStackDeploymentService) deployL1Contracts(statusChan chan entities.DeploymentStatusWithID, deploymentID uuid.UUID, request dtos.DeployL1ContractsRequest) error {
 	if err := thanos.DeployL1Contracts(&request); err != nil {
 		statusChan <- entities.DeploymentStatusWithID{
 			DeploymentID: deploymentID,
@@ -219,7 +238,7 @@ func (s *ThanosDeployment) deployL1Contracts(statusChan chan entities.Deployment
 	return nil
 }
 
-func (s *ThanosDeployment) deployThanosAWSInfra(statusChan chan entities.DeploymentStatusWithID, deploymentID uuid.UUID, request dtos.DeployThanosAWSInfraRequest) error {
+func (s *ThanosStackDeploymentService) deployThanosAWSInfra(statusChan chan entities.DeploymentStatusWithID, deploymentID uuid.UUID, request dtos.DeployThanosAWSInfraRequest) error {
 	if err := thanos.DeployAWSInfrastructure(&request); err != nil {
 		statusChan <- entities.DeploymentStatusWithID{
 			DeploymentID: deploymentID,
@@ -234,14 +253,14 @@ func (s *ThanosDeployment) deployThanosAWSInfra(statusChan chan entities.Deploym
 	return nil
 }
 
-func (s *ThanosDeployment) ResumeThanosStack(stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) ResumeThanosStack(stackId uuid.UUID) error {
 	s.taskManager.AddTask(func() {
 		s.handleStackDeployment(stackId)
 	})
 	return nil
 }
 
-func (s *ThanosDeployment) TerminateThanosStack(stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) TerminateThanosStack(stackId uuid.UUID) error {
 	// Check if stacks exists
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
@@ -261,7 +280,7 @@ func (s *ThanosDeployment) TerminateThanosStack(stackId uuid.UUID) error {
 	return nil
 }
 
-func (s *ThanosDeployment) handleStackTermination(stackId uuid.UUID) {
+func (s *ThanosStackDeploymentService) handleStackTermination(stackId uuid.UUID) {
 	// Check if stacks exists
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
@@ -340,27 +359,27 @@ func (s *ThanosDeployment) handleStackTermination(stackId uuid.UUID) {
 	logger.Info("AWS infrastructure destroyed successfully", zap.String("stackId", stackId.String()))
 }
 
-func (s *ThanosDeployment) GetAllStacks() ([]*entities.StackEntity, error) {
+func (s *ThanosStackDeploymentService) GetAllStacks() ([]*entities.StackEntity, error) {
 	return s.stackRepo.GetAllStacks()
 }
 
-func (s *ThanosDeployment) GetStackStatus(stackId uuid.UUID) (entities.Status, error) {
+func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (entities.Status, error) {
 	return s.stackRepo.GetStackStatus(stackId.String())
 }
 
-func (s *ThanosDeployment) GetStackDeployments(stackId uuid.UUID) ([]*entities.DeploymentEntity, error) {
+func (s *ThanosStackDeploymentService) GetStackDeployments(stackId uuid.UUID) ([]*entities.DeploymentEntity, error) {
 	return s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
 }
 
-func (s *ThanosDeployment) GetStackDeploymentStatus(deploymentId uuid.UUID) (entities.DeploymentStatus, error) {
+func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(deploymentId uuid.UUID) (entities.DeploymentStatus, error) {
 	return s.deploymentRepo.GetDeploymentStatus(deploymentId.String())
 }
 
-func (s *ThanosDeployment) GetStackDeployment(stackId uuid.UUID, deploymentId uuid.UUID) (*entities.DeploymentEntity, error) {
+func (s *ThanosStackDeploymentService) GetStackDeployment(_ uuid.UUID, deploymentId uuid.UUID) (*entities.DeploymentEntity, error) {
 	return s.deploymentRepo.GetDeploymentByID(deploymentId.String())
 }
 
-func (s *ThanosDeployment) GetStackByID(stackId uuid.UUID) (*entities.StackEntity, error) {
+func (s *ThanosStackDeploymentService) GetStackByID(stackId uuid.UUID) (*entities.StackEntity, error) {
 	return s.stackRepo.GetStackByID(stackId.String())
 }
 

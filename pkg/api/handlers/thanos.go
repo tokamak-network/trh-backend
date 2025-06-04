@@ -5,6 +5,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 	postgresRepositories "github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/repositories"
 	"github.com/tokamak-network/trh-backend/pkg/services"
+	"github.com/tokamak-network/trh-backend/pkg/taskmanager"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ import (
 )
 
 type ThanosDeploymentHandler struct {
-	ThanosDeploymentService *services.ThanosDeployment
+	ThanosDeploymentService *services.ThanosStackDeploymentService
 }
 
 func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
@@ -161,7 +162,9 @@ func (h *ThanosDeploymentHandler) GetStackByID(c *gin.Context) {
 func NewThanosHandler(server *servers.Server) *ThanosDeploymentHandler {
 	deploymentRepo := postgresRepositories.NewDeploymentRepository(server.PostgresDB)
 	stackRepo := postgresRepositories.NewStackRepository(server.PostgresDB)
+	taskManager := taskmanager.NewTaskManager(5, 20)
+
 	return &ThanosDeploymentHandler{
-		ThanosDeploymentService: services.NewThanosService(deploymentRepo, stackRepo),
+		ThanosDeploymentService: services.NewThanosService(deploymentRepo, stackRepo, taskManager),
 	}
 }
