@@ -163,6 +163,32 @@ func (h *ThanosDeploymentHandler) GetStackByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"stacks": stack})
 }
 
+func (h *ThanosDeploymentHandler) InstallPlugins(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	var pluginsRequest dtos.InstallPluginsRequest
+	if err := c.ShouldBindJSON(&pluginsRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := pluginsRequest.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.ThanosDeploymentService.InstallPlugins(id, pluginsRequest)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
 func NewThanosHandler(server *servers.Server) *ThanosDeploymentHandler {
 	deploymentRepo := postgresRepositories.NewDeploymentRepository(server.PostgresDB)
 	stackRepo := postgresRepositories.NewStackRepository(server.PostgresDB)

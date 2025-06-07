@@ -76,6 +76,13 @@ func (r *StackRepository) UpdateStatus(
 	}
 }
 
+func (r *StackRepository) UpdateMetadata(
+	id string,
+	metadata json.RawMessage,
+) error {
+	return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("metadata", metadata).Error
+}
+
 func (r *StackRepository) GetStackByID(
 	id string,
 ) (*entities.StackEntity, error) {
@@ -89,6 +96,7 @@ func (r *StackRepository) GetStackByID(
 		Name:           stack.Name,
 		Network:        stack.Network,
 		Config:         json.RawMessage(stack.Config),
+		Metadata:       json.RawMessage(stack.Metadata),
 		DeploymentPath: stack.DeploymentPath,
 		Status:         stack.Status,
 	}, nil
@@ -107,6 +115,7 @@ func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 			Name:           stack.Name,
 			Network:        stack.Network,
 			Config:         json.RawMessage(stack.Config),
+			Metadata:       json.RawMessage(stack.Metadata),
 			DeploymentPath: stack.DeploymentPath,
 			Status:         stack.Status,
 		}

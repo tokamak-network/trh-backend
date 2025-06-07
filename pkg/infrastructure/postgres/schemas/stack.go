@@ -16,6 +16,7 @@ type Stack struct {
 	Network        entities.DeploymentNetwork `gorm:"not null;column:network"`
 	DeploymentPath string                     `gorm:"not null;column:deployment_path"`
 	Config         datatypes.JSON             `gorm:"type:jsonb;not null;column:config"`
+	Metadata       datatypes.JSON             `gorm:"type:jsonb;column:metadata"`
 	CreatedAt      time.Time                  `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt      time.Time                  `gorm:"autoUpdateTime;column:updated_at"`
 	DeletedAt      time.Time                  `gorm:"autoUpdateTime;column:deleted_at"`
