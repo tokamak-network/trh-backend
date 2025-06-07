@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -26,6 +27,10 @@ type StackRepository interface {
 	GetStackByID(stackId string) (*entities.StackEntity, error)
 	GetAllStacks() ([]*entities.StackEntity, error)
 	GetStackStatus(stackId string) (entities.Status, error)
+	UpdateMetadata(
+		id string,
+		metadata json.RawMessage,
+	) error
 }
 
 type TaskManager interface {
@@ -126,6 +131,50 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(stackId uuid.UUID) 
 			logger.Error("failed to update stacks status",
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
+		}
+
+		stack, err := s.stackRepo.GetStackByID(stackId.String())
+		if err != nil {
+			logger.Error("failed to get stack by id", zap.String("stackId", stackId.String()))
+			return
+		}
+
+		config, err := json.Marshal(stack.Config)
+		if err != nil {
+			logger.Error("failed to marshal stack config", zap.Error(err))
+			return
+		}
+		stackConfig := dtos.DeployThanosRequest{}
+		if err := json.Unmarshal(config, &stackConfig); err != nil {
+			logger.Error("failed to unmarshal stack config", zap.Error(err))
+			return
+		}
+
+		// Get chain information
+		chainInformation, err := thanos.ShowChainInformation(context.Background(),
+			utils.GetInformationLogPath(stackId),
+			string(stack.Network),
+			stack.DeploymentPath,
+			stackConfig.AwsAccessKey,
+			stackConfig.AwsSecretAccessKey,
+			stackConfig.AwsRegion,
+		)
+
+		if err != nil || chainInformation == nil {
+			logger.Error("failed to show chain information", zap.Error(err))
+			return
+		}
+
+		metadata, err := json.Marshal(chainInformation)
+		if err != nil {
+			logger.Error("failed to marshal chain information", zap.Error(err))
+			return
+		}
+
+		err = s.stackRepo.UpdateMetadata(stackId.String(), metadata)
+		if err != nil {
+			logger.Error("failed to update stack metadata", zap.Error(err))
+			return
 		}
 	}
 }
@@ -380,6 +429,19 @@ func (s *ThanosStackDeploymentService) handleStackTermination(stackId uuid.UUID)
 		"AWS infrastructure destroyed successfully",
 		zap.String("stackId", stackId.String()),
 	)
+}
+
+func (s *ThanosStackDeploymentService) InstallPlugins(stackId string, request dtos.InstallPluginsRequest) error {
+	plugins := request.Plugins
+
+	for _, plugin := range plugins {
+		// TODO: install plugin
+		s.taskManager.AddTask(func() {
+			fmt.Println("Installing plugin", plugin)
+		})
+	}
+
+	return nil
 }
 
 func (s *ThanosStackDeploymentService) GetAllStacks() ([]*entities.StackEntity, error) {

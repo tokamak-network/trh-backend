@@ -12,5 +12,6 @@ type StackEntity struct {
 	Network        DeploymentNetwork `json:"network"`
 	Config         json.RawMessage   `json:"config"`
 	DeploymentPath string            `json:"deployment_path"`
+	Metadata       json.RawMessage   `json:"metadata"`
 	Status         Status            `json:"status"`
 }

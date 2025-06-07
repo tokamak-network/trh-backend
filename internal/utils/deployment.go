@@ -41,3 +41,11 @@ func GetDestroyLogPath(
 	timestamp := time.Now().Format("2006-01-02-15-04-05")
 	return path.Join(rootDir, "storage", "logs", stackID.String(), timestamp+"_destroy_logs.txt")
 }
+
+func GetInformationLogPath(
+	stackID uuid.UUID,
+) string {
+	rootDir, _ := os.Getwd()
+	timestamp := time.Now().Format("2006-01-02-15-04-05")
+	return path.Join(rootDir, "storage", "logs", stackID.String(), timestamp+"_information_logs.txt")
+}

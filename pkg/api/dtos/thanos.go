@@ -146,3 +146,15 @@ type TerminateThanosRequest struct {
 type DeployThanosResponse struct {
 	Id string `json:"id"`
 }
+
+type InstallPluginsRequest struct {
+	Plugins []string `json:"plugins"`
+}
+
+func (r *InstallPluginsRequest) Validate() error {
+	if len(r.Plugins) == 0 {
+		return errors.New("no plugins")
+	}
+
+	return nil
+}
