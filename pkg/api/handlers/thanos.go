@@ -1,8 +1,9 @@
 package handlers
 
 import (
-	"github.com/tokamak-network/trh-backend/internal/utils"
 	"net/http"
+
+	"github.com/tokamak-network/trh-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -163,25 +164,65 @@ func (h *ThanosDeploymentHandler) GetStackByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"stacks": stack})
 }
 
-func (h *ThanosDeploymentHandler) InstallPlugins(c *gin.Context) {
+func (h *ThanosDeploymentHandler) InstallBridge(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
 
-	var pluginsRequest dtos.InstallPluginsRequest
-	if err := c.ShouldBindJSON(&pluginsRequest); err != nil {
+	err := h.ThanosDeploymentService.InstallBridge(c, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
+func (h *ThanosDeploymentHandler) UninstallBridge(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	err := h.ThanosDeploymentService.UninstallBridge(c, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
+func (h *ThanosDeploymentHandler) UninstallBlockExplorer(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	err := h.ThanosDeploymentService.UninstallBlockExplorer(c, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
+func (h *ThanosDeploymentHandler) InstallBlockExplorer(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	var request dtos.InstallBlockExplorerRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := pluginsRequest.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	err := h.ThanosDeploymentService.InstallPlugins(id, pluginsRequest)
+	err := h.ThanosDeploymentService.InstallBlockExplorer(c, id, request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -192,9 +233,11 @@ func (h *ThanosDeploymentHandler) InstallPlugins(c *gin.Context) {
 func NewThanosHandler(server *servers.Server) *ThanosDeploymentHandler {
 	deploymentRepo := postgresRepositories.NewDeploymentRepository(server.PostgresDB)
 	stackRepo := postgresRepositories.NewStackRepository(server.PostgresDB)
+	integrationRepo := postgresRepositories.NewIntegrationRepository(server.PostgresDB)
+
 	taskManager := taskmanager.NewTaskManager(5, 20)
 
 	return &ThanosDeploymentHandler{
-		ThanosDeploymentService: services.NewThanosService(deploymentRepo, stackRepo, taskManager),
+		ThanosDeploymentService: services.NewThanosService(deploymentRepo, stackRepo, integrationRepo, taskManager),
 	}
 }

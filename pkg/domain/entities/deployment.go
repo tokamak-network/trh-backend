@@ -1,19 +1,19 @@
 package entities
 
 import (
+	"encoding/json"
+
 	"github.com/google/uuid"
-	"gorm.io/datatypes"
 )
 
 type DeploymentEntity struct {
 	ID             uuid.UUID
 	StackID        *uuid.UUID
-	IntegrationID  *uuid.UUID
 	Step           int
 	Status         DeploymentStatus
 	LogPath        string
 	DeploymentPath string
-	Config         datatypes.JSON
+	Config         json.RawMessage
 }
 
 type DeploymentStatusWithID struct {
