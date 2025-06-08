@@ -20,14 +20,7 @@ func NewStackRepository(db *gorm.DB) *StackRepository {
 func (r *StackRepository) CreateStack(
 	stack *entities.StackEntity,
 ) error {
-	newStack := schemas.Stack{
-		ID:             stack.ID,
-		Name:           stack.Name,
-		Network:        stack.Network,
-		Config:         datatypes.JSON(stack.Config),
-		DeploymentPath: stack.DeploymentPath,
-		Status:         stack.Status,
-	}
+	newStack := ToStackEntity(stack)
 	err := r.db.Create(&newStack).Error
 	if err != nil {
 		return err

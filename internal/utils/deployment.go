@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"time"
@@ -48,4 +49,13 @@ func GetInformationLogPath(
 	rootDir, _ := os.Getwd()
 	timestamp := time.Now().Format("2006-01-02-15-04-05")
 	return path.Join(rootDir, "storage", "logs", stackID.String(), timestamp+"_information_logs.txt")
+}
+
+func GetPluginLogPath(
+	stackID uuid.UUID,
+	plugin string,
+) string {
+	rootDir, _ := os.Getwd()
+	timestamp := time.Now().Format("2006-01-02-15-04-05")
+	return path.Join(rootDir, "storage", "logs", stackID.String(), timestamp+fmt.Sprintf("_%s_logs.txt", plugin))
 }

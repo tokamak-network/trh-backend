@@ -1,8 +1,11 @@
 package repositories
 
 import (
+	"encoding/json"
+
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -35,13 +38,12 @@ func (r *DeploymentRepository) GetDeploymentByID(id string) (*entities.Deploymen
 		return nil, err
 	}
 	return &entities.DeploymentEntity{
-		ID:            deployment.ID,
-		StackID:       deployment.StackID,
-		IntegrationID: deployment.IntegrationID,
-		Step:          deployment.Step,
-		Status:        deployment.Status,
-		LogPath:       deployment.LogPath,
-		Config:        deployment.Config,
+		ID:      deployment.ID,
+		StackID: deployment.StackID,
+		Step:    deployment.Step,
+		Status:  deployment.Status,
+		LogPath: deployment.LogPath,
+		Config:  json.RawMessage(deployment.Config),
 	}, nil
 }
 
@@ -55,13 +57,12 @@ func (r *DeploymentRepository) GetDeploymentsByStackID(
 	deploymentsEntities := make([]*entities.DeploymentEntity, len(deployments))
 	for i, deployment := range deployments {
 		deploymentsEntities[i] = &entities.DeploymentEntity{
-			ID:            deployment.ID,
-			StackID:       deployment.StackID,
-			IntegrationID: deployment.IntegrationID,
-			Step:          deployment.Step,
-			Status:        deployment.Status,
-			LogPath:       deployment.LogPath,
-			Config:        deployment.Config,
+			ID:      deployment.ID,
+			StackID: deployment.StackID,
+			Step:    deployment.Step,
+			Status:  deployment.Status,
+			LogPath: deployment.LogPath,
+			Config:  json.RawMessage(deployment.Config),
 		}
 	}
 	return deploymentsEntities, nil
@@ -77,12 +78,11 @@ func (r *DeploymentRepository) GetDeploymentStatus(id string) (entities.Deployme
 
 func ToDeploymentSchema(d *entities.DeploymentEntity) *schemas.Deployment {
 	return &schemas.Deployment{
-		ID:            d.ID,
-		StackID:       d.StackID,
-		IntegrationID: d.IntegrationID,
-		Step:          d.Step,
-		Status:        d.Status,
-		LogPath:       d.LogPath,
-		Config:        d.Config,
+		ID:      d.ID,
+		StackID: d.StackID,
+		Step:    d.Step,
+		Status:  d.Status,
+		LogPath: d.LogPath,
+		Config:  datatypes.JSON(d.Config),
 	}
 }

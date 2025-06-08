@@ -161,3 +161,77 @@ func ShowChainInformation(
 
 	return s.ShowInformation(ctx)
 }
+
+func InstallBridge(
+	ctx context.Context,
+	logPath string,
+	network string,
+	deploymentPath string,
+	awsAccessKey string,
+	awsSecretAccessKey string,
+	awsRegion string,
+) (string, error) {
+	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
+	if err != nil {
+		return "", err
+	}
+
+	return s.InstallBridge(ctx)
+}
+
+func UninstallBridge(
+	ctx context.Context,
+	logPath string,
+	network string,
+	deploymentPath string,
+	awsAccessKey string,
+	awsSecretAccessKey string,
+	awsRegion string,
+) error {
+	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
+	if err != nil {
+		return err
+	}
+
+	return s.UninstallBridge(ctx)
+}
+
+func InstallBlockExplorer(
+	ctx context.Context,
+	logPath string,
+	network string,
+	deploymentPath string,
+	awsAccessKey string,
+	awsSecretAccessKey string,
+	awsRegion string,
+	req *dtos.InstallBlockExplorerRequest,
+) (string, error) {
+	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
+	if err != nil {
+		return "", err
+	}
+
+	return s.InstallBlockExplorer(ctx, &thanosStack.InstallBlockExplorerInput{
+		DatabaseUsername:       req.DatabaseUsername,
+		DatabasePassword:       req.DatabasePassword,
+		CoinmarketcapKey:       req.CoinmarketcapKey,
+		WalletConnectProjectID: req.WalletConnectID,
+	})
+}
+
+func UninstallBlockExplorer(
+	ctx context.Context,
+	logPath string,
+	network string,
+	deploymentPath string,
+	awsAccessKey string,
+	awsSecretAccessKey string,
+	awsRegion string,
+) error {
+	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
+	if err != nil {
+		return err
+	}
+
+	return s.UninstallBlockExplorer(ctx)
+}
