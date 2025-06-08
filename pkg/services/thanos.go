@@ -131,68 +131,93 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(stackId uuid.UUID) 
 		return
 	}
 
-	if err := s.deployThanosStack(stackId); err != nil {
+	err = s.deployThanosStack(stackId)
+	if err != nil {
 		logger.Error("failed to deploy thanos stacks",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 
 		// Update stacks status to failed
-		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToDeploy, err.Error()); updateErr != nil {
+		updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToDeploy, err.Error())
+		if updateErr != nil {
 			logger.Error("failed to update stacks status",
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
 		}
-	} else {
-		// Update stacks status to active on success
-		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeployed, ""); updateErr != nil {
-			logger.Error("failed to update stacks status",
-				zap.String("stackId", stackId.String()),
-				zap.Error(updateErr))
-		}
+		return
+	}
 
-		stack, err := s.stackRepo.GetStackByID(stackId.String())
-		if err != nil {
-			logger.Error("failed to get stack by id", zap.String("stackId", stackId.String()))
-			return
-		}
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack by id", zap.String("stackId", stackId.String()))
+		return
+	}
 
-		config, err := json.Marshal(stack.Config)
-		if err != nil {
-			logger.Error("failed to marshal stack config", zap.Error(err))
-			return
-		}
-		stackConfig := dtos.DeployThanosRequest{}
-		if err := json.Unmarshal(config, &stackConfig); err != nil {
-			logger.Error("failed to unmarshal stack config", zap.Error(err))
-			return
-		}
+	// Update stacks status to active on success
+	updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeployed, "")
+	if updateErr != nil {
+		logger.Error("failed to update stacks status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(updateErr))
+	}
 
-		// Get chain information
-		chainInformation, err := thanos.ShowChainInformation(context.Background(),
-			utils.GetInformationLogPath(stackId),
-			string(stack.Network),
-			stack.DeploymentPath,
-			stackConfig.AwsAccessKey,
-			stackConfig.AwsSecretAccessKey,
-			stackConfig.AwsRegion,
-		)
+	config, err := json.Marshal(stack.Config)
+	if err != nil {
+		logger.Error("failed to marshal stack config", zap.Error(err))
+		return
+	}
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.Error(err))
+		return
+	}
 
-		if err != nil || chainInformation == nil {
-			logger.Error("failed to show chain information", zap.Error(err))
-			return
-		}
+	// Get chain information
+	chainInformation, err := thanos.ShowChainInformation(context.Background(),
+		utils.GetInformationLogPath(stackId),
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
 
-		metadata, err := json.Marshal(chainInformation)
-		if err != nil {
-			logger.Error("failed to marshal chain information", zap.Error(err))
-			return
-		}
+	if err != nil || chainInformation == nil {
+		logger.Error("failed to show chain information", zap.Error(err))
+		return
+	}
 
-		err = s.stackRepo.UpdateMetadata(stackId.String(), metadata)
-		if err != nil {
-			logger.Error("failed to update stack metadata", zap.Error(err))
-			return
-		}
+	metadata, err := json.Marshal(chainInformation)
+	if err != nil {
+		logger.Error("failed to marshal chain information", zap.Error(err))
+		return
+	}
+
+	err = s.stackRepo.UpdateMetadata(stackId.String(), metadata)
+	if err != nil {
+		logger.Error("failed to update stack metadata", zap.Error(err))
+		return
+	}
+
+	bridgeUrl := chainInformation.BridgeUrl
+	if bridgeUrl == "" {
+		logger.Error("bridge url is empty", zap.String("stackId", stackId.String()))
+		return
+	}
+
+	// create integration by default(bridge)
+	err = s.integrationRepo.CreateIntegration(&entities.Integration{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Name:    "bridge",
+		Status:  string(entities.DeploymentStatusCompleted),
+		Info:    json.RawMessage(fmt.Sprintf(`{"url": "%s"}`, bridgeUrl)),
+		Config:  nil,
+	})
+
+	if err != nil {
+		logger.Error("failed to create integration", zap.Error(err))
+		return
 	}
 }
 
