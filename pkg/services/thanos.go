@@ -488,6 +488,18 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		return fmt.Errorf("stack %s not found", stackId)
 	}
 
+	// check if block explorer is already installed
+	integration, err := s.integrationRepo.GetIntegration(stackId, "block-explorer")
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+		return err
+	}
+
+	if integration != nil {
+		logger.Error("block explorer is already installed", zap.String("plugin", "block-explorer"))
+		return fmt.Errorf("block explorer is already installed")
+	}
+
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
@@ -606,6 +618,18 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 
 	if stack == nil {
 		return fmt.Errorf("stack %s not found", stackId)
+	}
+
+	// check if block explorer is already installed
+	integration, err := s.integrationRepo.GetIntegration(stackId, "bridge")
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
+		return err
+	}
+
+	if integration != nil {
+		logger.Error("bridge is already installed", zap.String("plugin", "bridge"))
+		return fmt.Errorf("bridge is already installed")
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}

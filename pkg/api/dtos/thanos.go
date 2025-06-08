@@ -142,7 +142,12 @@ type InstallBlockExplorerRequest struct {
 }
 
 func (r *InstallBlockExplorerRequest) Validate() error {
-	if err := trhSdkUtils.IsValidRDSUsername(r.DatabaseUsername); err {
+	if err := trhSdkUtils.ValidatePostgresUsername(r.DatabaseUsername); err != nil {
+		logger.Error("invalid database username", zap.String("databaseUsername", r.DatabaseUsername))
+		return errors.New("invalid database username")
+	}
+
+	if !trhSdkUtils.IsValidRDSUsername(r.DatabaseUsername) {
 		logger.Error("invalid database username", zap.String("databaseUsername", r.DatabaseUsername))
 		return errors.New("invalid database username")
 	}

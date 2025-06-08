@@ -40,7 +40,7 @@ func (r *IntegrationRepository) GetIntegration(
 	name string,
 ) (*entities.Integration, error) {
 	var integration schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).First(&integration).Error; err != nil {
+	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).Where("status = ?", entities.StatusDeployed).First(&integration).Error; err != nil {
 		return nil, err
 	}
 	return ToIntegrationEntity(&integration), nil
