@@ -36,7 +36,9 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server) {
 	router.DELETE("/:id/plugins/bridge", handler.UninstallBridge)
 	router.DELETE("/:id/plugins/block-explorer", handler.UninstallBlockExplorer)
 	router.GET("/:id/status", handler.GetStackStatus)
-	router.GET("/:id/deployments", handler.GetStackDeployments)
+	router.GET("/:id/deployments", handler.GetDeployments)
+	router.GET("/:id/integrations", handler.GetIntegrations)
+	router.GET("/:id/integrations/:integrationId", handler.GetIntegrationById)
 	router.GET("/:id/deployments/:deploymentId", handler.GetStackDeployment)
 	router.GET("/:id/deployments/:deploymentId/status", handler.GetStackDeploymentStatus)
 }

@@ -98,6 +98,19 @@ func (r *IntegrationRepository) GetIntegration(
 	return ToIntegrationEntity(&integration), nil
 }
 
+func (r *IntegrationRepository) GetIntegrationById(
+	id string,
+) (*entities.IntegrationEntity, error) {
+	var integration schemas.Integration
+	if err := r.db.Where("id = ?", id).First(&integration).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // No integration found
+		}
+		return nil, err
+	}
+	return ToIntegrationEntity(&integration), nil
+}
+
 func (r *IntegrationRepository) GetIntegrationsByStackID(
 	stackID string,
 ) ([]*entities.IntegrationEntity, error) {

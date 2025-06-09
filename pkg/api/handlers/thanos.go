@@ -95,18 +95,54 @@ func (h *ThanosDeploymentHandler) GetStackStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": status})
 }
 
-func (h *ThanosDeploymentHandler) GetStackDeployments(c *gin.Context) {
+func (h *ThanosDeploymentHandler) GetDeployments(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	deployments, err := h.ThanosDeploymentService.GetStackDeployments(uuid.MustParse(id))
+	deployments, err := h.ThanosDeploymentService.GetDeployments(uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deployments": deployments})
+}
+
+func (h *ThanosDeploymentHandler) GetIntegrations(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	integrations, err := h.ThanosDeploymentService.GetIntegrations(uuid.MustParse(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"integrations": integrations})
+}
+
+func (h *ThanosDeploymentHandler) GetIntegrationById(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	integrationId := c.Param("integrationId")
+	if integrationId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "integrationId is required"})
+		return
+	}
+	integration, err := h.ThanosDeploymentService.GetIntegration(
+		uuid.MustParse(id),
+		uuid.MustParse(integrationId),
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"integration": integration})
 }
 
 func (h *ThanosDeploymentHandler) GetStackDeployment(c *gin.Context) {

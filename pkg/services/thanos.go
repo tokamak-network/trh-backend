@@ -57,6 +57,9 @@ type IntegrationRepository interface {
 		stackId string,
 		name string,
 	) (*entities.IntegrationEntity, error)
+	GetIntegrationById(
+		id string,
+	) (*entities.IntegrationEntity, error)
 	GetIntegrationsByStackID(
 		stackID string,
 	) ([]*entities.IntegrationEntity, error)
@@ -576,7 +579,7 @@ func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (entiti
 	return s.stackRepo.GetStackStatus(stackId.String())
 }
 
-func (s *ThanosStackDeploymentService) GetStackDeployments(
+func (s *ThanosStackDeploymentService) GetDeployments(
 	stackId uuid.UUID,
 ) ([]*entities.DeploymentEntity, error) {
 	return s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
@@ -599,6 +602,29 @@ func (s *ThanosStackDeploymentService) GetStackByID(
 	stackId uuid.UUID,
 ) (*entities.StackEntity, error) {
 	return s.stackRepo.GetStackByID(stackId.String())
+}
+
+func (s *ThanosStackDeploymentService) GetIntegrations(
+	stackId uuid.UUID,
+) ([]*entities.IntegrationEntity, error) {
+	integrations, err := s.integrationRepo.GetIntegrationsByStackID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get integrations", zap.String("stackId", stackId.String()), zap.Error(err))
+		return nil, err
+	}
+	return integrations, nil
+}
+
+func (s *ThanosStackDeploymentService) GetIntegration(
+	stackId uuid.UUID,
+	integrationId uuid.UUID,
+) (*entities.IntegrationEntity, error) {
+	integration, err := s.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integrations", zap.String("stackId", stackId.String()), zap.Error(err))
+		return nil, err
+	}
+	return integration, nil
 }
 
 // New helper method to handle deployment logic
@@ -975,13 +1001,12 @@ func getThanosStackDeployments(
 		return nil, err
 	}
 	l1ContractDeployment := &entities.DeploymentEntity{
-		ID:             l1ContractDeploymentID,
-		StackID:        &stackId,
-		Step:           1,
-		Status:         entities.DeploymentStatusPending,
-		LogPath:        l1ContractDeploymentLogPath,
-		Config:         l1ContractDeploymentConfig,
-		DeploymentPath: deploymentPath,
+		ID:      l1ContractDeploymentID,
+		StackID: &stackId,
+		Step:    1,
+		Status:  entities.DeploymentStatusPending,
+		LogPath: l1ContractDeploymentLogPath,
+		Config:  l1ContractDeploymentConfig,
 	}
 	deployments = append(deployments, l1ContractDeployment)
 
@@ -998,13 +1023,12 @@ func getThanosStackDeployments(
 		return nil, err
 	}
 	thanosInfrastructureDeployment := &entities.DeploymentEntity{
-		ID:             thanosInfrastructureDeploymentID,
-		StackID:        &stackId,
-		Step:           2,
-		Status:         entities.DeploymentStatusPending,
-		LogPath:        thanosInfrastructureDeploymentLogPath,
-		Config:         thanosInfrastructureDeploymentConfig,
-		DeploymentPath: deploymentPath,
+		ID:      thanosInfrastructureDeploymentID,
+		StackID: &stackId,
+		Step:    2,
+		Status:  entities.DeploymentStatusPending,
+		LogPath: thanosInfrastructureDeploymentLogPath,
+		Config:  thanosInfrastructureDeploymentConfig,
 	}
 	deployments = append(deployments, thanosInfrastructureDeployment)
 
