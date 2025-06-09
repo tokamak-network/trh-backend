@@ -11,7 +11,7 @@ import (
 	thanosTypes "github.com/tokamak-network/trh-sdk/pkg/types"
 )
 
-func newThanosSDKClient(
+func NewThanosSDKClient(
 	logPath string,
 	network string,
 	deploymentPath string,
@@ -43,28 +43,15 @@ func newThanosSDKClient(
 	return s, nil
 }
 
-func DeployAWSInfrastructure(req *dtos.DeployThanosAWSInfraRequest) error {
+func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosAWSInfraRequest) error {
 	logger.Info("Deploying AWS Infrastructure...")
-
-	s, err := newThanosSDKClient(
-		req.LogPath,
-		req.Network,
-		req.DeploymentPath,
-		req.AwsAccessKey,
-		req.AwsSecretAccessKey,
-		req.AwsRegion,
-	)
-	if err != nil {
-		logger.Errorf("Failed to create thanos stacks: %s", err)
-		return err
-	}
 
 	deployInfraInput := thanosStack.DeployInfraInput{
 		ChainName:   req.ChainName,
 		L1BeaconURL: req.L1BeaconUrl,
 	}
 
-	err = s.Deploy(context.Background(), consts.AWS, &deployInfraInput)
+	err := sdkClient.Deploy(ctx, consts.AWS, &deployInfraInput)
 	if err != nil {
 		return err
 	}
@@ -74,23 +61,10 @@ func DeployAWSInfrastructure(req *dtos.DeployThanosAWSInfraRequest) error {
 	return nil
 }
 
-func DestroyAWSInfrastructure(req *dtos.TerminateThanosRequest) error {
+func DestroyAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack) error {
 	logger.Info("Destroying AWS Infrastructure...")
 
-	s, err := newThanosSDKClient(
-		req.LogPath,
-		req.Network,
-		req.DeploymentPath,
-		req.AwsAccessKey,
-		req.AwsSecretAccessKey,
-		req.AwsRegion,
-	)
-	if err != nil {
-		logger.Errorf("Failed to create thanos stacks: %s", err)
-		return err
-	}
-
-	err = s.Destroy(context.Background())
+	err := sdkClient.Destroy(ctx)
 	if err != nil {
 		return err
 	}
@@ -100,21 +74,8 @@ func DestroyAWSInfrastructure(req *dtos.TerminateThanosRequest) error {
 	return nil
 }
 
-func DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error {
+func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployL1ContractsRequest) error {
 	logger.Info("Deploying L1 Contracts...")
-
-	s, err := newThanosSDKClient(
-		req.LogPath,
-		string(req.Network),
-		req.DeploymentPath,
-		"",
-		"",
-		"",
-	)
-	if err != nil {
-		logger.Errorf("Failed to create thanos stacks: %s", err)
-		return err
-	}
 
 	chainConfig := thanosTypes.ChainConfiguration{
 		BatchSubmissionFrequency: uint64(req.BatchSubmissionFrequency),
@@ -128,7 +89,7 @@ func DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error {
 		SequencerPrivateKey:  req.SequencerAccount,
 		BatcherPrivateKey:    req.BatcherAccount,
 		ProposerPrivateKey:   req.ProposerAccount,
-		ChallengerPrivateKey: "",
+		ChallengerPrivateKey: "", // TODO: enable challenger in the future when we support fp
 	}
 
 	contractDeploymentInput := thanosStack.DeployContractsInput{
@@ -136,7 +97,7 @@ func DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error {
 		ChainConfiguration: &chainConfig,
 		Operators:          &operators,
 	}
-	err = s.DeployContracts(context.Background(), &contractDeploymentInput)
+	err := sdkClient.DeployContracts(ctx, &contractDeploymentInput)
 	if err != nil {
 		return err
 	}
@@ -147,70 +108,30 @@ func DeployL1Contracts(req *dtos.DeployL1ContractsRequest) error {
 
 func ShowChainInformation(
 	ctx context.Context,
-	logPath string,
-	network string,
-	deploymentPath string,
-	awsAccessKey string,
-	awsSecretAccessKey string,
-	awsRegion string,
+	sdkClient *thanosStack.ThanosStack,
 ) (*thanosTypes.ChainInformation, error) {
-	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.ShowInformation(ctx)
+	return sdkClient.ShowInformation(ctx)
 }
 
 func InstallBridge(
 	ctx context.Context,
-	logPath string,
-	network string,
-	deploymentPath string,
-	awsAccessKey string,
-	awsSecretAccessKey string,
-	awsRegion string,
+	sdkClient *thanosStack.ThanosStack,
 ) (string, error) {
-	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
-	if err != nil {
-		return "", err
-	}
-
-	return s.InstallBridge(ctx)
+	return sdkClient.InstallBridge(ctx)
 }
 
 func UninstallBridge(
 	ctx context.Context,
-	logPath string,
-	network string,
-	deploymentPath string,
-	awsAccessKey string,
-	awsSecretAccessKey string,
-	awsRegion string,
+	sdkClient *thanosStack.ThanosStack,
 ) error {
-	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
-	if err != nil {
-		return err
-	}
-
-	return s.UninstallBridge(ctx)
+	return sdkClient.UninstallBridge(ctx)
 }
 
 func InstallBlockExplorer(
 	ctx context.Context,
-	logPath string,
-	network string,
-	deploymentPath string,
-	awsAccessKey string,
-	awsSecretAccessKey string,
-	awsRegion string,
+	s *thanosStack.ThanosStack,
 	req *dtos.InstallBlockExplorerRequest,
 ) (string, error) {
-	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
-	if err != nil {
-		return "", err
-	}
-
 	return s.InstallBlockExplorer(ctx, &thanosStack.InstallBlockExplorerInput{
 		DatabaseUsername:       req.DatabaseUsername,
 		DatabasePassword:       req.DatabasePassword,
@@ -221,17 +142,7 @@ func InstallBlockExplorer(
 
 func UninstallBlockExplorer(
 	ctx context.Context,
-	logPath string,
-	network string,
-	deploymentPath string,
-	awsAccessKey string,
-	awsSecretAccessKey string,
-	awsRegion string,
+	s *thanosStack.ThanosStack,
 ) error {
-	s, err := newThanosSDKClient(logPath, network, deploymentPath, awsAccessKey, awsSecretAccessKey, awsRegion)
-	if err != nil {
-		return err
-	}
-
 	return s.UninstallBlockExplorer(ctx)
 }

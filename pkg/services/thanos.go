@@ -81,6 +81,7 @@ func NewThanosService(
 }
 
 func (s *ThanosStackDeploymentService) CreateThanosStack(
+	ctx context.Context,
 	request dtos.DeployThanosRequest,
 ) (uuid.UUID, error) {
 	stackId := uuid.New()
@@ -113,14 +114,14 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 	logger.Info("Stack created", zap.String("stackId", stackId.String()))
 
 	s.taskManager.AddTask(func() {
-		s.handleStackDeployment(stackId)
+		s.handleStackDeployment(ctx, stackId)
 	})
 
 	return stackId, nil
 }
 
 // New helper method to handle deployment logic
-func (s *ThanosStackDeploymentService) handleStackDeployment(stackId uuid.UUID) {
+func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context, stackId uuid.UUID) {
 	logger.Info("Updating stacks status to creating", zap.String("stackId", stackId.String()))
 
 	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeploying, "")
@@ -131,7 +132,7 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(stackId uuid.UUID) 
 		return
 	}
 
-	err = s.deployThanosStack(stackId)
+	err = s.deployThanosStack(ctx, stackId)
 	if err != nil {
 		logger.Error("failed to deploy thanos stacks",
 			zap.String("stackId", stackId.String()),
@@ -166,22 +167,30 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(stackId uuid.UUID) 
 		logger.Error("failed to marshal stack config", zap.Error(err))
 		return
 	}
-	stackConfig := dtos.DeployThanosRequest{}
+	var stackConfig dtos.DeployThanosRequest
 	if err := json.Unmarshal(config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.Error(err))
 		return
 	}
 
-	// Get chain information
-	chainInformation, err := thanos.ShowChainInformation(context.Background(),
-		utils.GetInformationLogPath(stackId),
+	logPath := utils.GetInformationLogPath(stack.ID)
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
 	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
 
+	// Get chain information
+	chainInformation, err := thanos.ShowChainInformation(ctx, sdkClient)
 	if err != nil || chainInformation == nil {
 		logger.Error("failed to show chain information", zap.Error(err))
 		return
@@ -221,7 +230,7 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(stackId uuid.UUID) 
 	}
 }
 
-func (s *ThanosStackDeploymentService) deployThanosStack(stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, stackId uuid.UUID) error {
 	statusChan := make(chan entities.DeploymentStatusWithID)
 	defer close(statusChan)
 
@@ -274,10 +283,26 @@ func (s *ThanosStackDeploymentService) deployThanosStack(stackId uuid.UUID) erro
 			Status:       entities.DeploymentStatusInProgress,
 		}
 
-		var err error
+		sdkClient, err := thanos.NewThanosSDKClient(
+			deployment.LogPath,
+			string(deploymentConfig.Network),
+			deploymentConfig.DeploymentPath,
+			deploymentConfig.AwsAccessKey,
+			deploymentConfig.AwsSecretAccessKey,
+			deploymentConfig.AwsRegion,
+		)
+		if err != nil {
+			logger.Error("failed to create thanos sdk client",
+				zap.String("deploymentId", deployment.ID.String()),
+				zap.Error(err))
+			statusChan <- entities.DeploymentStatusWithID{
+				DeploymentID: deployment.ID,
+				Status:       entities.DeploymentStatusFailed,
+			}
+			return err
+		}
 		if deployment.Step == 1 {
-			err = s.deployL1Contracts(statusChan, deployment.ID, dtos.DeployL1ContractsRequest{
-				Network:                  deploymentConfig.Network,
+			if err := thanos.DeployL1Contracts(ctx, sdkClient, &dtos.DeployL1ContractsRequest{
 				L1RpcUrl:                 deploymentConfig.L1RpcUrl,
 				L2BlockTime:              deploymentConfig.L2BlockTime,
 				BatchSubmissionFrequency: deploymentConfig.BatchSubmissionFrequency,
@@ -287,20 +312,32 @@ func (s *ThanosStackDeploymentService) deployThanosStack(stackId uuid.UUID) erro
 				SequencerAccount:         deploymentConfig.SequencerAccount,
 				BatcherAccount:           deploymentConfig.BatcherAccount,
 				ProposerAccount:          deploymentConfig.ProposerAccount,
-				DeploymentPath:           deploymentConfig.DeploymentPath,
-				LogPath:                  deployment.LogPath,
-			})
+			}); err != nil {
+				statusChan <- entities.DeploymentStatusWithID{
+					DeploymentID: deployment.ID,
+					Status:       entities.DeploymentStatusFailed,
+				}
+				return err
+			}
+			statusChan <- entities.DeploymentStatusWithID{
+				DeploymentID: deployment.ID,
+				Status:       entities.DeploymentStatusCompleted,
+			}
 		} else if deployment.Step == 2 {
-			err = s.deployThanosAWSInfra(statusChan, deployment.ID, dtos.DeployThanosAWSInfraRequest{
-				ChainName:          deploymentConfig.ChainName,
-				Network:            string(deploymentConfig.Network),
-				L1BeaconUrl:        deploymentConfig.L1BeaconUrl,
-				AwsAccessKey:       deploymentConfig.AwsAccessKey,
-				AwsSecretAccessKey: deploymentConfig.AwsSecretAccessKey,
-				AwsRegion:          deploymentConfig.AwsRegion,
-				DeploymentPath:     deploymentConfig.DeploymentPath,
-				LogPath:            deployment.LogPath,
-			})
+			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &dtos.DeployThanosAWSInfraRequest{
+				ChainName:   deploymentConfig.ChainName,
+				L1BeaconUrl: deploymentConfig.L1BeaconUrl,
+			}); err != nil {
+				statusChan <- entities.DeploymentStatusWithID{
+					DeploymentID: deployment.ID,
+					Status:       entities.DeploymentStatusFailed,
+				}
+				return err
+			}
+			statusChan <- entities.DeploymentStatusWithID{
+				DeploymentID: deployment.ID,
+				Status:       entities.DeploymentStatusCompleted,
+			}
 		}
 
 		if err != nil {
@@ -316,52 +353,14 @@ func (s *ThanosStackDeploymentService) deployThanosStack(stackId uuid.UUID) erro
 	return <-errChan
 }
 
-func (s *ThanosStackDeploymentService) deployL1Contracts(
-	statusChan chan entities.DeploymentStatusWithID,
-	deploymentID uuid.UUID,
-	request dtos.DeployL1ContractsRequest,
-) error {
-	if err := thanos.DeployL1Contracts(&request); err != nil {
-		statusChan <- entities.DeploymentStatusWithID{
-			DeploymentID: deploymentID,
-			Status:       entities.DeploymentStatusFailed,
-		}
-		return err
-	}
-	statusChan <- entities.DeploymentStatusWithID{
-		DeploymentID: deploymentID,
-		Status:       entities.DeploymentStatusCompleted,
-	}
-	return nil
-}
-
-func (s *ThanosStackDeploymentService) deployThanosAWSInfra(
-	statusChan chan entities.DeploymentStatusWithID,
-	deploymentID uuid.UUID,
-	request dtos.DeployThanosAWSInfraRequest,
-) error {
-	if err := thanos.DeployAWSInfrastructure(&request); err != nil {
-		statusChan <- entities.DeploymentStatusWithID{
-			DeploymentID: deploymentID,
-			Status:       entities.DeploymentStatusFailed,
-		}
-		return err
-	}
-	statusChan <- entities.DeploymentStatusWithID{
-		DeploymentID: deploymentID,
-		Status:       entities.DeploymentStatusCompleted,
-	}
-	return nil
-}
-
-func (s *ThanosStackDeploymentService) ResumeThanosStack(stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, stackId uuid.UUID) error {
 	s.taskManager.AddTask(func() {
-		s.handleStackDeployment(stackId)
+		s.handleStackDeployment(ctx, stackId)
 	})
 	return nil
 }
 
-func (s *ThanosStackDeploymentService) TerminateThanosStack(stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context, stackId uuid.UUID) error {
 	// Check if stacks exists
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
@@ -381,13 +380,13 @@ func (s *ThanosStackDeploymentService) TerminateThanosStack(stackId uuid.UUID) e
 	}
 
 	s.taskManager.AddTask(func() {
-		s.handleStackTermination(stackId)
+		s.handleStackTermination(ctx, stackId)
 	})
 
 	return nil
 }
 
-func (s *ThanosStackDeploymentService) handleStackTermination(stackId uuid.UUID) {
+func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Context, stackId uuid.UUID) {
 	// Check if stacks exists
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
@@ -422,14 +421,21 @@ func (s *ThanosStackDeploymentService) handleStackTermination(stackId uuid.UUID)
 
 	logPath := utils.GetDestroyLogPath(stack.ID)
 
-	if err := thanos.DestroyAWSInfrastructure(&dtos.TerminateThanosRequest{
-		Network:            string(stack.Network),
-		AwsAccessKey:       stackConfig.AwsAccessKey,
-		AwsSecretAccessKey: stackConfig.AwsSecretAccessKey,
-		AwsRegion:          stackConfig.AwsRegion,
-		DeploymentPath:     stack.DeploymentPath,
-		LogPath:            logPath,
-	}); err != nil {
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return
+	}
+
+	if err := thanos.DestroyAWSInfrastructure(ctx, sdkClient); err != nil {
 		logger.Error("failed to destroy AWS infrastructure",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
@@ -510,18 +516,24 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		blockExplorerUrl string
 	)
 
-	s.taskManager.AddTask(func() {
-		logPath := utils.GetPluginLogPath(stack.ID, "block-explorer")
-		blockExplorerUrl, err = thanos.InstallBlockExplorer(
-			ctx,
-			logPath,
-			string(stackConfig.Network),
-			stackConfig.DeploymentPath,
-			stackConfig.AwsAccessKey,
-			stackConfig.AwsSecretAccessKey,
-			stackConfig.AwsRegion,
-			&request)
+	logPath := utils.GetPluginLogPath(stack.ID, "block-explorer")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return err
+	}
 
+	s.taskManager.AddTask(func() {
+
+		blockExplorerUrl, err = thanos.InstallBlockExplorer(ctx, sdkClient, &request)
 		if err != nil {
 			logger.Error("failed to install block explorer", zap.String("plugin", "block-explorer"), zap.Error(err))
 			return
@@ -532,7 +544,7 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 			return
 		}
 
-		logger.Debug("bridge successfully installed", zap.String("plugin", "block-explorer"), zap.String("url", blockExplorerUrl))
+		logger.Debug("block explorer successfully installed", zap.String("plugin", "block-explorer"), zap.String("url", blockExplorerUrl))
 		// create integration
 		b, err := json.Marshal(request)
 		if err != nil {
@@ -573,17 +585,23 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 		return err
 	}
 
-	s.taskManager.AddTask(func() {
-		logPath := utils.GetPluginLogPath(stack.ID, "uninstall-block-explorer")
-		err = thanos.UninstallBlockExplorer(
-			ctx,
-			logPath,
-			string(stackConfig.Network),
-			stackConfig.DeploymentPath,
-			stackConfig.AwsAccessKey,
-			stackConfig.AwsSecretAccessKey,
-			stackConfig.AwsRegion)
+	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-block-explorer")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return err
+	}
 
+	s.taskManager.AddTask(func() {
+		err = thanos.UninstallBlockExplorer(ctx, sdkClient)
 		if err != nil {
 			logger.Error("failed to install block-explorer", zap.String("plugin", "block-explorer"), zap.Error(err))
 			return
@@ -642,17 +660,24 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		bridgeUrl string
 	)
 
-	s.taskManager.AddTask(func() {
-		logPath := utils.GetPluginLogPath(stack.ID, "bridge")
-		bridgeUrl, err = thanos.InstallBridge(
-			ctx,
-			logPath,
-			string(stackConfig.Network),
-			stackConfig.DeploymentPath,
-			stackConfig.AwsAccessKey,
-			stackConfig.AwsSecretAccessKey,
-			stackConfig.AwsRegion)
+	logPath := utils.GetPluginLogPath(stack.ID, "install-bridge")
 
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return err
+	}
+
+	s.taskManager.AddTask(func() {
+		bridgeUrl, err = thanos.InstallBridge(ctx, sdkClient)
 		if err != nil {
 			logger.Error("failed to install bridge", zap.String("plugin", "bridge"), zap.Error(err))
 			return
@@ -700,17 +725,24 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 		return err
 	}
 
-	s.taskManager.AddTask(func() {
-		logPath := utils.GetPluginLogPath(stack.ID, "bridge")
-		err = thanos.UninstallBridge(
-			ctx,
-			logPath,
-			string(stackConfig.Network),
-			stackConfig.DeploymentPath,
-			stackConfig.AwsAccessKey,
-			stackConfig.AwsSecretAccessKey,
-			stackConfig.AwsRegion)
+	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-bridge")
 
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return err
+	}
+
+	s.taskManager.AddTask(func() {
+		err = thanos.UninstallBridge(ctx, sdkClient)
 		if err != nil {
 			logger.Error("failed to install bridge", zap.String("plugin", "bridge"), zap.Error(err))
 			return
@@ -779,7 +811,6 @@ func getThanosStackDeployments(
 	l1ContractDeploymentID := uuid.New()
 	l1ContractDeploymentLogPath := utils.GetDeploymentLogPath(stackId, l1ContractDeploymentID)
 	l1ContractDeploymentConfig, err := json.Marshal(dtos.DeployL1ContractsRequest{
-		Network:                  config.Network,
 		L1RpcUrl:                 config.L1RpcUrl,
 		L2BlockTime:              config.L2BlockTime,
 		BatchSubmissionFrequency: config.BatchSubmissionFrequency,
@@ -789,8 +820,6 @@ func getThanosStackDeployments(
 		SequencerAccount:         config.SequencerAccount,
 		BatcherAccount:           config.BatcherAccount,
 		ProposerAccount:          config.ProposerAccount,
-		DeploymentPath:           deploymentPath,
-		LogPath:                  l1ContractDeploymentLogPath,
 	})
 	if err != nil {
 		return nil, err
@@ -812,14 +841,8 @@ func getThanosStackDeployments(
 		thanosInfrastructureDeploymentID,
 	)
 	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
-		ChainName:          config.ChainName,
-		Network:            string(config.Network),
-		L1BeaconUrl:        config.L1BeaconUrl,
-		AwsAccessKey:       config.AwsAccessKey,
-		AwsSecretAccessKey: config.AwsSecretAccessKey,
-		AwsRegion:          config.AwsRegion,
-		DeploymentPath:     deploymentPath,
-		LogPath:            thanosInfrastructureDeploymentLogPath,
+		ChainName:   config.ChainName,
+		L1BeaconUrl: config.L1BeaconUrl,
 	})
 	if err != nil {
 		return nil, err

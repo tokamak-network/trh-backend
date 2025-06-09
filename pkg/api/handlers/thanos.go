@@ -35,7 +35,7 @@ func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 	request.BatcherAccount = utils.TrimPrivateKey(request.BatcherAccount)
 	request.ProposerAccount = utils.TrimPrivateKey(request.ProposerAccount)
 
-	stackId, err := h.ThanosDeploymentService.CreateThanosStack(request)
+	stackId, err := h.ThanosDeploymentService.CreateThanosStack(c, request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -50,7 +50,7 @@ func (h *ThanosDeploymentHandler) Terminate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	err := h.ThanosDeploymentService.TerminateThanosStack(uuid.MustParse(id))
+	err := h.ThanosDeploymentService.TerminateThanosStack(c, uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -64,7 +64,7 @@ func (h *ThanosDeploymentHandler) Resume(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	err := h.ThanosDeploymentService.ResumeThanosStack(uuid.MustParse(id))
+	err := h.ThanosDeploymentService.ResumeThanosStack(c, uuid.MustParse(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
