@@ -9,17 +9,17 @@ import (
 )
 
 type Integration struct {
-	ID        uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid();column:id"`
-	StackID   *uuid.UUID      `gorm:"column:stack_id;not null;references:ID"`
-	Stack     *Stack          `gorm:"foreignKey:StackID"`
-	Name      string          `gorm:"column:name;not null"`
-	LogPath   string          `gorm:"column:log_path"`
-	Status    entities.Status `gorm:"column:status;not null"`
-	Config    datatypes.JSON  `gorm:"column:config;type:jsonb;default:null"`
-	Info      datatypes.JSON  `gorm:"column:info;type:jsonb;default:null"`
-	CreatedAt time.Time       `gorm:"autoCreateTime;column:created_at"`
-	UpdatedAt time.Time       `gorm:"autoUpdateTime;column:updated_at"`
-	DeletedAt time.Time       `gorm:"autoUpdateTime;column:deleted_at"`
+	ID        uuid.UUID            `gorm:"type:uuid;primaryKey;default:gen_random_uuid();column:id"`
+	StackID   *uuid.UUID           `gorm:"column:stack_id;not null;references:ID"`
+	Stack     *Stack               `gorm:"foreignKey:StackID"`
+	Name      string               `gorm:"column:name;not null"`
+	LogPath   string               `gorm:"column:log_path"`
+	Status    entities.StackStatus `gorm:"column:status;not null"`
+	Config    datatypes.JSON       `gorm:"column:config;type:jsonb;default:null"`
+	Info      datatypes.JSON       `gorm:"column:info;type:jsonb;default:null"`
+	CreatedAt time.Time            `gorm:"autoCreateTime;column:created_at"`
+	UpdatedAt time.Time            `gorm:"autoUpdateTime;column:updated_at"`
+	DeletedAt time.Time            `gorm:"autoUpdateTime;column:deleted_at"`
 }
 
 func (Integration) TableName() string {

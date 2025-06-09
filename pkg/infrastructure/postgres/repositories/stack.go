@@ -59,7 +59,7 @@ func (r *StackRepository) DeleteStack(
 
 func (r *StackRepository) UpdateStatus(
 	id string,
-	status entities.Status,
+	status entities.StackStatus,
 	reason string,
 ) error {
 	if reason == "" {
@@ -118,7 +118,7 @@ func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 
 func (r *StackRepository) GetStackStatus(
 	id string,
-) (entities.Status, error) {
+) (entities.StackStatus, error) {
 	var stack schemas.Stack
 	err := r.db.Where("id = ?", id).First(&stack).Error
 	if err != nil {

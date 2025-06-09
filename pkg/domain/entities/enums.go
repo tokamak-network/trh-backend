@@ -8,19 +8,19 @@ const (
 	DeploymentNetworkLocalDevnet DeploymentNetwork = "LocalDevnet"
 )
 
-type Status string
+type StackStatus string
 
 const (
-	StatusPending           Status = "Pending"
-	StatusDeployed          Status = "Deployed"
-	StatusDeploying         Status = "Deploying"
-	StatusUpdating          Status = "Updating"
-	StatusTerminating       Status = "Terminating"
-	StatusTerminated        Status = "Terminated"
-	StatusFailedToDeploy    Status = "FailedToDeploy"
-	StatusFailedToUpdate    Status = "FailedToUpdate"
-	StatusFailedToTerminate Status = "FailedToTerminate"
-	StatusUnknown           Status = "Unknown"
+	StatusPending           StackStatus = "Pending"
+	StatusDeployed          StackStatus = "Deployed"
+	StatusDeploying         StackStatus = "Deploying"
+	StatusUpdating          StackStatus = "Updating"
+	StatusTerminating       StackStatus = "Terminating"
+	StatusTerminated        StackStatus = "Terminated"
+	StatusFailedToDeploy    StackStatus = "FailedToDeploy"
+	StatusFailedToUpdate    StackStatus = "FailedToUpdate"
+	StatusFailedToTerminate StackStatus = "FailedToTerminate"
+	StatusUnknown           StackStatus = "Unknown"
 )
 
 type DeploymentStatus string

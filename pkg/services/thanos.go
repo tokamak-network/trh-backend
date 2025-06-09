@@ -23,10 +23,10 @@ type DeploymentRepository interface {
 
 type StackRepository interface {
 	CreateStackByTx(stack *entities.StackEntity, deployments []*entities.DeploymentEntity) error
-	UpdateStatus(stackId string, status entities.Status, reason string) error
+	UpdateStatus(stackId string, status entities.StackStatus, reason string) error
 	GetStackByID(stackId string) (*entities.StackEntity, error)
 	GetAllStacks() ([]*entities.StackEntity, error)
-	GetStackStatus(stackId string) (entities.Status, error)
+	GetStackStatus(stackId string) (entities.StackStatus, error)
 	UpdateMetadata(
 		id string,
 		metadata json.RawMessage,
@@ -39,7 +39,7 @@ type IntegrationRepository interface {
 	) error
 	UpdateIntegrationStatus(
 		id string,
-		status entities.Status,
+		status entities.StackStatus,
 	) error
 	GetIntegration(
 		stackId string,
@@ -228,6 +228,10 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 		logger.Error("failed to create integration", zap.Error(err))
 		return
 	}
+
+	logger.Info("Thanos stack deployed successfully",
+		zap.String("stackId", stackId.String()),
+	)
 }
 
 func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, stackId uuid.UUID) error {
@@ -781,7 +785,7 @@ func (s *ThanosStackDeploymentService) GetAllStacks() ([]*entities.StackEntity, 
 	return s.stackRepo.GetAllStacks()
 }
 
-func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (entities.Status, error) {
+func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (entities.StackStatus, error) {
 	return s.stackRepo.GetStackStatus(stackId.String())
 }
 

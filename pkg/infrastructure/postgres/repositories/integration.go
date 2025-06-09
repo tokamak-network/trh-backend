@@ -30,7 +30,7 @@ func (r *IntegrationRepository) CreateIntegration(
 
 func (r *IntegrationRepository) UpdateIntegrationStatus(
 	id string,
-	status entities.Status,
+	status entities.StackStatus,
 ) error {
 	return r.db.Model(&schemas.Integration{}).Where("id = ?", id).Update("status", status).Error
 }
@@ -40,7 +40,7 @@ func (r *IntegrationRepository) GetIntegration(
 	name string,
 ) (*entities.Integration, error) {
 	var integration schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).Where("status = ?", entities.StatusDeployed).First(&integration).Error; err != nil {
+	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).Where("status = ?", entities.DeploymentStatusCompleted).First(&integration).Error; err != nil {
 		return nil, err
 	}
 	return ToIntegrationEntity(&integration), nil
@@ -53,7 +53,7 @@ func ToIntegrationSchema(
 		ID:      integration.ID,
 		StackID: integration.StackID,
 		Name:    integration.Name,
-		Status:  entities.Status(integration.Status),
+		Status:  entities.StackStatus(integration.Status),
 		Config:  datatypes.JSON(integration.Config),
 		Info:    datatypes.JSON(integration.Info),
 		LogPath: integration.LogPath,
