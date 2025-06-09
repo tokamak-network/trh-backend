@@ -30,9 +30,16 @@ func (r *IntegrationRepository) CreateIntegration(
 
 func (r *IntegrationRepository) UpdateIntegrationStatus(
 	id string,
-	status entities.StackStatus,
+	status entities.DeploymentStatus,
 ) error {
 	return r.db.Model(&schemas.Integration{}).Where("id = ?", id).Update("status", status).Error
+}
+
+func (r *IntegrationRepository) UpdateIntegrationsStatusByStackID(
+	stackID string,
+	status entities.DeploymentStatus,
+) error {
+	return r.db.Model(&schemas.Integration{}).Where("stack_id = ?", stackID).Update("status", status).Error
 }
 
 func (r *IntegrationRepository) GetIntegration(
@@ -41,9 +48,29 @@ func (r *IntegrationRepository) GetIntegration(
 ) (*entities.Integration, error) {
 	var integration schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).Where("status = ?", entities.DeploymentStatusCompleted).First(&integration).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // No integration found
+		}
 		return nil, err
 	}
 	return ToIntegrationEntity(&integration), nil
+}
+
+func (r *IntegrationRepository) GetIntegrationsByStackID(
+	stackID string,
+) ([]*entities.Integration, error) {
+	var integrations []schemas.Integration
+	if err := r.db.Where("stack_id = ?", stackID).Order("created_at asc").Find(&integrations).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // No integrations found for this stack
+		}
+		return nil, err
+	}
+	integrationEntities := make([]*entities.Integration, len(integrations))
+	for i, integration := range integrations {
+		integrationEntities[i] = ToIntegrationEntity(&integration)
+	}
+	return integrationEntities, nil
 }
 
 func ToIntegrationSchema(
@@ -53,7 +80,7 @@ func ToIntegrationSchema(
 		ID:      integration.ID,
 		StackID: integration.StackID,
 		Name:    integration.Name,
-		Status:  entities.StackStatus(integration.Status),
+		Status:  entities.DeploymentStatus(integration.Status),
 		Config:  datatypes.JSON(integration.Config),
 		Info:    datatypes.JSON(integration.Info),
 		LogPath: integration.LogPath,

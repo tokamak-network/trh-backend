@@ -11,25 +11,27 @@ const (
 type StackStatus string
 
 const (
-	StatusPending           StackStatus = "Pending"
-	StatusDeployed          StackStatus = "Deployed"
-	StatusDeploying         StackStatus = "Deploying"
-	StatusUpdating          StackStatus = "Updating"
-	StatusTerminating       StackStatus = "Terminating"
-	StatusTerminated        StackStatus = "Terminated"
-	StatusFailedToDeploy    StackStatus = "FailedToDeploy"
-	StatusFailedToUpdate    StackStatus = "FailedToUpdate"
-	StatusFailedToTerminate StackStatus = "FailedToTerminate"
-	StatusUnknown           StackStatus = "Unknown"
+	StackStatusPending           StackStatus = "Pending"
+	StackStatusDeployed          StackStatus = "Deployed"
+	StackStatusDeploying         StackStatus = "Deploying"
+	StackStatusUpdating          StackStatus = "Updating"
+	StackStatusTerminating       StackStatus = "Terminating"
+	StackStatusTerminated        StackStatus = "Terminated"
+	StackStatusFailedToDeploy    StackStatus = "FailedToDeploy"
+	StackStatusFailedToUpdate    StackStatus = "FailedToUpdate"
+	StackStatusFailedToTerminate StackStatus = "FailedToTerminate"
+	StackStatusUnknown           StackStatus = "Unknown"
 )
 
 type DeploymentStatus string
 
 const (
-	DeploymentStatusPending    DeploymentStatus = "Pending"
-	DeploymentStatusInProgress DeploymentStatus = "InProgress"
-	DeploymentStatusFailed     DeploymentStatus = "Failed"
-	DeploymentStatusStopped    DeploymentStatus = "Stopped"
-	DeploymentStatusCompleted  DeploymentStatus = "Completed"
-	DeploymentStatusUnknown    DeploymentStatus = "Unknown"
+	DeploymentStatusPending     DeploymentStatus = "Pending"
+	DeploymentStatusInProgress  DeploymentStatus = "InProgress"
+	DeploymentStatusFailed      DeploymentStatus = "Failed"
+	DeploymentStatusStopped     DeploymentStatus = "Stopped"
+	DeploymentStatusCompleted   DeploymentStatus = "Completed"
+	DeploymentStatusTerminating DeploymentStatus = "Terminating"
+	DeploymentStatusTerminated  DeploymentStatus = "Terminated"
+	DeploymentStatusUnknown     DeploymentStatus = "Unknown"
 )

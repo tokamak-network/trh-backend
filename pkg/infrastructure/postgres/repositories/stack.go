@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
@@ -71,9 +72,16 @@ func (r *StackRepository) UpdateStatus(
 
 func (r *StackRepository) UpdateMetadata(
 	id string,
-	metadata json.RawMessage,
+	metadata *entities.StackMetadata,
 ) error {
-	return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("metadata", metadata).Error
+	if metadata == nil {
+		return fmt.Errorf("metadata cannot be nil")
+	}
+	b, err := metadata.Marshal()
+	if err != nil {
+		return err
+	}
+	return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("metadata", b).Error
 }
 
 func (r *StackRepository) GetStackByID(
@@ -82,14 +90,23 @@ func (r *StackRepository) GetStackByID(
 	var stack schemas.Stack
 	err := r.db.Where("id = ?", id).First(&stack).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("stack with id %s not found", id)
+		}
 		return nil, err
 	}
+
+	metadata, err := entities.FromJSONToStackMetadata(json.RawMessage(stack.Metadata))
+	if err != nil {
+		return nil, err
+	}
+
 	return &entities.StackEntity{
 		ID:             stack.ID,
 		Name:           stack.Name,
 		Network:        stack.Network,
 		Config:         json.RawMessage(stack.Config),
-		Metadata:       json.RawMessage(stack.Metadata),
+		Metadata:       metadata,
 		DeploymentPath: stack.DeploymentPath,
 		Status:         stack.Status,
 	}, nil
@@ -103,12 +120,17 @@ func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 	}
 	stacksEntities := make([]*entities.StackEntity, len(stacks))
 	for i, stack := range stacks {
+		metadata, err := entities.FromJSONToStackMetadata(json.RawMessage(stack.Metadata))
+		if err != nil {
+			return nil, err
+		}
+
 		stacksEntities[i] = &entities.StackEntity{
 			ID:             stack.ID,
 			Name:           stack.Name,
 			Network:        stack.Network,
 			Config:         json.RawMessage(stack.Config),
-			Metadata:       json.RawMessage(stack.Metadata),
+			Metadata:       metadata,
 			DeploymentPath: stack.DeploymentPath,
 			Status:         stack.Status,
 		}
@@ -122,7 +144,7 @@ func (r *StackRepository) GetStackStatus(
 	var stack schemas.Stack
 	err := r.db.Where("id = ?", id).First(&stack).Error
 	if err != nil {
-		return entities.StatusUnknown, err
+		return entities.StackStatusUnknown, err
 	}
 	return stack.Status, nil
 }

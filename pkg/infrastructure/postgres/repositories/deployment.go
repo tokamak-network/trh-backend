@@ -28,6 +28,13 @@ func (r *DeploymentRepository) UpdateDeploymentStatus(
 	return r.db.Model(&schemas.Deployment{}).Where("id = ?", id).Update("status", status).Error
 }
 
+func (r *DeploymentRepository) UpdateStatusesByStackId(
+	stackID string,
+	status entities.DeploymentStatus,
+) error {
+	return r.db.Model(&schemas.Deployment{}).Where("stack_id = ?", stackID).Update("status", status).Error
+}
+
 func (r *DeploymentRepository) DeleteDeployment(id string) error {
 	return r.db.Delete(&schemas.Deployment{}, id).Error
 }
@@ -52,6 +59,9 @@ func (r *DeploymentRepository) GetDeploymentsByStackID(
 ) ([]*entities.DeploymentEntity, error) {
 	var deployments []schemas.Deployment
 	if err := r.db.Where("stack_id = ?", stackID).Order("step asc").Find(&deployments).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // No deployments found for this stack
+		}
 		return nil, err
 	}
 	deploymentsEntities := make([]*entities.DeploymentEntity, len(deployments))

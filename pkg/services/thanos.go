@@ -19,6 +19,10 @@ type DeploymentRepository interface {
 	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentStatus) error
 	GetDeploymentByID(deploymentId string) (*entities.DeploymentEntity, error)
 	GetDeploymentStatus(deploymentId string) (entities.DeploymentStatus, error)
+	UpdateStatusesByStackId(
+		stackID string,
+		status entities.DeploymentStatus,
+	) error
 }
 
 type StackRepository interface {
@@ -29,7 +33,7 @@ type StackRepository interface {
 	GetStackStatus(stackId string) (entities.StackStatus, error)
 	UpdateMetadata(
 		id string,
-		metadata json.RawMessage,
+		metadata *entities.StackMetadata,
 	) error
 }
 
@@ -39,12 +43,19 @@ type IntegrationRepository interface {
 	) error
 	UpdateIntegrationStatus(
 		id string,
-		status entities.StackStatus,
+		status entities.DeploymentStatus,
 	) error
 	GetIntegration(
 		stackId string,
 		name string,
 	) (*entities.Integration, error)
+	GetIntegrationsByStackID(
+		stackID string,
+	) ([]*entities.Integration, error)
+	UpdateIntegrationsStatusByStackID(
+		stackID string,
+		status entities.DeploymentStatus,
+	) error
 }
 
 type TaskManager interface {
@@ -97,7 +108,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		Network:        request.Network,
 		Config:         config,
 		DeploymentPath: deploymentPath,
-		Status:         entities.StatusPending,
+		Status:         entities.StackStatusPending,
 	}
 
 	deployments, err := getThanosStackDeployments(stackId, &request, deploymentPath)
@@ -120,11 +131,425 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 	return stackId, nil
 }
 
+func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, stackId uuid.UUID) error {
+	s.taskManager.AddTask(func() {
+		s.handleStackDeployment(ctx, stackId)
+	})
+	return nil
+}
+
+func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context, stackId uuid.UUID) error {
+	// Check if stacks exists
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return fmt.Errorf("failed to get stacks: %w", err)
+	}
+
+	// Check if stacks is in a valid state to be terminated
+	if stack.Status == entities.StackStatusDeploying || stack.Status == entities.StackStatusUpdating ||
+		stack.Status == entities.StackStatusTerminating {
+		logger.Error(
+			"The stacks is still deploying, updating or terminating, please wait for it to finish",
+			zap.String("stackId", stackId.String()),
+		)
+		return fmt.Errorf(
+			"the stacks is still deploying, updating or terminating, please wait for it to finish",
+		)
+	}
+
+	s.taskManager.AddTask(func() {
+		s.handleStackTermination(ctx, stack)
+	})
+
+	return nil
+}
+
+func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context, stackId string, request dtos.InstallBlockExplorerRequest) error {
+	if err := request.Validate(); err != nil {
+		logger.Error("invalid block explorer request", zap.Error(err))
+		return err
+	}
+
+	stack, err := s.stackRepo.GetStackByID(stackId)
+	if err != nil {
+		return err
+	}
+
+	if stack == nil {
+		return fmt.Errorf("stack %s not found", stackId)
+	}
+
+	// check if block explorer is already installed
+	integration, err := s.integrationRepo.GetIntegration(stackId, "block-explorer")
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+		return err
+	}
+
+	if integration != nil {
+		logger.Error("block explorer is already installed", zap.String("plugin", "block-explorer"))
+		return fmt.Errorf("block explorer is already installed")
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
+		return err
+	}
+
+	var (
+		blockExplorerUrl string
+	)
+
+	logPath := utils.GetPluginLogPath(stack.ID, "block-explorer")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return err
+	}
+
+	s.taskManager.AddTask(func() {
+
+		blockExplorerUrl, err = thanos.InstallBlockExplorer(ctx, sdkClient, &request)
+		if err != nil {
+			logger.Error("failed to install block explorer", zap.String("plugin", "block-explorer"), zap.Error(err))
+			return
+		}
+
+		if blockExplorerUrl == "" {
+			logger.Error("block explorer URL is empty", zap.String("plugin", "block-explorer"))
+			return
+		}
+
+		logger.Debug("block explorer successfully installed", zap.String("plugin", "block-explorer"), zap.String("url", blockExplorerUrl))
+		// create integration
+		b, err := json.Marshal(request)
+		if err != nil {
+			logger.Error("failed to marshal block explorer config", zap.Error(err))
+			return
+		}
+		err = s.integrationRepo.CreateIntegration(&entities.Integration{
+			ID:      uuid.New(),
+			StackID: &stack.ID,
+			Name:    "block-explorer",
+			Status:  string(entities.DeploymentStatusCompleted),
+			Info:    json.RawMessage(fmt.Sprintf(`{"url": "%s"}`, blockExplorerUrl)),
+			Config:  b,
+			LogPath: logPath,
+		})
+		if err != nil {
+			logger.Error("failed to create integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			return
+		}
+		stack.Metadata.BlockExplorerUrl = blockExplorerUrl
+
+		err = s.stackRepo.UpdateMetadata(
+			stackId,
+			stack.Metadata,
+		)
+		if err != nil {
+			logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
+			return
+		}
+	})
+
+	return nil
+}
+
+func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Context, stackId string) error {
+	stack, err := s.stackRepo.GetStackByID(stackId)
+	if err != nil {
+		return err
+	}
+
+	if stack == nil {
+		return fmt.Errorf("stack %s not found", stackId)
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
+		return err
+	}
+
+	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-block-explorer")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return err
+	}
+
+	s.taskManager.AddTask(func() {
+		integration, err := s.integrationRepo.GetIntegration(stackId, "block-explorer")
+		if err != nil {
+			logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			return
+		}
+
+		if integration == nil {
+			logger.Error("integration not found", zap.String("plugin", "block-explorer"))
+			return
+		}
+		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating)
+		if err != nil {
+			logger.Error("failed to update integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			return
+		}
+		err = thanos.UninstallBlockExplorer(ctx, sdkClient)
+		if err != nil {
+			logger.Error("failed to install block-explorer", zap.String("plugin", "block-explorer"), zap.Error(err))
+			return
+		}
+
+		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated)
+		if err != nil {
+			logger.Error("failed to update integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			return
+		}
+		stack.Metadata.BlockExplorerUrl = ""
+
+		err = s.stackRepo.UpdateMetadata(
+			stackId,
+			stack.Metadata,
+		)
+		if err != nil {
+			logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
+			return
+		}
+	})
+
+	return nil
+}
+
+func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackId string) error {
+	stack, err := s.stackRepo.GetStackByID(stackId)
+	if err != nil {
+		return err
+	}
+
+	if stack == nil {
+		return fmt.Errorf("stack %s not found", stackId)
+	}
+
+	// check if block explorer is already installed
+	integration, err := s.integrationRepo.GetIntegration(stackId, "bridge")
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
+		return err
+	}
+
+	if integration != nil {
+		logger.Error("bridge is already installed", zap.String("plugin", "bridge"))
+		return fmt.Errorf("bridge is already installed")
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
+		return err
+	}
+
+	var (
+		bridgeUrl string
+	)
+
+	logPath := utils.GetPluginLogPath(stack.ID, "install-bridge")
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return err
+	}
+
+	s.taskManager.AddTask(func() {
+		bridgeUrl, err = thanos.InstallBridge(ctx, sdkClient)
+		if err != nil {
+			logger.Error("failed to install bridge", zap.String("plugin", "bridge"), zap.Error(err))
+			return
+		}
+
+		if bridgeUrl == "" {
+			logger.Error("bridge URL is empty", zap.String("plugin", "bridge"))
+			return
+		}
+
+		logger.Debug("bridge successfully installed", zap.String("plugin", "bridge"), zap.String("url", bridgeUrl))
+
+		// create integration
+		err = s.integrationRepo.CreateIntegration(&entities.Integration{
+			ID:      uuid.New(),
+			StackID: &stack.ID,
+			Name:    "bridge",
+			Status:  string(entities.DeploymentStatusCompleted),
+			Info:    json.RawMessage(fmt.Sprintf(`{"url": "%s"}`, bridgeUrl)),
+			Config:  nil,
+			LogPath: logPath,
+		})
+		if err != nil {
+			logger.Error("failed to create integration", zap.String("plugin", "bridge"), zap.Error(err))
+			return
+		}
+
+		stack.Metadata.BridgeUrl = bridgeUrl
+
+		err = s.stackRepo.UpdateMetadata(
+			stackId,
+			stack.Metadata,
+		)
+		if err != nil {
+			logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
+			return
+		}
+
+		logger.Info("Bridge installed successfully",
+			zap.String("stackId", stackId),
+			zap.String("bridgeUrl", bridgeUrl),
+		)
+	})
+
+	return nil
+}
+
+func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stackId string) error {
+	stack, err := s.stackRepo.GetStackByID(stackId)
+	if err != nil {
+		return err
+	}
+
+	if stack == nil {
+		return fmt.Errorf("stack %s not found", stackId)
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
+		return err
+	}
+
+	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-bridge")
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return err
+	}
+
+	s.taskManager.AddTask(func() {
+		integration, err := s.integrationRepo.GetIntegration(stackId, "bridge")
+		if err != nil {
+			logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
+			return
+		}
+
+		if integration == nil {
+			logger.Error("integration not found", zap.String("plugin", "bridge"))
+			return
+		}
+
+		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating)
+		if err != nil {
+			logger.Error("failed to update integration", zap.String("plugin", "bridge"), zap.Error(err))
+			return
+		}
+
+		logger.Info("Uninstalling bridge", zap.String("plugin", "bridge"))
+
+		err = thanos.UninstallBridge(ctx, sdkClient)
+		if err != nil {
+			logger.Error("failed to install bridge", zap.String("plugin", "bridge"), zap.Error(err))
+			return
+		}
+
+		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated)
+		if err != nil {
+			logger.Error("failed to update integration", zap.String("plugin", "bridge"), zap.Error(err))
+			return
+		}
+		stack.Metadata.BridgeUrl = ""
+
+		err = s.stackRepo.UpdateMetadata(
+			stackId,
+			stack.Metadata,
+		)
+		if err != nil {
+			logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
+			return
+		}
+	})
+
+	return nil
+}
+
+func (s *ThanosStackDeploymentService) GetAllStacks() ([]*entities.StackEntity, error) {
+	return s.stackRepo.GetAllStacks()
+}
+
+func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (entities.StackStatus, error) {
+	return s.stackRepo.GetStackStatus(stackId.String())
+}
+
+func (s *ThanosStackDeploymentService) GetStackDeployments(
+	stackId uuid.UUID,
+) ([]*entities.DeploymentEntity, error) {
+	return s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
+}
+
+func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(
+	deploymentId uuid.UUID,
+) (entities.DeploymentStatus, error) {
+	return s.deploymentRepo.GetDeploymentStatus(deploymentId.String())
+}
+
+func (s *ThanosStackDeploymentService) GetStackDeployment(
+	_ uuid.UUID,
+	deploymentId uuid.UUID,
+) (*entities.DeploymentEntity, error) {
+	return s.deploymentRepo.GetDeploymentByID(deploymentId.String())
+}
+
+func (s *ThanosStackDeploymentService) GetStackByID(
+	stackId uuid.UUID,
+) (*entities.StackEntity, error) {
+	return s.stackRepo.GetStackByID(stackId.String())
+}
+
 // New helper method to handle deployment logic
 func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context, stackId uuid.UUID) {
 	logger.Info("Updating stacks status to creating", zap.String("stackId", stackId.String()))
 
-	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeploying, "")
+	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusDeploying, "")
 	if err != nil {
 		logger.Error("failed to update stacks status",
 			zap.String("stackId", stackId.String()),
@@ -139,7 +564,7 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 			zap.Error(err))
 
 		// Update stacks status to failed
-		updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToDeploy, err.Error())
+		updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusFailedToDeploy, err.Error())
 		if updateErr != nil {
 			logger.Error("failed to update stacks status",
 				zap.String("stackId", stackId.String()),
@@ -155,7 +580,7 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 	}
 
 	// Update stacks status to active on success
-	updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusDeployed, "")
+	updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusDeployed, "")
 	if updateErr != nil {
 		logger.Error("failed to update stacks status",
 			zap.String("stackId", stackId.String()),
@@ -196,13 +621,11 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 		return
 	}
 
-	metadata, err := json.Marshal(chainInformation)
-	if err != nil {
-		logger.Error("failed to marshal chain information", zap.Error(err))
-		return
-	}
-
-	err = s.stackRepo.UpdateMetadata(stackId.String(), metadata)
+	err = s.stackRepo.UpdateMetadata(stackId.String(), &entities.StackMetadata{
+		L2Url:            chainInformation.L2RpcUrl,
+		BridgeUrl:        chainInformation.BridgeUrl,
+		BlockExplorerUrl: chainInformation.BlockExplorer,
+	})
 	if err != nil {
 		logger.Error("failed to update stack metadata", zap.Error(err))
 		return
@@ -365,65 +788,22 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 	return <-errChan
 }
 
-func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, stackId uuid.UUID) error {
-	s.taskManager.AddTask(func() {
-		s.handleStackDeployment(ctx, stackId)
-	})
-	return nil
-}
-
-func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context, stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Context, stack *entities.StackEntity) {
 	// Check if stacks exists
-	stack, err := s.stackRepo.GetStackByID(stackId.String())
-	if err != nil {
-		return fmt.Errorf("failed to get stacks: %w", err)
-	}
-
-	// Check if stacks is in a valid state to be terminated
-	if stack.Status == entities.StatusDeploying || stack.Status == entities.StatusUpdating ||
-		stack.Status == entities.StatusTerminating {
-		logger.Error(
-			"The stacks is still deploying, updating or terminating, please wait for it to finish",
-			zap.String("stackId", stackId.String()),
-		)
-		return fmt.Errorf(
-			"the stacks is still deploying, updating or terminating, please wait for it to finish",
-		)
-	}
-
-	s.taskManager.AddTask(func() {
-		s.handleStackTermination(ctx, stackId)
-	})
-
-	return nil
-}
-
-func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Context, stackId uuid.UUID) {
-	// Check if stacks exists
-	stack, err := s.stackRepo.GetStackByID(stackId.String())
-	if err != nil {
-		logger.Error(
-			"failed to get stacks",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err),
-		)
+	if stack == nil {
+		logger.Error("stack not found")
 		return
 	}
 
-	// Update stacks status to terminating
-	if err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminating, ""); err != nil {
-		logger.Error("failed to update stacks status to terminating",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
-		return
-	}
+	stackId := stack.ID
 
 	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+	err := json.Unmarshal(stack.Config, &stackConfig)
+	if err != nil {
 		logger.Error("failed to unmarshal stacks config",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
-		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate, err.Error()); updateErr != nil {
+		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusFailedToTerminate, err.Error()); updateErr != nil {
 			logger.Error("failed to update stacks status after unmarshal error",
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
@@ -447,11 +827,22 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
-	if err := thanos.DestroyAWSInfrastructure(ctx, sdkClient); err != nil {
+	err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusTerminating, "")
+	if err != nil {
+		logger.Error("failed to update stacks status after destroy error",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
+
+	err = thanos.DestroyAWSInfrastructure(ctx, sdkClient)
+	if err != nil {
 		logger.Error("failed to destroy AWS infrastructure",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
-		if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusFailedToTerminate, err.Error()); updateErr != nil {
+
+		updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusFailedToTerminate, err.Error())
+		if updateErr != nil {
 			logger.Error("failed to update stacks status after destroy error",
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
@@ -459,359 +850,41 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
-	if err := s.stackRepo.UpdateStatus(stackId.String(), entities.StatusTerminated, ""); err != nil {
+	err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusTerminated, "")
+	if err != nil {
 		logger.Error("failed to update stacks status to terminated",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 		return
 	}
 
-	deployments, err := s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
+	err = s.deploymentRepo.UpdateStatusesByStackId(
+		stackId.String(),
+		entities.DeploymentStatusTerminated,
+	)
 	if err != nil {
-		logger.Error("failed to get deployments",
+		logger.Error("failed to update deployments status to terminated",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 		return
 	}
 
-	for _, deployment := range deployments {
-		if err := s.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentStatus(entities.StatusPending)); err != nil {
-			logger.Error("failed to update deployment status",
-				zap.String("deploymentId", deployment.ID.String()),
-				zap.String("stackId", stackId.String()),
-				zap.Error(err))
-			// Continue updating other deployments even if one fails
-			continue
-		}
+	// Update integrations status to terminated
+	err = s.integrationRepo.UpdateIntegrationsStatusByStackID(
+		stackId.String(),
+		entities.DeploymentStatusTerminated,
+	)
+	if err != nil {
+		logger.Error("failed to update integrations status to terminated",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
 	}
 
 	logger.Info(
 		"AWS infrastructure destroyed successfully",
 		zap.String("stackId", stackId.String()),
 	)
-}
-
-func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context, stackId string, request dtos.InstallBlockExplorerRequest) error {
-	if err := request.Validate(); err != nil {
-		logger.Error("invalid block explorer request", zap.Error(err))
-		return err
-	}
-
-	stack, err := s.stackRepo.GetStackByID(stackId)
-	if err != nil {
-		return err
-	}
-
-	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId)
-	}
-
-	// check if block explorer is already installed
-	integration, err := s.integrationRepo.GetIntegration(stackId, "block-explorer")
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
-		return err
-	}
-
-	if integration != nil {
-		logger.Error("block explorer is already installed", zap.String("plugin", "block-explorer"))
-		return fmt.Errorf("block explorer is already installed")
-	}
-
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return err
-	}
-
-	var (
-		blockExplorerUrl string
-	)
-
-	logPath := utils.GetPluginLogPath(stack.ID, "block-explorer")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client",
-			zap.Error(err))
-		return err
-	}
-
-	s.taskManager.AddTask(func() {
-
-		blockExplorerUrl, err = thanos.InstallBlockExplorer(ctx, sdkClient, &request)
-		if err != nil {
-			logger.Error("failed to install block explorer", zap.String("plugin", "block-explorer"), zap.Error(err))
-			return
-		}
-
-		if blockExplorerUrl == "" {
-			logger.Error("block explorer URL is empty", zap.String("plugin", "block-explorer"))
-			return
-		}
-
-		logger.Debug("block explorer successfully installed", zap.String("plugin", "block-explorer"), zap.String("url", blockExplorerUrl))
-		// create integration
-		b, err := json.Marshal(request)
-		if err != nil {
-			logger.Error("failed to marshal block explorer config", zap.Error(err))
-			return
-		}
-		err = s.integrationRepo.CreateIntegration(&entities.Integration{
-			ID:      uuid.New(),
-			StackID: &stack.ID,
-			Name:    "block-explorer",
-			Status:  string(entities.DeploymentStatusCompleted),
-			Info:    json.RawMessage(fmt.Sprintf(`{"url": "%s"}`, blockExplorerUrl)),
-			Config:  b,
-			LogPath: logPath,
-		})
-		if err != nil {
-			logger.Error("failed to create integration", zap.String("plugin", "block-explorer"), zap.Error(err))
-			return
-		}
-	})
-
-	return nil
-}
-
-func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Context, stackId string) error {
-	stack, err := s.stackRepo.GetStackByID(stackId)
-	if err != nil {
-		return err
-	}
-
-	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId)
-	}
-
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return err
-	}
-
-	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-block-explorer")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client",
-			zap.Error(err))
-		return err
-	}
-
-	s.taskManager.AddTask(func() {
-		err = thanos.UninstallBlockExplorer(ctx, sdkClient)
-		if err != nil {
-			logger.Error("failed to install block-explorer", zap.String("plugin", "block-explorer"), zap.Error(err))
-			return
-		}
-
-		integration, err := s.integrationRepo.GetIntegration(stackId, "block-explorer")
-		if err != nil {
-			logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
-			return
-		}
-
-		if integration == nil {
-			logger.Error("integration not found", zap.String("plugin", "block-explorer"))
-			return
-		}
-
-		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.StatusTerminated)
-		if err != nil {
-			logger.Error("failed to update integration", zap.String("plugin", "block-explorer"), zap.Error(err))
-			return
-		}
-	})
-
-	return nil
-}
-
-func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackId string) error {
-	stack, err := s.stackRepo.GetStackByID(stackId)
-	if err != nil {
-		return err
-	}
-
-	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId)
-	}
-
-	// check if block explorer is already installed
-	integration, err := s.integrationRepo.GetIntegration(stackId, "bridge")
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
-		return err
-	}
-
-	if integration != nil {
-		logger.Error("bridge is already installed", zap.String("plugin", "bridge"))
-		return fmt.Errorf("bridge is already installed")
-	}
-
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return err
-	}
-
-	var (
-		bridgeUrl string
-	)
-
-	logPath := utils.GetPluginLogPath(stack.ID, "install-bridge")
-
-	sdkClient, err := thanos.NewThanosSDKClient(
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client",
-			zap.Error(err))
-		return err
-	}
-
-	s.taskManager.AddTask(func() {
-		bridgeUrl, err = thanos.InstallBridge(ctx, sdkClient)
-		if err != nil {
-			logger.Error("failed to install bridge", zap.String("plugin", "bridge"), zap.Error(err))
-			return
-		}
-
-		if bridgeUrl == "" {
-			logger.Error("bridge URL is empty", zap.String("plugin", "bridge"))
-			return
-		}
-
-		logger.Debug("bridge successfully installed", zap.String("plugin", "bridge"), zap.String("url", bridgeUrl))
-
-		// create integration
-		err = s.integrationRepo.CreateIntegration(&entities.Integration{
-			ID:      uuid.New(),
-			StackID: &stack.ID,
-			Name:    "bridge",
-			Status:  string(entities.DeploymentStatusCompleted),
-			Info:    json.RawMessage(fmt.Sprintf(`{"url": "%s"}`, bridgeUrl)),
-			Config:  nil,
-			LogPath: logPath,
-		})
-		if err != nil {
-			logger.Error("failed to create integration", zap.String("plugin", "bridge"), zap.Error(err))
-			return
-		}
-	})
-
-	return nil
-}
-
-func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stackId string) error {
-	stack, err := s.stackRepo.GetStackByID(stackId)
-	if err != nil {
-		return err
-	}
-
-	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId)
-	}
-
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return err
-	}
-
-	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-bridge")
-
-	sdkClient, err := thanos.NewThanosSDKClient(
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client",
-			zap.Error(err))
-		return err
-	}
-
-	s.taskManager.AddTask(func() {
-		err = thanos.UninstallBridge(ctx, sdkClient)
-		if err != nil {
-			logger.Error("failed to install bridge", zap.String("plugin", "bridge"), zap.Error(err))
-			return
-		}
-
-		integration, err := s.integrationRepo.GetIntegration(stackId, "bridge")
-		if err != nil {
-			logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
-			return
-		}
-
-		if integration == nil {
-			logger.Error("integration not found", zap.String("plugin", "bridge"))
-			return
-		}
-
-		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.StatusTerminated)
-		if err != nil {
-			logger.Error("failed to update integration", zap.String("plugin", "bridge"), zap.Error(err))
-			return
-		}
-	})
-
-	return nil
-}
-
-func (s *ThanosStackDeploymentService) GetAllStacks() ([]*entities.StackEntity, error) {
-	return s.stackRepo.GetAllStacks()
-}
-
-func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (entities.StackStatus, error) {
-	return s.stackRepo.GetStackStatus(stackId.String())
-}
-
-func (s *ThanosStackDeploymentService) GetStackDeployments(
-	stackId uuid.UUID,
-) ([]*entities.DeploymentEntity, error) {
-	return s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
-}
-
-func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(
-	deploymentId uuid.UUID,
-) (entities.DeploymentStatus, error) {
-	return s.deploymentRepo.GetDeploymentStatus(deploymentId.String())
-}
-
-func (s *ThanosStackDeploymentService) GetStackDeployment(
-	_ uuid.UUID,
-	deploymentId uuid.UUID,
-) (*entities.DeploymentEntity, error) {
-	return s.deploymentRepo.GetDeploymentByID(deploymentId.String())
-}
-
-func (s *ThanosStackDeploymentService) GetStackByID(
-	stackId uuid.UUID,
-) (*entities.StackEntity, error) {
-	return s.stackRepo.GetStackByID(stackId.String())
 }
 
 func getThanosStackDeployments(
