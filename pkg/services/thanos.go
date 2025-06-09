@@ -234,6 +234,20 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 	statusChan := make(chan entities.DeploymentStatusWithID)
 	defer close(statusChan)
 
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return fmt.Errorf("failed to get stack: %w", err)
+	}
+
+	if stack == nil {
+		return fmt.Errorf("stack %s not found", stackId)
+	}
+
+	var deploymentConfig dtos.DeployThanosRequest
+	if err := json.Unmarshal(stack.Config, &deploymentConfig); err != nil {
+		return fmt.Errorf("failed to unmarshal stack config: %w", err)
+	}
+
 	deployments, err := s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
 	if err != nil {
 		return fmt.Errorf("failed to get deployments: %w", err)
@@ -272,21 +286,10 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			continue
 		}
 
-		deploymentConfig := dtos.DeployThanosRequest{}
-		if err := json.Unmarshal(deployment.Config, &deploymentConfig); err != nil {
-			return fmt.Errorf("failed to unmarshal deployment config: %w", err)
-		}
-
-		// Update status to in-progress before starting deployment
-		statusChan <- entities.DeploymentStatusWithID{
-			DeploymentID: deployment.ID,
-			Status:       entities.DeploymentStatusInProgress,
-		}
-
 		sdkClient, err := thanos.NewThanosSDKClient(
 			deployment.LogPath,
-			string(deploymentConfig.Network),
-			deploymentConfig.DeploymentPath,
+			string(stack.Network),
+			stack.DeploymentPath,
 			deploymentConfig.AwsAccessKey,
 			deploymentConfig.AwsSecretAccessKey,
 			deploymentConfig.AwsRegion,
@@ -301,18 +304,24 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			}
 			return err
 		}
+
+		// Update status to in-progress before starting deployment
+		statusChan <- entities.DeploymentStatusWithID{
+			DeploymentID: deployment.ID,
+			Status:       entities.DeploymentStatusInProgress,
+		}
+
 		if deployment.Step == 1 {
-			if err := thanos.DeployL1Contracts(ctx, sdkClient, &dtos.DeployL1ContractsRequest{
-				L1RpcUrl:                 deploymentConfig.L1RpcUrl,
-				L2BlockTime:              deploymentConfig.L2BlockTime,
-				BatchSubmissionFrequency: deploymentConfig.BatchSubmissionFrequency,
-				OutputRootFrequency:      deploymentConfig.OutputRootFrequency,
-				ChallengePeriod:          deploymentConfig.ChallengePeriod,
-				AdminAccount:             deploymentConfig.AdminAccount,
-				SequencerAccount:         deploymentConfig.SequencerAccount,
-				BatcherAccount:           deploymentConfig.BatcherAccount,
-				ProposerAccount:          deploymentConfig.ProposerAccount,
-			}); err != nil {
+			var deployL1ContractsConfig dtos.DeployL1ContractsRequest
+			if err := json.Unmarshal(deployment.Config, &deployL1ContractsConfig); err != nil {
+				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
+			}
+
+			if err := thanos.DeployL1Contracts(ctx, sdkClient, &deployL1ContractsConfig); err != nil {
+				logger.Error("deployment failed",
+					zap.String("deploymentId", deployment.ID.String()),
+					zap.Int("step", deployment.Step),
+					zap.Error(err))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentStatusFailed,
@@ -324,10 +333,16 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				Status:       entities.DeploymentStatusCompleted,
 			}
 		} else if deployment.Step == 2 {
-			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &dtos.DeployThanosAWSInfraRequest{
-				ChainName:   deploymentConfig.ChainName,
-				L1BeaconUrl: deploymentConfig.L1BeaconUrl,
-			}); err != nil {
+			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
+			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
+				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
+			}
+
+			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
+				logger.Error("deployment failed",
+					zap.String("deploymentId", deployment.ID.String()),
+					zap.Int("step", deployment.Step),
+					zap.Error(err))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentStatusFailed,
@@ -340,13 +355,6 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			}
 		}
 
-		if err != nil {
-			logger.Error("deployment failed",
-				zap.String("deploymentId", deployment.ID.String()),
-				zap.Int("step", deployment.Step),
-				zap.Error(err))
-			return err
-		}
 	}
 
 	// Wait for final status update
