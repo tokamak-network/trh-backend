@@ -21,6 +21,9 @@ func (m *StackMetadata) Marshal() ([]byte, error) {
 }
 
 func FromJSONToStackMetadata(data json.RawMessage) (*StackMetadata, error) {
+	if data == nil || len(data) == 0 {
+		return nil, nil
+	}
 	var metadata StackMetadata
 	if err := json.Unmarshal(data, &metadata); err != nil {
 		return nil, err

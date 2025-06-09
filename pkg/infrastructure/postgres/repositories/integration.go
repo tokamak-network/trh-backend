@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
@@ -48,7 +49,7 @@ func (r *IntegrationRepository) GetIntegration(
 ) (*entities.Integration, error) {
 	var integration schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).Where("status = ?", entities.DeploymentStatusCompleted).First(&integration).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No integration found
 		}
 		return nil, err
@@ -61,7 +62,7 @@ func (r *IntegrationRepository) GetIntegrationsByStackID(
 ) ([]*entities.Integration, error) {
 	var integrations []schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackID).Order("created_at asc").Find(&integrations).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No integrations found for this stack
 		}
 		return nil, err

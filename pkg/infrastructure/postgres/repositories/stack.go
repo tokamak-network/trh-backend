@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
@@ -90,7 +91,7 @@ func (r *StackRepository) GetStackByID(
 	var stack schemas.Stack
 	err := r.db.Where("id = ?", id).First(&stack).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("stack with id %s not found", id)
 		}
 		return nil, err

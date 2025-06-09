@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
@@ -59,7 +60,7 @@ func (r *DeploymentRepository) GetDeploymentsByStackID(
 ) ([]*entities.DeploymentEntity, error) {
 	var deployments []schemas.Deployment
 	if err := r.db.Where("stack_id = ?", stackID).Order("step asc").Find(&deployments).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No deployments found for this stack
 		}
 		return nil, err
