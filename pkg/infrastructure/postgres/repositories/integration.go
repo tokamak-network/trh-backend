@@ -19,7 +19,7 @@ func NewIntegrationRepository(db *gorm.DB) *IntegrationRepository {
 }
 
 func (r *IntegrationRepository) CreateIntegration(
-	integration *entities.Integration,
+	integration *entities.IntegrationEntity,
 ) error {
 	newIntegration := ToIntegrationSchema(integration)
 	err := r.db.Create(newIntegration).Error
@@ -36,6 +36,33 @@ func (r *IntegrationRepository) UpdateIntegrationStatus(
 	return r.db.Model(&schemas.Integration{}).Where("id = ?", id).Update("status", status).Error
 }
 
+func (r *IntegrationRepository) UpdateMetadataAfterInstalled(
+	id string,
+	metadata *entities.IntegrationInfo,
+) error {
+	if metadata == nil {
+		return nil // No metadata to update
+	}
+	return r.db.Model(&schemas.Integration{}).
+		Where("id = ?", id).
+		Update("info", metadata).
+		Update("status", entities.DeploymentStatusCompleted).
+		Error
+}
+
+func (r *IntegrationRepository) UpdateConfig(
+	id string,
+	config json.RawMessage,
+) error {
+	if config == nil {
+		return nil // No metadata to update
+	}
+	return r.db.Model(&schemas.Integration{}).
+		Where("id = ?", id).
+		Update("config", config).
+		Error
+}
+
 func (r *IntegrationRepository) UpdateIntegrationsStatusByStackID(
 	stackID string,
 	status entities.DeploymentStatus,
@@ -43,10 +70,10 @@ func (r *IntegrationRepository) UpdateIntegrationsStatusByStackID(
 	return r.db.Model(&schemas.Integration{}).Where("stack_id = ?", stackID).Update("status", status).Error
 }
 
-func (r *IntegrationRepository) GetIntegration(
+func (r *IntegrationRepository) GetInstalledIntegration(
 	stackId string,
 	name string,
-) (*entities.Integration, error) {
+) (*entities.IntegrationEntity, error) {
 	var integration schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).Where("status = ?", entities.DeploymentStatusCompleted).First(&integration).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -57,9 +84,23 @@ func (r *IntegrationRepository) GetIntegration(
 	return ToIntegrationEntity(&integration), nil
 }
 
+func (r *IntegrationRepository) GetIntegration(
+	stackId string,
+	name string,
+) (*entities.IntegrationEntity, error) {
+	var integration schemas.Integration
+	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).First(&integration).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // No integration found
+		}
+		return nil, err
+	}
+	return ToIntegrationEntity(&integration), nil
+}
+
 func (r *IntegrationRepository) GetIntegrationsByStackID(
 	stackID string,
-) ([]*entities.Integration, error) {
+) ([]*entities.IntegrationEntity, error) {
 	var integrations []schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackID).Order("created_at asc").Find(&integrations).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -67,7 +108,7 @@ func (r *IntegrationRepository) GetIntegrationsByStackID(
 		}
 		return nil, err
 	}
-	integrationEntities := make([]*entities.Integration, len(integrations))
+	integrationEntities := make([]*entities.IntegrationEntity, len(integrations))
 	for i, integration := range integrations {
 		integrationEntities[i] = ToIntegrationEntity(&integration)
 	}
@@ -75,7 +116,7 @@ func (r *IntegrationRepository) GetIntegrationsByStackID(
 }
 
 func ToIntegrationSchema(
-	integration *entities.Integration,
+	integration *entities.IntegrationEntity,
 ) *schemas.Integration {
 	return &schemas.Integration{
 		ID:      integration.ID,
@@ -90,8 +131,8 @@ func ToIntegrationSchema(
 
 func ToIntegrationEntity(
 	integration *schemas.Integration,
-) *entities.Integration {
-	return &entities.Integration{
+) *entities.IntegrationEntity {
+	return &entities.IntegrationEntity{
 		ID:      integration.ID,
 		StackID: integration.StackID,
 		Name:    integration.Name,

@@ -33,6 +33,7 @@ func (r *StackRepository) CreateStack(
 func (r *StackRepository) CreateStackByTx(
 	stack *entities.StackEntity,
 	deployments []*entities.DeploymentEntity,
+	integration *entities.IntegrationEntity,
 ) error {
 	tx := r.db.Begin()
 	err := tx.Create(ToStackEntity(stack)).Error
@@ -48,6 +49,13 @@ func (r *StackRepository) CreateStackByTx(
 	err = tx.Create(deploymentsSchema).Error
 	if err != nil {
 		tx.Rollback()
+		return err
+	}
+
+	err = tx.Create(ToIntegrationSchema(integration)).Error
+	if err != nil {
+		tx.Rollback()
+		return err
 	}
 
 	return tx.Commit().Error
