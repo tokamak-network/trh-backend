@@ -12,7 +12,7 @@ type Integration struct {
 	ID        uuid.UUID                 `gorm:"type:uuid;primaryKey;default:gen_random_uuid();column:id"`
 	StackID   *uuid.UUID                `gorm:"column:stack_id;not null;references:ID"`
 	Stack     *Stack                    `gorm:"foreignKey:StackID"`
-	Name      string                    `gorm:"column:name;not null"`
+	Type      string                    `gorm:"column:type;not null"`
 	LogPath   string                    `gorm:"column:log_path"`
 	Status    entities.DeploymentStatus `gorm:"column:status;not null"`
 	Config    datatypes.JSON            `gorm:"column:config;type:jsonb;default:null"`

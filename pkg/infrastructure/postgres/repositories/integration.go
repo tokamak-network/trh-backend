@@ -84,6 +84,21 @@ func (r *IntegrationRepository) GetInstalledIntegration(
 	return ToIntegrationEntity(&integration), nil
 }
 
+func (r *IntegrationRepository) GetActiveIntegrations(
+	stackId string,
+	integrationType string,
+) ([]*entities.IntegrationEntity, error) {
+	var integrations []schemas.Integration
+	if err := r.db.Where("stack_id = ?", stackId).Where("type = ?", integrationType).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at asc").Find(&integrations).Error; err != nil {
+		return nil, err
+	}
+	integrationEntities := make([]*entities.IntegrationEntity, len(integrations))
+	for i, integration := range integrations {
+		integrationEntities[i] = ToIntegrationEntity(&integration)
+	}
+	return integrationEntities, nil
+}
+
 func (r *IntegrationRepository) GetIntegration(
 	stackId string,
 	name string,
@@ -134,7 +149,7 @@ func ToIntegrationSchema(
 	return &schemas.Integration{
 		ID:      integration.ID,
 		StackID: integration.StackID,
-		Name:    integration.Name,
+		Type:    integration.Type,
 		Status:  entities.DeploymentStatus(integration.Status),
 		Config:  datatypes.JSON(integration.Config),
 		Info:    datatypes.JSON(integration.Info),
@@ -148,7 +163,7 @@ func ToIntegrationEntity(
 	return &entities.IntegrationEntity{
 		ID:      integration.ID,
 		StackID: integration.StackID,
-		Name:    integration.Name,
+		Type:    integration.Type,
 		Status:  string(integration.Status),
 		Config:  json.RawMessage(integration.Config),
 		Info:    json.RawMessage(integration.Info),

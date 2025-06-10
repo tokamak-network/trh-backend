@@ -24,7 +24,7 @@ func (info *IntegrationInfo) ToJson() (json.RawMessage, error) {
 type IntegrationEntity struct {
 	ID      uuid.UUID       `json:"id"`
 	StackID *uuid.UUID      `json:"stack_id"`
-	Name    string          `json:"name"`
+	Type    string          `json:"type"`
 	Status  string          `json:"status"`
 	Config  json.RawMessage `json:"config"`
 	Info    json.RawMessage `json:"info"`

@@ -51,8 +51,12 @@ type IntegrationRepository interface {
 	) error
 	GetInstalledIntegration(
 		stackId string,
-		name string,
+		integrationType string,
 	) (*entities.IntegrationEntity, error)
+	GetActiveIntegrations(
+		stackId string,
+		integrationType string,
+	) ([]*entities.IntegrationEntity, error)
 	GetIntegration(
 		stackId string,
 		name string,
@@ -134,7 +138,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 	bridgeIntegration := &entities.IntegrationEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Name:    "bridge",
+		Type:    "bridge",
 		Status:  string(entities.DeploymentStatusPending),
 	}
 
@@ -206,16 +210,16 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		return fmt.Errorf("stack %s not found", stackId)
 	}
 
-	// check if block explorer is already installed
-	integration, err := s.integrationRepo.GetInstalledIntegration(stackId, "block-explorer")
+	// check if block explorer is already in non-terminated state
+	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId, "block-explorer")
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
 		return err
 	}
 
-	if integration != nil {
-		logger.Error("block explorer is already installed", zap.String("plugin", "block-explorer"))
-		return fmt.Errorf("block explorer is already installed")
+	if len(integrations) > 0 {
+		logger.Error("There is already an active block explorer", zap.String("plugin", "block-explorer"))
+		return fmt.Errorf("there is already an active block explorer")
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}
@@ -247,7 +251,7 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		blockExplorerIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
-			Name:    "block-explorer",
+			Type:    "block-explorer",
 			Status:  string(entities.DeploymentStatusPending),
 			LogPath: logPath,
 		}
@@ -394,16 +398,16 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		return fmt.Errorf("stack %s not found", stackId)
 	}
 
-	// check if block explorer is already installed
-	integration, err := s.integrationRepo.GetInstalledIntegration(stackId, "bridge")
+	// check if block explorer is already in non-terminated state
+	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId, "bridge")
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
 		return err
 	}
 
-	if integration != nil {
-		logger.Error("bridge is already installed", zap.String("plugin", "bridge"))
-		return fmt.Errorf("bridge is already installed")
+	if len(integrations) > 0 {
+		logger.Error("There is already an active bridge", zap.String("plugin", "bridge"))
+		return fmt.Errorf("there is already an active bridge")
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}
@@ -436,7 +440,7 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		bridgeIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
-			Name:    "bridge",
+			Type:    "bridge",
 			Status:  string(entities.DeploymentStatusPending),
 			LogPath: logPath,
 		}
