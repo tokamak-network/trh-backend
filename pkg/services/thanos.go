@@ -206,6 +206,10 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		return err
 	}
 
+	if stack.Status != entities.StackStatusDeployed {
+		return fmt.Errorf("stack %s is not deployed, yet. Please wait for it to finish", stackId)
+	}
+
 	if stack == nil {
 		return fmt.Errorf("stack %s not found", stackId)
 	}
@@ -398,7 +402,11 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		return fmt.Errorf("stack %s not found", stackId)
 	}
 
-	// check if block explorer is already in non-terminated state
+	if stack.Status != entities.StackStatusDeployed {
+		return fmt.Errorf("stack %s is not deployed, yet. Please wait for it to finish", stackId)
+	}
+
+	// check if bridge is already in non-terminated state
 	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId, "bridge")
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
