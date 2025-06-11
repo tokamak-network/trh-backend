@@ -143,6 +143,20 @@ func (r *IntegrationRepository) GetIntegrationsByStackID(
 	return integrationEntities, nil
 }
 
+func (r *IntegrationRepository) GetActiveIntegrationsByStackID(
+	stackId string,
+) ([]*entities.IntegrationEntity, error) {
+	var integrations []schemas.Integration
+	if err := r.db.Where("stack_id = ?", stackId).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at asc").Find(&integrations).Error; err != nil {
+		return nil, err
+	}
+	integrationEntities := make([]*entities.IntegrationEntity, len(integrations))
+	for i, integration := range integrations {
+		integrationEntities[i] = ToIntegrationEntity(&integration)
+	}
+	return integrationEntities, nil
+}
+
 func ToIntegrationSchema(
 	integration *entities.IntegrationEntity,
 ) *schemas.Integration {

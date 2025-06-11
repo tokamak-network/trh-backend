@@ -67,6 +67,9 @@ type IntegrationRepository interface {
 	GetIntegrationsByStackID(
 		stackID string,
 	) ([]*entities.IntegrationEntity, error)
+	GetActiveIntegrationsByStackID(
+		stackID string,
+	) ([]*entities.IntegrationEntity, error)
 	UpdateIntegrationsStatusByStackID(
 		stackID string,
 		status entities.DeploymentStatus,
@@ -619,7 +622,7 @@ func (s *ThanosStackDeploymentService) GetStackByID(
 func (s *ThanosStackDeploymentService) GetIntegrations(
 	stackId uuid.UUID,
 ) ([]*entities.IntegrationEntity, error) {
-	integrations, err := s.integrationRepo.GetIntegrationsByStackID(stackId.String())
+	integrations, err := s.integrationRepo.GetActiveIntegrationsByStackID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get integrations", zap.String("stackId", stackId.String()), zap.Error(err))
 		return nil, err
