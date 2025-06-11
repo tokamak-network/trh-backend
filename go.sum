@@ -289,6 +289,12 @@ github.com/tokamak-network/trh-sdk v0.0.0-20250609044226-6c837730e429 h1:o85MtXt
 github.com/tokamak-network/trh-sdk v0.0.0-20250609044226-6c837730e429/go.mod h1:g2kPuHNSlLC/03qikqBCfF5Nmd/R27Q6UZhjRgbpFLQ=
 github.com/tokamak-network/trh-sdk v0.0.0-20250609153832-16868a6319c4 h1:qGpLoqn0LtT5GmnLqpdMdNqYZkcLIfJgtNVupCrSmic=
 github.com/tokamak-network/trh-sdk v0.0.0-20250609153832-16868a6319c4/go.mod h1:g2kPuHNSlLC/03qikqBCfF5Nmd/R27Q6UZhjRgbpFLQ=
+github.com/tokamak-network/trh-sdk v0.0.0-20250611092729-427cae9ba8f1 h1:ohc60mqmmgYiHLTsyueyloEHr09EHHLiYYMBFS+9kNA=
+github.com/tokamak-network/trh-sdk v0.0.0-20250611092729-427cae9ba8f1/go.mod h1:g2kPuHNSlLC/03qikqBCfF5Nmd/R27Q6UZhjRgbpFLQ=
+github.com/tokamak-network/trh-sdk v0.0.0-20250611100402-f835755bd5ab h1:JUSsrwbiQscYu3INZG2/d2gnrPC18chuOL/yvCPODT8=
+github.com/tokamak-network/trh-sdk v0.0.0-20250611100402-f835755bd5ab/go.mod h1:g2kPuHNSlLC/03qikqBCfF5Nmd/R27Q6UZhjRgbpFLQ=
+github.com/tokamak-network/trh-sdk v0.0.0-20250611111745-17d00baaa67a h1:T9IU5NN+f5MUObwqfpbo00WYTNT9aSZpo54phVZNlhk=
+github.com/tokamak-network/trh-sdk v0.0.0-20250611111745-17d00baaa67a/go.mod h1:g2kPuHNSlLC/03qikqBCfF5Nmd/R27Q6UZhjRgbpFLQ=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/tyler-smith/go-bip32 v1.0.0 h1:sDR9juArbUgX+bO/iblgZnMPeWY1KZMUC2AFUJdv5KE=
