@@ -13,6 +13,7 @@ type StackStatus string
 const (
 	StackStatusPending           StackStatus = "Pending"
 	StackStatusDeployed          StackStatus = "Deployed"
+	StackStatusStopped           StackStatus = "Stopped"
 	StackStatusDeploying         StackStatus = "Deploying"
 	StackStatusUpdating          StackStatus = "Updating"
 	StackStatusTerminating       StackStatus = "Terminating"

@@ -1,3 +1,5 @@
 package entities
 
-type Task func()
+import "context"
+
+type Task func(ctx context.Context)

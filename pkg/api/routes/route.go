@@ -28,6 +28,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server) {
 	handler := handlers2.NewThanosHandler(server)
 	router.POST("", handler.Deploy)
 	router.POST("/:id/resume", handler.Resume)
+	router.POST("/:id/stop", handler.Stop)
 	router.DELETE("/:id", handler.Terminate)
 	router.GET("", handler.GetAllStacks)
 	router.GET("/:id", handler.GetStackByID)
