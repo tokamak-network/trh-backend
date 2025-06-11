@@ -72,10 +72,10 @@ func (r *IntegrationRepository) UpdateIntegrationsStatusByStackID(
 
 func (r *IntegrationRepository) GetInstalledIntegration(
 	stackId string,
-	name string,
+	integrationType string,
 ) (*entities.IntegrationEntity, error) {
 	var integration schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).Where("status = ?", entities.DeploymentStatusCompleted).First(&integration).Error; err != nil {
+	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status = ?", entities.DeploymentStatusCompleted).First(&integration).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No integration found
 		}
@@ -101,10 +101,10 @@ func (r *IntegrationRepository) GetActiveIntegrations(
 
 func (r *IntegrationRepository) GetIntegration(
 	stackId string,
-	name string,
+	integrationType string,
 ) (*entities.IntegrationEntity, error) {
 	var integration schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("name", name).First(&integration).Error; err != nil {
+	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).First(&integration).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil // No integration found
 		}
