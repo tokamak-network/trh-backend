@@ -44,6 +44,20 @@ func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "OK", "stackId": stackId})
 }
 
+func (h *ThanosDeploymentHandler) Stop(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	err := h.ThanosDeploymentService.StopDeployingThanosStack(c, uuid.MustParse(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
 func (h *ThanosDeploymentHandler) Terminate(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

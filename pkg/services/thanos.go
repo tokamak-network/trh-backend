@@ -86,7 +86,8 @@ type IntegrationRepository interface {
 
 type TaskManager interface {
 	Start()
-	AddTask(task entities.Task)
+	AddTask(id string, task entities.Task)
+	StopTask(id string)
 	Stop()
 }
 
@@ -158,15 +159,32 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 
 	logger.Info("Stack created", zap.String("stackId", stackId.String()))
 
-	s.taskManager.AddTask(func() {
+	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		s.handleStackDeployment(ctx, stackId)
 	})
 
 	return stackId, nil
 }
 
+func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Context, stackId uuid.UUID) error {
+	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
+	s.taskManager.StopTask(taskId)
+
+	// Update stacks status to stopping
+	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusStopped, "")
+	if err != nil {
+		logger.Error("failed to update stacks status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return fmt.Errorf("failed to update stacks status: %w", err)
+	}
+	return nil
+}
+
 func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, stackId uuid.UUID) error {
-	s.taskManager.AddTask(func() {
+	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		s.handleStackDeployment(ctx, stackId)
 	})
 	return nil
@@ -191,7 +209,8 @@ func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context,
 		)
 	}
 
-	s.taskManager.AddTask(func() {
+	taskId := fmt.Sprintf("terminate-thanos-stack-%s", stackId.String())
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		s.handleStackTermination(ctx, stack)
 	})
 
@@ -254,7 +273,8 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		return err
 	}
 
-	s.taskManager.AddTask(func() {
+	taskId := fmt.Sprintf("install-block-explorer-%s", stackId)
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		blockExplorerIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
@@ -353,7 +373,8 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 		return err
 	}
 
-	s.taskManager.AddTask(func() {
+	taskId := fmt.Sprintf("uninstall-block-explorer-%s", stackId)
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		integration, err := s.integrationRepo.GetInstalledIntegration(stackId, "block-explorer")
 		if err != nil {
 			logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
@@ -447,7 +468,8 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		return err
 	}
 
-	s.taskManager.AddTask(func() {
+	taskId := fmt.Sprintf("install-bridge-%s", stackId)
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		bridgeIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
@@ -540,7 +562,8 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 		return err
 	}
 
-	s.taskManager.AddTask(func() {
+	taskId := fmt.Sprintf("uninstall-bridge-%s", stackId)
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		integration, err := s.integrationRepo.GetInstalledIntegration(stackId, "bridge")
 		if err != nil {
 			logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
@@ -656,6 +679,9 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 
 	err = s.deployThanosStack(ctx, stackId)
 	if err != nil {
+		if err == context.Canceled {
+			return
+		}
 		logger.Error("failed to deploy thanos stacks",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
@@ -851,6 +877,16 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			}
 
 			if err := thanos.DeployL1Contracts(ctx, sdkClient, &deployL1ContractsConfig); err != nil {
+				if err == context.Canceled {
+					logger.Info("deployment cancelled",
+						zap.String("deploymentId", deployment.ID.String()),
+						zap.Int("step", deployment.Step))
+					statusChan <- entities.DeploymentStatusWithID{
+						DeploymentID: deployment.ID,
+						Status:       entities.DeploymentStatusStopped,
+					}
+					return err
+				}
 				logger.Error("deployment failed",
 					zap.String("deploymentId", deployment.ID.String()),
 					zap.Int("step", deployment.Step),
@@ -872,6 +908,16 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			}
 
 			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
+				if err == context.Canceled {
+					logger.Info("deployment cancelled",
+						zap.String("deploymentId", deployment.ID.String()),
+						zap.Int("step", deployment.Step))
+					statusChan <- entities.DeploymentStatusWithID{
+						DeploymentID: deployment.ID,
+						Status:       entities.DeploymentStatusStopped,
+					}
+					return err
+				}
 				logger.Error("deployment failed",
 					zap.String("deploymentId", deployment.ID.String()),
 					zap.Int("step", deployment.Step),
