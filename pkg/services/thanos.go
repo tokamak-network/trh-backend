@@ -256,7 +256,7 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 			ID:      uuid.New(),
 			StackID: &stack.ID,
 			Type:    "block-explorer",
-			Status:  string(entities.DeploymentStatusPending),
+			Status:  string(entities.DeploymentStatusInProgress),
 			LogPath: logPath,
 		}
 		err = s.integrationRepo.CreateIntegration(blockExplorerIntegration)
@@ -449,7 +449,7 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 			ID:      uuid.New(),
 			StackID: &stack.ID,
 			Type:    "bridge",
-			Status:  string(entities.DeploymentStatusPending),
+			Status:  string(entities.DeploymentStatusInProgress),
 			LogPath: logPath,
 		}
 		err = s.integrationRepo.CreateIntegration(bridgeIntegration)
