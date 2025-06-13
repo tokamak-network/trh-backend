@@ -190,6 +190,49 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 	return nil
 }
 
+func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackId uuid.UUID, request dtos.UpdateNetworkRequest) error {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return err
+	}
+
+	if stack == nil {
+		return fmt.Errorf("stack %s not found", stackId.String())
+	}
+
+	if stack.Status != entities.StackStatusDeployed {
+		return fmt.Errorf("stack %s is not deployed, yet. Please wait for it to finish", stackId.String())
+	}
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		return err
+	}
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		stack.DeploymentPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		return err
+	}
+
+	taskId := fmt.Sprintf("update-network-%s", stackId.String())
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
+		err = thanos.UpdateNetwork(ctx, sdkClient, &request)
+		if err != nil {
+			logger.Error("failed to update network", zap.Error(err))
+		}
+	})
+
+	return nil
+}
+
 func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context, stackId uuid.UUID) error {
 	// Check if stacks exists
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
