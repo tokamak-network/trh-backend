@@ -184,3 +184,8 @@ func (r *InstallPluginsRequest) Validate() error {
 
 	return nil
 }
+
+type UpdateNetworkRequest struct {
+	L1RpcUrl    string `json:"l1RpcUrl" validate:"url"`
+	L1BeaconUrl string `json:"l1BeaconUrl" validate:"url"`
+}

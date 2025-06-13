@@ -58,6 +58,26 @@ func (h *ThanosDeploymentHandler) Stop(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "OK"})
 }
 
+func (h *ThanosDeploymentHandler) UpdateNetwork(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	var request dtos.UpdateNetworkRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.ThanosDeploymentService.UpdateNetwork(c, uuid.MustParse(id), request)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
 func (h *ThanosDeploymentHandler) Terminate(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

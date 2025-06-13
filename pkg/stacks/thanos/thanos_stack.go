@@ -146,3 +146,14 @@ func UninstallBlockExplorer(
 ) error {
 	return s.UninstallBlockExplorer(ctx)
 }
+
+func UpdateNetwork(
+	ctx context.Context,
+	s *thanosStack.ThanosStack,
+	req *dtos.UpdateNetworkRequest,
+) error {
+	return s.UpdateNetwork(ctx, &thanosStack.UpdateNetworkInput{
+		L1RPC:       req.L1RpcUrl,
+		L1BeaconURL: req.L1BeaconUrl,
+	})
+}
