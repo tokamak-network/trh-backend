@@ -210,6 +210,7 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 	}
 
 	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
 		stack.DeploymentPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -303,6 +304,7 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 
 	logPath := utils.GetPluginLogPath(stack.ID, "block-explorer")
 	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -403,6 +405,7 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 
 	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-block-explorer")
 	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -498,6 +501,7 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 	logPath := utils.GetPluginLogPath(stack.ID, "install-bridge")
 
 	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -592,6 +596,7 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-bridge")
 
 	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -766,6 +771,7 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 
 	logPath := utils.GetInformationLogPath(stack.ID)
 	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -889,6 +895,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		}
 
 		sdkClient, err := thanos.NewThanosSDKClient(
+			ctx,
 			deployment.LogPath,
 			string(stack.Network),
 			stack.DeploymentPath,
@@ -1009,6 +1016,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	logPath := utils.GetDestroyLogPath(stack.ID)
 
 	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,

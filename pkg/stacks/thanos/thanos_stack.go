@@ -12,13 +12,13 @@ import (
 )
 
 func NewThanosSDKClient(
+	ctx context.Context,
 	logPath string,
 	network string,
 	deploymentPath string,
 	awsAccessKey string,
 	awsSecretAccessKey string,
 	awsRegion string,
-
 ) (*thanosStack.ThanosStack, error) {
 	l := trhSDKLogging.InitLogger(logPath)
 
@@ -34,7 +34,7 @@ func NewThanosSDKClient(
 		}
 	}
 
-	s, err := thanosStack.NewThanosStack(l, network, false, deploymentPath, awsConfig)
+	s, err := thanosStack.NewThanosStack(ctx, l, network, false, deploymentPath, awsConfig)
 	if err != nil {
 		logger.Errorf("Failed to create thanos stacks: %s", err)
 		return nil, err
