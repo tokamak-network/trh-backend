@@ -223,11 +223,23 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 		return err
 	}
 
+	err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusUpdating, "")
+	if err != nil {
+		logger.Error("failed to update stack status", zap.String("stackId", stackId.String()), zap.Error(err))
+		return err
+	}
+
 	taskId := fmt.Sprintf("update-network-%s", stackId.String())
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		err = thanos.UpdateNetwork(ctx, sdkClient, &request)
 		if err != nil {
 			logger.Error("failed to update network", zap.Error(err))
+		}
+
+		err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusDeployed, "")
+		if err != nil {
+			logger.Error("failed to update stack status", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
 		}
 	})
 
