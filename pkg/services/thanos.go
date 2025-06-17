@@ -209,9 +209,10 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 		return err
 	}
 
+	logPath := utils.GetUpdateNetworkLogPath(stack.ID)
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
-		stack.DeploymentPath,
+		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
 		stackConfig.AwsAccessKey,

@@ -20,9 +20,12 @@ func NewThanosSDKClient(
 	awsSecretAccessKey string,
 	awsRegion string,
 ) (*thanosStack.ThanosStack, error) {
-	l := trhSDKLogging.InitLogger(logPath)
+	l, err := trhSDKLogging.InitLogger(logPath)
+	if err != nil {
+		return nil, err
+	}
 
-	logger.Info("Deploying AWS Infrastructure...")
+	logger.Info("Initializing Thanos SDK...")
 
 	var awsConfig *thanosTypes.AWSConfig
 

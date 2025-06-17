@@ -59,3 +59,11 @@ func GetPluginLogPath(
 	timestamp := time.Now().Format("2006-01-02-15-04-05")
 	return path.Join(rootDir, "storage", "logs", stackID.String(), timestamp+fmt.Sprintf("_%s_logs.txt", plugin))
 }
+
+func GetUpdateNetworkLogPath(
+	stackID uuid.UUID,
+) string {
+	rootDir, _ := os.Getwd()
+	timestamp := time.Now().Format("2006-01-02-15-04-05")
+	return path.Join(rootDir, "storage", "logs", stackID.String(), timestamp+"_update_network_logs.txt")
+}
