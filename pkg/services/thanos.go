@@ -209,7 +209,7 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 		return err
 	}
 
-	logPath := utils.GetUpdateNetworkLogPath(stack.ID)
+	logPath := utils.GetLogPath(stack.ID, "update-network")
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
@@ -315,7 +315,7 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		blockExplorerUrl string
 	)
 
-	logPath := utils.GetPluginLogPath(stack.ID, "block-explorer")
+	logPath := utils.GetLogPath(stack.ID, "block-explorer")
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
@@ -416,7 +416,7 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 		return err
 	}
 
-	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-block-explorer")
+	logPath := utils.GetLogPath(stack.ID, "uninstall-block-explorer")
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
@@ -511,7 +511,7 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		bridgeUrl string
 	)
 
-	logPath := utils.GetPluginLogPath(stack.ID, "install-bridge")
+	logPath := utils.GetLogPath(stack.ID, "install-bridge")
 
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
@@ -606,7 +606,7 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 		return err
 	}
 
-	logPath := utils.GetPluginLogPath(stack.ID, "uninstall-bridge")
+	logPath := utils.GetLogPath(stack.ID, "uninstall-bridge")
 
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
@@ -782,7 +782,7 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 		return
 	}
 
-	logPath := utils.GetInformationLogPath(stack.ID)
+	logPath := utils.GetLogPath(stack.ID, "information")
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
@@ -1026,7 +1026,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
-	logPath := utils.GetDestroyLogPath(stack.ID)
+	logPath := utils.GetLogPath(stack.ID, "destroy")
 
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
@@ -1110,7 +1110,7 @@ func getThanosStackDeployments(
 ) ([]*entities.DeploymentEntity, error) {
 	deployments := make([]*entities.DeploymentEntity, 0)
 	l1ContractDeploymentID := uuid.New()
-	l1ContractDeploymentLogPath := utils.GetDeploymentLogPath(stackId, l1ContractDeploymentID)
+	l1ContractDeploymentLogPath := utils.GetLogPath(stackId, "deploy-l1-contracts")
 	l1ContractDeploymentConfig, err := json.Marshal(dtos.DeployL1ContractsRequest{
 		L1RpcUrl:                 config.L1RpcUrl,
 		L2BlockTime:              config.L2BlockTime,
@@ -1136,9 +1136,9 @@ func getThanosStackDeployments(
 	deployments = append(deployments, l1ContractDeployment)
 
 	thanosInfrastructureDeploymentID := uuid.New()
-	thanosInfrastructureDeploymentLogPath := utils.GetDeploymentLogPath(
+	thanosInfrastructureDeploymentLogPath := utils.GetLogPath(
 		stackId,
-		thanosInfrastructureDeploymentID,
+		"deploy-thanos-aws-infra",
 	)
 	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
 		ChainName:   config.ChainName,
