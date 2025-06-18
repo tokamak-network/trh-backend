@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -121,13 +122,17 @@ func NewThanosService(
 func (s *ThanosStackDeploymentService) CreateThanosStack(
 	ctx context.Context,
 	request dtos.DeployThanosRequest,
-) (uuid.UUID, error) {
+) (*entities.Response, error) {
 	stackId := uuid.New()
 	deploymentPath := utils.GetDeploymentPath(s.name, request.Network, stackId.String())
 	request.DeploymentPath = deploymentPath
 	config, err := json.Marshal(request)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to marshal config: %w", err)
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 	stack := &entities.StackEntity{
 		ID:             stackId,
@@ -146,15 +151,23 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		Status:  string(entities.DeploymentStatusPending),
 	}
 
-	deployments, err := getThanosStackDeployments(stackId, &request, deploymentPath)
+	deployments, err := getThanosStackDeployments(stackId, &request)
 	if err != nil {
-		return uuid.Nil, err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	err = s.stackRepo.CreateStackByTx(stack, deployments, bridgeIntegration)
 	if err != nil {
 		logger.Error("Failed to create thanos stack", zap.Error(err))
-		return uuid.Nil, err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	logger.Info("Stack created", zap.String("stackId", stackId.String()))
@@ -164,49 +177,131 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		s.handleStackDeployment(ctx, stackId)
 	})
 
-	return stackId, nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]string{"stackId": stackId.String()},
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Context, stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if stack.Status != entities.StackStatusDeploying {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not deploying, yet. Please wait for it to finish",
+			Data:    nil,
+		}, nil
+	}
+
 	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
 	s.taskManager.StopTask(taskId)
-
 	// Update stacks status to stopping
-	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusStopped, "")
+	err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusStopped, "")
 	if err != nil {
 		logger.Error("failed to update stacks status",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
-		return fmt.Errorf("failed to update stacks status: %w", err)
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
-	return nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if stack.Status != entities.StackStatusStopped {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not stopped, yet. Please wait for it to finish",
+			Data:    nil,
+		}, nil
+	}
+
 	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		s.handleStackDeployment(ctx, stackId)
 	})
-	return nil
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackId uuid.UUID, request dtos.UpdateNetworkRequest) error {
+func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackId uuid.UUID, request dtos.UpdateNetworkRequest) (*entities.Response, error) {
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId.String())
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
 	}
 
 	if stack.Status != entities.StackStatusDeployed {
-		return fmt.Errorf("stack %s is not deployed, yet. Please wait for it to finish", stackId.String())
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not deployed, yet. Please wait for it to finish",
+			Data:    nil,
+		}, nil
 	}
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	logPath := utils.GetLogPath(stack.ID, "update-network")
@@ -221,13 +316,21 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 	)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusUpdating, "")
 	if err != nil {
 		logger.Error("failed to update stack status", zap.String("stackId", stackId.String()), zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	taskId := fmt.Sprintf("update-network-%s", stackId.String())
@@ -244,14 +347,22 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 		}
 	})
 
-	return nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context, stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	// Check if stacks exists
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
-		return fmt.Errorf("failed to get stacks: %w", err)
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	// Check if stacks is in a valid state to be terminated
@@ -261,9 +372,11 @@ func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context,
 			"The stacks is still deploying, updating or terminating, please wait for it to finish",
 			zap.String("stackId", stackId.String()),
 		)
-		return fmt.Errorf(
-			"the stacks is still deploying, updating or terminating, please wait for it to finish",
-		)
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "The stacks is still deploying, updating or terminating, please wait for it to finish",
+			Data:    nil,
+		}, nil
 	}
 
 	taskId := fmt.Sprintf("terminate-thanos-stack-%s", stackId.String())
@@ -271,44 +384,76 @@ func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context,
 		s.handleStackTermination(ctx, stack)
 	})
 
-	return nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context, stackId string, request dtos.InstallBlockExplorerRequest) error {
+func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context, stackId string, request dtos.InstallBlockExplorerRequest) (*entities.Response, error) {
 	if err := request.Validate(); err != nil {
 		logger.Error("invalid block explorer request", zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid block explorer request",
+			Data:    nil,
+		}, err
 	}
 
 	stack, err := s.stackRepo.GetStackByID(stackId)
 	if err != nil {
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	if stack.Status != entities.StackStatusDeployed {
-		return fmt.Errorf("stack %s is not deployed, yet. Please wait for it to finish", stackId)
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not deployed, yet. Please wait for it to finish",
+			Data:    nil,
+		}, nil
 	}
 
 	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId)
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
 	}
 
 	// check if block explorer is already in non-terminated state
 	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId, "block-explorer")
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	if len(integrations) > 0 {
 		logger.Error("There is already an active block explorer", zap.String("plugin", "block-explorer"))
-		return fmt.Errorf("there is already an active block explorer")
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "There is already an active block explorer",
+			Data:    nil,
+		}, nil
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	var (
@@ -328,7 +473,11 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 	if err != nil {
 		logger.Error("failed to create thanos sdk client",
 			zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	taskId := fmt.Sprintf("install-block-explorer-%s", stackId)
@@ -397,23 +546,39 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		}
 	})
 
-	return nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Context, stackId string) error {
+func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Context, stackId string) (*entities.Response, error) {
 	stack, err := s.stackRepo.GetStackByID(stackId)
 	if err != nil {
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId)
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-block-explorer")
@@ -429,7 +594,11 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 	if err != nil {
 		logger.Error("failed to create thanos sdk client",
 			zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	taskId := fmt.Sprintf("uninstall-block-explorer-%s", stackId)
@@ -472,39 +641,67 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 		}
 	})
 
-	return nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackId string) error {
+func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackId string) (*entities.Response, error) {
 	stack, err := s.stackRepo.GetStackByID(stackId)
 	if err != nil {
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId)
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
 	}
 
 	if stack.Status != entities.StackStatusDeployed {
-		return fmt.Errorf("stack %s is not deployed, yet. Please wait for it to finish", stackId)
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not deployed, yet. Please wait for it to finish",
+			Data:    nil,
+		}, nil
 	}
 
 	// check if bridge is already in non-terminated state
 	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId, "bridge")
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	if len(integrations) > 0 {
 		logger.Error("There is already an active bridge", zap.String("plugin", "bridge"))
-		return fmt.Errorf("there is already an active bridge")
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "There is already an active bridge",
+			Data:    nil,
+		}, nil
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	var (
@@ -525,7 +722,11 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 	if err != nil {
 		logger.Error("failed to create thanos sdk client",
 			zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	taskId := fmt.Sprintf("install-bridge-%s", stackId)
@@ -587,23 +788,39 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		)
 	})
 
-	return nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stackId string) error {
+func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stackId string) (*entities.Response, error) {
 	stack, err := s.stackRepo.GetStackByID(stackId)
 	if err != nil {
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	if stack == nil {
-		return fmt.Errorf("stack %s not found", stackId)
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-bridge")
@@ -620,7 +837,11 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 	if err != nil {
 		logger.Error("failed to create thanos sdk client",
 			zap.Error(err))
-		return err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
 
 	taskId := fmt.Sprintf("uninstall-bridge-%s", stackId)
@@ -667,63 +888,246 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 		}
 	})
 
-	return nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) GetAllStacks() ([]*entities.StackEntity, error) {
-	return s.stackRepo.GetAllStacks()
+func (s *ThanosStackDeploymentService) GetAllStacks() (*entities.Response, error) {
+	stacks, err := s.stackRepo.GetAllStacks()
+	if err != nil {
+		logger.Error("failed to get stacks", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"stacks": stacks},
+	}, nil
 }
 
-func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (entities.StackStatus, error) {
-	return s.stackRepo.GetStackStatus(stackId.String())
+func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	status, err := s.stackRepo.GetStackStatus(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack status", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"status": status},
+	}, nil
 }
 
 func (s *ThanosStackDeploymentService) GetDeployments(
 	stackId uuid.UUID,
-) ([]*entities.DeploymentEntity, error) {
-	return s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
+) (*entities.Response, error) {
+
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	deployments, err := s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get deployments", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"deployments": deployments},
+	}, nil
 }
 
 func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(
 	deploymentId uuid.UUID,
-) (entities.DeploymentStatus, error) {
-	return s.deploymentRepo.GetDeploymentStatus(deploymentId.String())
+) (*entities.Response, error) {
+	status, err := s.deploymentRepo.GetDeploymentStatus(deploymentId.String())
+	if err != nil {
+		logger.Error("failed to get deployment status", zap.String("deploymentId", deploymentId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"status": status},
+	}, nil
 }
 
 func (s *ThanosStackDeploymentService) GetStackDeployment(
 	_ uuid.UUID,
 	deploymentId uuid.UUID,
-) (*entities.DeploymentEntity, error) {
-	return s.deploymentRepo.GetDeploymentByID(deploymentId.String())
+) (*entities.Response, error) {
+	deployment, err := s.deploymentRepo.GetDeploymentByID(deploymentId.String())
+	if err != nil {
+		logger.Error("failed to get deployment", zap.String("deploymentId", deploymentId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if deployment == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Deployment not found",
+			Data:    nil,
+		}, nil
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"deployment": deployment},
+	}, nil
 }
 
 func (s *ThanosStackDeploymentService) GetStackByID(
 	stackId uuid.UUID,
-) (*entities.StackEntity, error) {
-	return s.stackRepo.GetStackByID(stackId.String())
+) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"stack": stack},
+	}, nil
 }
 
 func (s *ThanosStackDeploymentService) GetIntegrations(
 	stackId uuid.UUID,
-) ([]*entities.IntegrationEntity, error) {
+) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
 	integrations, err := s.integrationRepo.GetActiveIntegrationsByStackID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get integrations", zap.String("stackId", stackId.String()), zap.Error(err))
-		return nil, err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
-	return integrations, nil
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"integrations": integrations},
+	}, nil
 }
 
 func (s *ThanosStackDeploymentService) GetIntegration(
 	stackId uuid.UUID,
 	integrationId uuid.UUID,
-) (*entities.IntegrationEntity, error) {
+) (*entities.Response, error) {
 	integration, err := s.integrationRepo.GetIntegrationById(integrationId.String())
 	if err != nil {
 		logger.Error("failed to get integrations", zap.String("stackId", stackId.String()), zap.Error(err))
-		return nil, err
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
 	}
-	return integration, nil
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"integration": integration},
+	}, nil
 }
 
 // New helper method to handle deployment logic
@@ -1106,7 +1510,6 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 func getThanosStackDeployments(
 	stackId uuid.UUID,
 	config *dtos.DeployThanosRequest,
-	deploymentPath string,
 ) ([]*entities.DeploymentEntity, error) {
 	deployments := make([]*entities.DeploymentEntity, 0)
 	l1ContractDeploymentID := uuid.New()
