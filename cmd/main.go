@@ -18,10 +18,9 @@ func main() {
 
 	logger.Init()
 
-	err := godotenv.Load(".env")
-	if err != nil {
-		logger.Errorf("Failed to load environment, err: %s", err)
-		return
+	// Load .env file if it exists (optional for Docker runtime)
+	if err := godotenv.Load(".env"); err != nil {
+		logger.Infof("No .env file found, using environment variables: %s", err)
 	}
 
 	port := os.Getenv("PORT")
