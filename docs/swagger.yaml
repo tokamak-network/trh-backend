@@ -1,0 +1,304 @@
+basePath: /api/v1
+definitions:
+  dtos.DeployThanosRequest:
+    properties:
+      adminAccount:
+        type: string
+      awsAccessKey:
+        type: string
+      awsRegion:
+        type: string
+      awsSecretAccessKey:
+        type: string
+      batchSubmissionFrequency:
+        description: seconds
+        minimum: 1
+        type: integer
+      batcherAccount:
+        type: string
+      chainName:
+        type: string
+      challengePeriod:
+        description: seconds
+        minimum: 1
+        type: integer
+      deploymentPath:
+        type: string
+      l1BeaconUrl:
+        type: string
+      l1RpcUrl:
+        type: string
+      l2BlockTime:
+        description: seconds
+        minimum: 1
+        type: integer
+      network:
+        allOf:
+        - $ref: '#/definitions/entities.DeploymentNetwork'
+        enum:
+        - Mainnet
+        - Testnet
+        - LocalDevnet
+      outputRootFrequency:
+        description: seconds
+        minimum: 1
+        type: integer
+      proposerAccount:
+        type: string
+      sequencerAccount:
+        type: string
+    required:
+    - adminAccount
+    - awsAccessKey
+    - awsRegion
+    - awsSecretAccessKey
+    - batchSubmissionFrequency
+    - batcherAccount
+    - chainName
+    - challengePeriod
+    - l1BeaconUrl
+    - l1RpcUrl
+    - l2BlockTime
+    - network
+    - outputRootFrequency
+    - proposerAccount
+    - sequencerAccount
+    type: object
+  dtos.UpdateNetworkRequest:
+    properties:
+      l1BeaconUrl:
+        type: string
+      l1RpcUrl:
+        type: string
+    type: object
+  entities.DeploymentNetwork:
+    enum:
+    - Mainnet
+    - Testnet
+    - LocalDevnet
+    type: string
+    x-enum-varnames:
+    - DeploymentNetworkMainnet
+    - DeploymentNetworkTestnet
+    - DeploymentNetworkLocalDevnet
+  entities.Response:
+    properties:
+      data: {}
+      message:
+        type: string
+      status:
+        type: integer
+    type: object
+host: localhost:${PORT}
+info:
+  contact: {}
+  description: TRH Backend API
+  title: TRH Backend
+  version: "1.0"
+paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Get health
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get health
+      tags:
+      - health
+  /stacks/thanos:
+    get:
+      consumes:
+      - application/json
+      description: Get All Stacks
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get All Stacks
+      tags:
+      - Thanos Stack
+    post:
+      consumes:
+      - application/json
+      description: Deploy Thanos Stack
+      parameters:
+      - description: Deploy Thanos Stack Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.DeployThanosRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Deploy Thanos Stack
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Terminate Thanos Stack
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Terminate Thanos Stack
+      tags:
+      - Thanos Stack
+    get:
+      consumes:
+      - application/json
+      description: Get Stack Status
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get Stack Status
+      tags:
+      - Thanos Stack
+    put:
+      consumes:
+      - application/json
+      description: Update Network
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update Network Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.UpdateNetworkRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Update Network
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/deployments:
+    get:
+      consumes:
+      - application/json
+      description: Get Deployments
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get Deployments
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations:
+    get:
+      consumes:
+      - application/json
+      description: Get Integrations
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get Integrations
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/resume:
+    post:
+      consumes:
+      - application/json
+      description: Resume Thanos Stack
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Resume Thanos Stack
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/stop:
+    post:
+      consumes:
+      - application/json
+      description: Stop Thanos Stack
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Stop Thanos Stack
+      tags:
+      - Thanos Stack
+securityDefinitions:
+  NoAuth:
+    type: basic
+swagger: "2.0"

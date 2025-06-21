@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
+	"github.com/tokamak-network/trh-backend/docs"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/routes"
 	"github.com/tokamak-network/trh-backend/pkg/api/servers"
@@ -12,8 +14,18 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
+
+	_ "github.com/tokamak-network/trh-backend/docs"
 )
 
+// @title           TRH Backend
+// @version         1.0
+// @description     TRH Backend API
+
+// @host      localhost:${PORT}
+// @BasePath  /api/v1
+
+// @securityDefinitions.basic  NoAuth
 func main() {
 
 	logger.Init()
@@ -45,6 +57,14 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to connect to postgres", zap.Error(err))
 	}
+
+	// programmatically set swagger info
+	docs.SwaggerInfo.Title = "TRH Backend"
+	docs.SwaggerInfo.Description = "TRH Backend API"
+	docs.SwaggerInfo.Version = "1.0"
+	docs.SwaggerInfo.Schemes = []string{"http"}
+	docs.SwaggerInfo.Host = fmt.Sprintf("localhost:%s", port)
+	docs.SwaggerInfo.BasePath = "/api/v1"
 
 	server := servers.NewServer(postgresDB)
 	config := cors.DefaultConfig()

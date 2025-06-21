@@ -47,6 +47,13 @@ This is the backend service for the TRH application. It is built using Go and ut
 4. Push to the branch (`git push origin feature/YourFeature`).
 5. Create a new Pull Request.
 
+### API Documentation
+The swagger API documentation is running at the endpoint
+```
+http://localhost:${PORT}/swagger/index.html
+```
+
+
 ### License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

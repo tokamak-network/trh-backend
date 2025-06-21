@@ -2,30 +2,36 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	handlers2 "github.com/tokamak-network/trh-backend/pkg/api/handlers"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/tokamak-network/trh-backend/pkg/api/handlers"
 	"github.com/tokamak-network/trh-backend/pkg/api/servers"
+
+	swaggerFiles "github.com/swaggo/files"
 )
 
 func SetupRoutes(server *servers.Server) {
 	apiV1 := server.Router.Group("/api/v1")
 	setupV1Routes(apiV1, server)
 
-	healthGroup := server.Router.Group("/health")
-	setupHealthRoutes(healthGroup)
+	server.Router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }
 
 func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
+	// Health routes
+	setupHealthRoutes(router.Group("/health"))
+
+	// Stack routes
 	stacks := router.Group("/stacks")
 	setupThanosRoutes(stacks.Group("/thanos"), server)
 }
 
 func setupHealthRoutes(router *gin.RouterGroup) {
-	handler := handlers2.NewHealthHandler()
+	handler := handlers.NewHealthHandler()
 	router.GET("", handler.GetHealth)
 }
 
 func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server) {
-	handler := handlers2.NewThanosHandler(server)
+	handler := handlers.NewThanosHandler(server)
 	router.POST("", handler.Deploy)
 	router.POST("/:id/resume", handler.Resume)
 	router.POST("/:id/stop", handler.Stop)

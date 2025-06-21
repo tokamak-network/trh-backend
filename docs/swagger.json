@@ -1,0 +1,450 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "TRH Backend API",
+        "title": "TRH Backend",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:${PORT}",
+    "basePath": "/api/v1",
+    "paths": {
+        "/health": {
+            "get": {
+                "description": "Get health",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Get health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos": {
+            "get": {
+                "description": "Get All Stacks",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get All Stacks",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Deploy Thanos Stack",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Deploy Thanos Stack",
+                "parameters": [
+                    {
+                        "description": "Deploy Thanos Stack Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.DeployThanosRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}": {
+            "get": {
+                "description": "Get Stack Status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get Stack Status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Update Network",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Update Network",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update Network Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.UpdateNetworkRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Terminate Thanos Stack",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Terminate Thanos Stack",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/deployments": {
+            "get": {
+                "description": "Get Deployments",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get Deployments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations": {
+            "get": {
+                "description": "Get Integrations",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get Integrations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/resume": {
+            "post": {
+                "description": "Resume Thanos Stack",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Resume Thanos Stack",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/stop": {
+            "post": {
+                "description": "Stop Thanos Stack",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Stop Thanos Stack",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "dtos.DeployThanosRequest": {
+            "type": "object",
+            "required": [
+                "adminAccount",
+                "awsAccessKey",
+                "awsRegion",
+                "awsSecretAccessKey",
+                "batchSubmissionFrequency",
+                "batcherAccount",
+                "chainName",
+                "challengePeriod",
+                "l1BeaconUrl",
+                "l1RpcUrl",
+                "l2BlockTime",
+                "network",
+                "outputRootFrequency",
+                "proposerAccount",
+                "sequencerAccount"
+            ],
+            "properties": {
+                "adminAccount": {
+                    "type": "string"
+                },
+                "awsAccessKey": {
+                    "type": "string"
+                },
+                "awsRegion": {
+                    "type": "string"
+                },
+                "awsSecretAccessKey": {
+                    "type": "string"
+                },
+                "batchSubmissionFrequency": {
+                    "description": "seconds",
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "batcherAccount": {
+                    "type": "string"
+                },
+                "chainName": {
+                    "type": "string"
+                },
+                "challengePeriod": {
+                    "description": "seconds",
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "deploymentPath": {
+                    "type": "string"
+                },
+                "l1BeaconUrl": {
+                    "type": "string"
+                },
+                "l1RpcUrl": {
+                    "type": "string"
+                },
+                "l2BlockTime": {
+                    "description": "seconds",
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "network": {
+                    "enum": [
+                        "Mainnet",
+                        "Testnet",
+                        "LocalDevnet"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/entities.DeploymentNetwork"
+                        }
+                    ]
+                },
+                "outputRootFrequency": {
+                    "description": "seconds",
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "proposerAccount": {
+                    "type": "string"
+                },
+                "sequencerAccount": {
+                    "type": "string"
+                }
+            }
+        },
+        "dtos.UpdateNetworkRequest": {
+            "type": "object",
+            "properties": {
+                "l1BeaconUrl": {
+                    "type": "string"
+                },
+                "l1RpcUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "entities.DeploymentNetwork": {
+            "type": "string",
+            "enum": [
+                "Mainnet",
+                "Testnet",
+                "LocalDevnet"
+            ],
+            "x-enum-varnames": [
+                "DeploymentNetworkMainnet",
+                "DeploymentNetworkTestnet",
+                "DeploymentNetworkLocalDevnet"
+            ]
+        },
+        "entities.Response": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "NoAuth": {
+            "type": "basic"
+        }
+    }
+}
