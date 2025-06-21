@@ -34,7 +34,7 @@ This is the backend service for the TRH application. It is built using Go and ut
 
 2. Run the application:
    ```bash
-   go run ./cmd
+   go run main.go
    ```
 
 3. The server will start on the port specified in the `.env` file (default is 8000).
