@@ -10,11 +10,30 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o main ./main.go
 
-FROM alpine:latest
+FROM ubuntu:latest
+
+# Set environment variables to prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+ENV DEBCONF_NONINTERACTIVE_SEEN=true
+ENV DEBCONF_NOWARNINGS=true
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sudo \
+    git \
+    build-essential \
+    curl \
+    wget \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure timezone non-interactively
+RUN ln -sf /usr/share/zoneinfo/UTC /etc/localtime && \
+    echo 'UTC' > /etc/timezone
 
 WORKDIR /app
-
-RUN apk --no-cache add ca-certificates tzdata
 
 COPY --from=builder /app/main .
 
