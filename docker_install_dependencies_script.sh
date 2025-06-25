@@ -20,7 +20,7 @@ fi
 
 OS_TYPE=$(uname)
 
-TOTAL_STEPS=10
+TOTAL_STEPS=11
 STEP=1
 SUCCESS="false"
 
@@ -277,6 +277,72 @@ fi
 STEP=$((STEP + 1))
 echo
 
+# 11. Install Go
+echo "[$STEP/$TOTAL_STEPS] Installing Go (v1.22.6)..."
+export PATH="$PATH:/usr/local/go/bin"
+
+# Save the current Go version
+current_go_version=$(go version 2>/dev/null)
+
+# Check if the current version is not v1.22.6
+if ! echo "$current_go_version" | grep 'go1.22.6' &>/dev/null ; then
+    echo "Installing go1.22.6..."
+    # If Go is installed, remove it
+    if command -v go &> /dev/null; then
+        echo "Go is already installed. Removing the existing version..."
+        sudo rm -rf "$(which go)"
+    fi
+
+    if ! command -v curl &> /dev/null; then
+        echo "curl not found, installing..."
+        sudo apt-get install -y curl
+    else
+        echo "curl is already installed."
+    fi
+
+    GO_FILE_NAME="go1.22.6.linux-${ARCH}.tar.gz"
+    GO_DOWNLOAD_URL="https://go.dev/dl/${GO_FILE_NAME}"
+
+    sudo curl -L -o "${GO_FILE_NAME}" "${GO_DOWNLOAD_URL}"
+
+    sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf "${GO_FILE_NAME}"
+
+    # Check if the Go configuration is already in the CONFIG_FILE
+    if ! grep -Fxq 'export PATH="$PATH:/usr/local/go/bin"' "$CONFIG_FILE"; then
+        # If the configuration is not found, add Go to the current shell session
+        {
+            echo ''
+            echo 'export PATH="$PATH:/usr/local/go/bin"'
+        } >> "$CONFIG_FILE"
+    fi
+
+    # Check if the Go configuration is already in the PROFILE_FILE
+    if ! grep -Fxq 'export PATH=$PATH:/usr/local/go/bin' "$PROFILE_FILE"; then
+        # If the configuration is not found, add Go to the current shell session
+        {
+            echo ''
+            echo 'export PATH="$PATH:/usr/local/go/bin"'
+        } >> "$PROFILE_FILE"
+    fi
+
+    rm -rf "${GO_FILE_NAME}"
+
+    export PATH="$PATH:/usr/local/go/bin"
+else
+    echo "Go 1.22.6 is already installed."
+fi
+
+# Add required PATH exports if not already present
+if ! grep -q "export PATH=\$PATH:/usr/local/go/bin" "$CONFIG_FILE"; then
+    echo "export PATH=\$PATH:/usr/local/go/bin" >> "$CONFIG_FILE"
+fi
+
+if ! grep -q "export PATH=\$HOME/go/bin:\$PATH" "$CONFIG_FILE"; then
+    echo "export PATH=\$HOME/go/bin:\$PATH" >> "$CONFIG_FILE"
+fi
+
+STEP=$((STEP + 1))
+echo
 
 SUCCESS="true"
 
@@ -316,8 +382,6 @@ else
     exit 1
 fi
 
-
-
 check_command_version git "" "git --version"
 check_command_version make "" "make --version"
 check_command_version gcc "" "gcc --version"
@@ -330,5 +394,6 @@ check_command_version kubectl "" "kubectl version --client"
 check_command_version forge "" "forge --version"
 check_command_version cast "" "cast --version"
 check_command_version anvil "" "anvil --version"
+check_command_version go "" "go version"
 
 echo "🎉 All required tools are installed and ready to use!" 
