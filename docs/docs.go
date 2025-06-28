@@ -95,7 +95,7 @@ const docTemplate = `{
         },
         "/stacks/thanos/{id}": {
             "get": {
-                "description": "Get Stack Status",
+                "description": "Get Stack By ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -105,7 +105,7 @@ const docTemplate = `{
                 "tags": [
                     "Thanos Stack"
                 ],
-                "summary": "Get Stack Status",
+                "summary": "Get Stack By ID",
                 "parameters": [
                     {
                         "type": "string",
@@ -226,6 +226,84 @@ const docTemplate = `{
                 }
             }
         },
+        "/stacks/thanos/{id}/deployments/{deploymentId}": {
+            "get": {
+                "description": "Get Stack Deployment",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get Stack Deployment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "deploymentId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/deployments/{deploymentId}/status": {
+            "get": {
+                "description": "Get Stack Deployment Status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get Stack Deployment Status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "deploymentId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/stacks/thanos/{id}/integrations": {
             "get": {
                 "description": "Get Integrations",
@@ -258,6 +336,249 @@ const docTemplate = `{
                 }
             }
         },
+        "/stacks/thanos/{id}/integrations/block-explorer": {
+            "post": {
+                "description": "Install Block Explorer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Install Block Explorer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Install Block Explorer Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.InstallBlockExplorerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Uninstall Block Explorer",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Uninstall Block Explorer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/bridge": {
+            "post": {
+                "description": "Install Bridge",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Install Bridge",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Uninstall Bridge",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Uninstall Bridge",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/monitoring": {
+            "post": {
+                "description": "Install Monitoring",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Install Monitoring",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Install Monitoring Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.InstallMonitoringRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Uninstall Monitoring",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Uninstall Monitoring",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/{integrationId}": {
+            "get": {
+                "description": "Get Integration By ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get Integration By ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Integration ID",
+                        "name": "integrationId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/stacks/thanos/{id}/resume": {
             "post": {
                 "description": "Resume Thanos Stack",
@@ -271,6 +592,38 @@ const docTemplate = `{
                     "Thanos Stack"
                 ],
                 "summary": "Resume Thanos Stack",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/status": {
+            "get": {
+                "description": "Get Stack Status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get Stack Status",
                 "parameters": [
                     {
                         "type": "string",
@@ -406,7 +759,66 @@ const docTemplate = `{
                 "proposerAccount": {
                     "type": "string"
                 },
+                "registerCandidate": {
+                    "type": "boolean"
+                },
+                "registerCandidateParams": {
+                    "$ref": "#/definitions/dtos.RegisterCandidateRequest"
+                },
                 "sequencerAccount": {
+                    "type": "string"
+                }
+            }
+        },
+        "dtos.InstallBlockExplorerRequest": {
+            "type": "object",
+            "required": [
+                "coinmarketcapKey",
+                "databasePassword",
+                "databaseUsername",
+                "walletConnectId"
+            ],
+            "properties": {
+                "coinmarketcapKey": {
+                    "type": "string"
+                },
+                "databasePassword": {
+                    "type": "string"
+                },
+                "databaseUsername": {
+                    "type": "string"
+                },
+                "walletConnectId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dtos.InstallMonitoringRequest": {
+            "type": "object",
+            "required": [
+                "grafanaPassword"
+            ],
+            "properties": {
+                "grafanaPassword": {
+                    "type": "string"
+                }
+            }
+        },
+        "dtos.RegisterCandidateRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "memo"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "memo": {
+                    "type": "string"
+                },
+                "nameInfo": {
                     "type": "string"
                 }
             }

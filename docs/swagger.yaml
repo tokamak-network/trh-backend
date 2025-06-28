@@ -45,6 +45,10 @@ definitions:
         type: integer
       proposerAccount:
         type: string
+      registerCandidate:
+        type: boolean
+      registerCandidateParams:
+        $ref: '#/definitions/dtos.RegisterCandidateRequest'
       sequencerAccount:
         type: string
     required:
@@ -63,6 +67,42 @@ definitions:
     - outputRootFrequency
     - proposerAccount
     - sequencerAccount
+    type: object
+  dtos.InstallBlockExplorerRequest:
+    properties:
+      coinmarketcapKey:
+        type: string
+      databasePassword:
+        type: string
+      databaseUsername:
+        type: string
+      walletConnectId:
+        type: string
+    required:
+    - coinmarketcapKey
+    - databasePassword
+    - databaseUsername
+    - walletConnectId
+    type: object
+  dtos.InstallMonitoringRequest:
+    properties:
+      grafanaPassword:
+        type: string
+    required:
+    - grafanaPassword
+    type: object
+  dtos.RegisterCandidateRequest:
+    properties:
+      amount:
+        minimum: 0
+        type: number
+      memo:
+        type: string
+      nameInfo:
+        type: string
+    required:
+    - amount
+    - memo
     type: object
   dtos.UpdateNetworkRequest:
     properties:
@@ -171,7 +211,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get Stack Status
+      description: Get Stack By ID
       parameters:
       - description: Thanos Stack ID
         in: path
@@ -185,7 +225,7 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/entities.Response'
-      summary: Get Stack Status
+      summary: Get Stack By ID
       tags:
       - Thanos Stack
     put:
@@ -235,6 +275,58 @@ paths:
       summary: Get Deployments
       tags:
       - Thanos Stack
+  /stacks/thanos/{id}/deployments/{deploymentId}:
+    get:
+      consumes:
+      - application/json
+      description: Get Stack Deployment
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Deployment ID
+        in: path
+        name: deploymentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get Stack Deployment
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/deployments/{deploymentId}/status:
+    get:
+      consumes:
+      - application/json
+      description: Get Stack Deployment Status
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Deployment ID
+        in: path
+        name: deploymentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get Stack Deployment Status
+      tags:
+      - Thanos Stack
   /stacks/thanos/{id}/integrations:
     get:
       consumes:
@@ -256,6 +348,167 @@ paths:
       summary: Get Integrations
       tags:
       - Thanos Stack
+  /stacks/thanos/{id}/integrations/{integrationId}:
+    get:
+      consumes:
+      - application/json
+      description: Get Integration By ID
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Integration ID
+        in: path
+        name: integrationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get Integration By ID
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/block-explorer:
+    delete:
+      consumes:
+      - application/json
+      description: Uninstall Block Explorer
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Uninstall Block Explorer
+      tags:
+      - Thanos Stack
+    post:
+      consumes:
+      - application/json
+      description: Install Block Explorer
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Install Block Explorer Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.InstallBlockExplorerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Install Block Explorer
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/bridge:
+    delete:
+      consumes:
+      - application/json
+      description: Uninstall Bridge
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Uninstall Bridge
+      tags:
+      - Thanos Stack
+    post:
+      consumes:
+      - application/json
+      description: Install Bridge
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Install Bridge
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/monitoring:
+    delete:
+      consumes:
+      - application/json
+      description: Uninstall Monitoring
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Uninstall Monitoring
+      tags:
+      - Thanos Stack
+    post:
+      consumes:
+      - application/json
+      description: Install Monitoring
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Install Monitoring Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.InstallMonitoringRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Install Monitoring
+      tags:
+      - Thanos Stack
   /stacks/thanos/{id}/resume:
     post:
       consumes:
@@ -275,6 +528,27 @@ paths:
           schema:
             $ref: '#/definitions/entities.Response'
       summary: Resume Thanos Stack
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/status:
+    get:
+      consumes:
+      - application/json
+      description: Get Stack Status
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get Stack Status
       tags:
       - Thanos Stack
   /stacks/thanos/{id}/stop:

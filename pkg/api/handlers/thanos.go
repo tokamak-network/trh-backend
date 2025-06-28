@@ -208,7 +208,7 @@ func (h *ThanosDeploymentHandler) GetAllStacks(c *gin.Context) {
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
 // @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id} [get]
+// @Router       /stacks/thanos/{id}/status [get]
 func (h *ThanosDeploymentHandler) GetStackStatus(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -283,6 +283,8 @@ func (h *ThanosDeploymentHandler) GetIntegrations(c *gin.Context) {
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
 // @Param        integrationId   path      string  true  "Integration ID"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/integrations/{integrationId} [get]
 func (h *ThanosDeploymentHandler) GetIntegrationById(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -319,6 +321,8 @@ func (h *ThanosDeploymentHandler) GetIntegrationById(c *gin.Context) {
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
 // @Param        deploymentId   path      string  true  "Deployment ID"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/deployments/{deploymentId} [get]
 func (h *ThanosDeploymentHandler) GetStackDeployment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -354,6 +358,9 @@ func (h *ThanosDeploymentHandler) GetStackDeployment(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
+// @Param        deploymentId   path      string  true  "Deployment ID"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/deployments/{deploymentId}/status [get]
 func (h *ThanosDeploymentHandler) GetStackDeploymentStatus(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -386,6 +393,8 @@ func (h *ThanosDeploymentHandler) GetStackDeploymentStatus(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id} [get]
 func (h *ThanosDeploymentHandler) GetStackByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -409,6 +418,8 @@ func (h *ThanosDeploymentHandler) GetStackByID(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/integrations/bridge [post]
 func (h *ThanosDeploymentHandler) InstallBridge(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -433,6 +444,8 @@ func (h *ThanosDeploymentHandler) InstallBridge(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/integrations/bridge [delete]
 func (h *ThanosDeploymentHandler) UninstallBridge(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -457,6 +470,8 @@ func (h *ThanosDeploymentHandler) UninstallBridge(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/integrations/block-explorer [delete]
 func (h *ThanosDeploymentHandler) UninstallBlockExplorer(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -481,6 +496,9 @@ func (h *ThanosDeploymentHandler) UninstallBlockExplorer(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
+// @Param        request  body      dtos.InstallBlockExplorerRequest  true  "Install Block Explorer Request"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/integrations/block-explorer [post]
 func (h *ThanosDeploymentHandler) InstallBlockExplorer(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -515,6 +533,9 @@ func (h *ThanosDeploymentHandler) InstallBlockExplorer(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
+// @Param        request  body      dtos.InstallMonitoringRequest  true  "Install Monitoring Request"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/integrations/monitoring [post]
 func (h *ThanosDeploymentHandler) InstallMonitoring(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -544,12 +565,13 @@ func (h *ThanosDeploymentHandler) InstallMonitoring(c *gin.Context) {
 }
 
 // @Summary      Uninstall Monitoring
-
 // @Description  Uninstall Monitoring
 // @Tags         Thanos Stack
 // @Accept       json
 // @Produce      json
 // @Param        id   path      string  true  "Thanos Stack ID"
+// @Success      200      {object}  entities.Response
+// @Router       /stacks/thanos/{id}/integrations/monitoring [delete]
 func (h *ThanosDeploymentHandler) UninstallMonitoring(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
