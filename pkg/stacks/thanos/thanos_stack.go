@@ -150,6 +150,29 @@ func UninstallBlockExplorer(
 	return s.UninstallBlockExplorer(ctx)
 }
 
+func GetMonitoringConfig(
+	ctx context.Context,
+	s *thanosStack.ThanosStack,
+	password string,
+) (*thanosStack.MonitoringConfig, error) {
+	return s.GetMonitoringConfig(ctx, password)
+}
+
+func InstallMonitoring(
+	ctx context.Context,
+	s *thanosStack.ThanosStack,
+	config *thanosStack.MonitoringConfig,
+) (string, error) {
+	return s.InstallMonitoring(ctx, config)
+}
+
+func UninstallMonitoring(
+	ctx context.Context,
+	s *thanosStack.ThanosStack,
+) error {
+	return s.UninstallMonitoring(ctx)
+}
+
 func UpdateNetwork(
 	ctx context.Context,
 	s *thanosStack.ThanosStack,

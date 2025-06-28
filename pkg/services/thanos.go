@@ -1131,6 +1131,266 @@ func (s *ThanosStackDeploymentService) GetIntegration(
 	}, nil
 }
 
+func (s *ThanosStackDeploymentService) InstallMonitoring(
+	ctx context.Context,
+	stackId uuid.UUID,
+	req dtos.InstallMonitoringRequest,
+) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if stack.Status != entities.StackStatusDeployed {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not deployed, yet. Please wait for it to finish",
+			Data:    nil,
+		}, nil
+	}
+
+	// check if bridge is already in non-terminated state
+	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId.String(), "monitoring")
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", "monitoring"), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if len(integrations) > 0 {
+		logger.Error("There is already an active monitoring", zap.String("plugin", "monitoring"))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "There is already an active monitoring",
+			Data:    nil,
+		}, nil
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	var (
+		grafanaURL string
+	)
+
+	logPath := utils.GetLogPath(stack.ID, "install-monitoring")
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	taskId := fmt.Sprintf("install-monitoring-%s", stackId.String())
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
+		monitoringIntegration := &entities.IntegrationEntity{
+			ID:      uuid.New(),
+			StackID: &stack.ID,
+			Type:    "monitoring",
+			Status:  string(entities.DeploymentStatusInProgress),
+			LogPath: logPath,
+		}
+		err = s.integrationRepo.CreateIntegration(monitoringIntegration)
+		if err != nil {
+			logger.Error("failed to create integration", zap.String("plugin", "monitoring"), zap.Error(err))
+			return
+		}
+
+		config, err := thanos.GetMonitoringConfig(ctx, sdkClient, req.GrafanaPassword)
+		if err != nil {
+			logger.Error("failed to get monitoring config", zap.Error(err))
+			return
+		}
+
+		grafanaURL, err = thanos.InstallMonitoring(ctx, sdkClient, config)
+		if err != nil {
+			logger.Error("failed to install monitoring", zap.String("plugin", "monitoring"), zap.Error(err))
+			return
+		}
+
+		if grafanaURL == "" {
+			logger.Error("monitoring URL is empty", zap.String("plugin", "monitoring"))
+			return
+		}
+
+		logger.Debug("monitoring successfully installed", zap.String("plugin", "monitoring"), zap.String("url", grafanaURL))
+
+		// create integration
+		monitoringMetadata := &entities.IntegrationInfo{
+			Url: grafanaURL,
+		}
+
+		err = s.integrationRepo.UpdateMetadataAfterInstalled(
+			monitoringIntegration.ID.String(),
+			monitoringMetadata,
+		)
+		if err != nil {
+			logger.Error("failed to update monitoring integration metadata", zap.String("plugin", "monitoring"), zap.Error(err))
+			return
+		}
+
+		stack.Metadata.MonitoringUrl = grafanaURL
+
+		err = s.stackRepo.UpdateMetadata(
+			stackId.String(),
+			stack.Metadata,
+		)
+		if err != nil {
+			logger.Error("failed to update stack metadata", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
+		}
+
+		logger.Info("Monitoring installed successfully",
+			zap.String("stackId", stackId.String()),
+			zap.String("grafanaUrl", grafanaURL),
+		)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
+}
+
+func (s *ThanosStackDeploymentService) UninstallMonitoring(
+	ctx context.Context,
+	stackId uuid.UUID,
+) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "uninstall-monitoring")
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	taskId := fmt.Sprintf("uninstall-monitoring-%s", stackId.String())
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
+		integration, err := s.integrationRepo.GetInstalledIntegration(stackId.String(), "monitoring")
+		if err != nil {
+			logger.Error("failed to get integration", zap.String("plugin", "monitoring"), zap.Error(err))
+			return
+		}
+
+		if integration == nil {
+			logger.Error("integration not found", zap.String("plugin", "monitoring"))
+			return
+		}
+
+		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating)
+		if err != nil {
+			logger.Error("failed to update integration", zap.String("plugin", "monitoring"), zap.Error(err))
+			return
+		}
+
+		logger.Info("Uninstalling monitoring", zap.String("plugin", "monitoring"))
+
+		err = thanos.UninstallMonitoring(ctx, sdkClient)
+		if err != nil {
+			logger.Error("failed to uninstall monitoring", zap.String("plugin", "monitoring"), zap.Error(err))
+			return
+		}
+
+		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated)
+		if err != nil {
+			logger.Error("failed to update integration", zap.String("plugin", "monitoring"), zap.Error(err))
+			return
+		}
+		stack.Metadata.MonitoringUrl = ""
+
+		err = s.stackRepo.UpdateMetadata(
+			stackId.String(),
+			stack.Metadata,
+		)
+		if err != nil {
+			logger.Error("failed to update stack metadata", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
+		}
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
+}
+
 // New helper method to handle deployment logic
 func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context, stackId uuid.UUID) {
 	logger.Info("Updating stacks status to creating", zap.String("stackId", stackId.String()))

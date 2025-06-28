@@ -496,6 +496,65 @@ func (h *ThanosDeploymentHandler) InstallBlockExplorer(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+// @Summary      Install Monitoring
+// @Description  Install Monitoring
+// @Tags         Thanos Stack
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Thanos Stack ID"
+func (h *ThanosDeploymentHandler) InstallMonitoring(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	var request dtos.InstallMonitoringRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.InstallMonitoring(c.Request.Context(), uuid.MustParse(id), request)
+	if err != nil {
+		logger.Error("failed to install monitoring", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary      Uninstall Monitoring
+
+// @Description  Uninstall Monitoring
+// @Tags         Thanos Stack
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Thanos Stack ID"
+func (h *ThanosDeploymentHandler) UninstallMonitoring(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UninstallMonitoring(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to uninstall monitoring", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 func NewThanosHandler(server *servers.Server) *ThanosDeploymentHandler {
 	deploymentRepo := postgresRepositories.NewDeploymentRepository(server.PostgresDB)
 	stackRepo := postgresRepositories.NewStackRepository(server.PostgresDB)
