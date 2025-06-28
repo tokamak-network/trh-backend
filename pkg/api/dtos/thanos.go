@@ -189,3 +189,7 @@ type UpdateNetworkRequest struct {
 	L1RpcUrl    string `json:"l1RpcUrl" validate:"url"`
 	L1BeaconUrl string `json:"l1BeaconUrl" validate:"url"`
 }
+
+type InstallMonitoringRequest struct {
+	GrafanaPassword string `json:"grafanaPassword" binding:"required"`
+}

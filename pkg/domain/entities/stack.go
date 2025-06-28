@@ -10,6 +10,8 @@ type StackMetadata struct {
 	L2Url            string `json:"l2_url"`
 	BridgeUrl        string `json:"bridge_url,omitempty"`
 	BlockExplorerUrl string `json:"block_explorer_url,omitempty"`
+	L2ChainID        string `json:"l2_chain_id,omitempty"`
+	MonitoringUrl    string `json:"monitoring_url,omitempty"`
 }
 
 func (m *StackMetadata) Marshal() ([]byte, error) {
@@ -21,7 +23,7 @@ func (m *StackMetadata) Marshal() ([]byte, error) {
 }
 
 func FromJSONToStackMetadata(data json.RawMessage) (*StackMetadata, error) {
-	if data == nil || len(data) == 0 {
+	if len(data) == 0 {
 		return nil, nil
 	}
 	var metadata StackMetadata
