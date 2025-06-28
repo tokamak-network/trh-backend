@@ -16,6 +16,12 @@ import (
 
 var chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]*$`)
 
+type RegisterCandidateRequest struct {
+	Amount   float64 `json:"amount" binding:"required" validate:"min=0"`
+	Memo     string  `json:"memo" binding:"required"`
+	NameInfo string  `json:"nameInfo"`
+}
+
 type DeployThanosRequest struct {
 	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
 	L1RpcUrl                 string                     `json:"l1RpcUrl"                 binding:"required" validate:"url"`
@@ -33,6 +39,8 @@ type DeployThanosRequest struct {
 	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
 	ChainName                string                     `json:"chainName"                binding:"required"`
 	DeploymentPath           string                     `json:"deploymentPath"`
+	RegisterCandidate        bool                       `json:"registerCandidate"`
+	RegisterCandidateParams  *RegisterCandidateRequest  `json:"registerCandidateParams,omitempty"`
 }
 
 func (request *DeployThanosRequest) Validate() error {
@@ -109,15 +117,17 @@ func (request *DeployThanosRequest) Validate() error {
 }
 
 type DeployL1ContractsRequest struct {
-	L1RpcUrl                 string `json:"l1RpcUrl"                 binding:"required" validate:"url"`
-	L2BlockTime              int    `json:"l2BlockTime"              binding:"required" validate:"min=1"` // seconds
-	BatchSubmissionFrequency int    `json:"batchSubmissionFrequency" binding:"required" validate:"min=1"` // seconds
-	OutputRootFrequency      int    `json:"outputRootFrequency"      binding:"required" validate:"min=1"` // seconds
-	ChallengePeriod          int    `json:"challengePeriod"          binding:"required" validate:"min=1"` // seconds
-	AdminAccount             string `json:"adminAccount"             binding:"required" validate:"eth_address"`
-	SequencerAccount         string `json:"sequencerAccount"         binding:"required" validate:"eth_address"`
-	BatcherAccount           string `json:"batcherAccount"           binding:"required" validate:"eth_address"`
-	ProposerAccount          string `json:"proposerAccount"          binding:"required" validate:"eth_address"`
+	L1RpcUrl                 string                    `json:"l1RpcUrl"                 binding:"required" validate:"url"`
+	L2BlockTime              int                       `json:"l2BlockTime"              binding:"required" validate:"min=1"` // seconds
+	BatchSubmissionFrequency int                       `json:"batchSubmissionFrequency" binding:"required" validate:"min=1"` // seconds
+	OutputRootFrequency      int                       `json:"outputRootFrequency"      binding:"required" validate:"min=1"` // seconds
+	ChallengePeriod          int                       `json:"challengePeriod"          binding:"required" validate:"min=1"` // seconds
+	AdminAccount             string                    `json:"adminAccount"             binding:"required" validate:"eth_address"`
+	SequencerAccount         string                    `json:"sequencerAccount"         binding:"required" validate:"eth_address"`
+	BatcherAccount           string                    `json:"batcherAccount"           binding:"required" validate:"eth_address"`
+	ProposerAccount          string                    `json:"proposerAccount"          binding:"required" validate:"eth_address"`
+	RegisterCandidate        bool                      `json:"registerCandidate"`
+	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
 }
 
 type DeployThanosAWSInfraRequest struct {

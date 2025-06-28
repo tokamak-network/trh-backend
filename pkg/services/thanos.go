@@ -311,6 +311,7 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -467,6 +468,7 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -588,6 +590,7 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -716,6 +719,7 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -831,6 +835,7 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -1202,6 +1207,7 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -1326,6 +1332,7 @@ func (s *ThanosStackDeploymentService) UninstallMonitoring(
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -1453,6 +1460,7 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -1577,6 +1585,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			deployment.LogPath,
 			string(stack.Network),
 			stack.DeploymentPath,
+			deploymentConfig.RegisterCandidate,
 			deploymentConfig.AwsAccessKey,
 			deploymentConfig.AwsSecretAccessKey,
 			deploymentConfig.AwsRegion,
@@ -1598,7 +1607,8 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			Status:       entities.DeploymentStatusInProgress,
 		}
 
-		if deployment.Step == 1 {
+		switch deployment.Step {
+		case 1:
 			var deployL1ContractsConfig dtos.DeployL1ContractsRequest
 			if err := json.Unmarshal(deployment.Config, &deployL1ContractsConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
@@ -1629,7 +1639,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				DeploymentID: deployment.ID,
 				Status:       entities.DeploymentStatusCompleted,
 			}
-		} else if deployment.Step == 2 {
+		case 2:
 			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
 			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
@@ -1698,6 +1708,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
 		stackConfig.AwsSecretAccessKey,
 		stackConfig.AwsRegion,
@@ -1775,6 +1786,12 @@ func getThanosStackDeployments(
 	deployments := make([]*entities.DeploymentEntity, 0)
 	l1ContractDeploymentID := uuid.New()
 	l1ContractDeploymentLogPath := utils.GetLogPath(stackId, "deploy-l1-contracts")
+
+	var registerCandidateParams *dtos.RegisterCandidateRequest
+	if config.RegisterCandidate {
+		registerCandidateParams = config.RegisterCandidateParams
+	}
+
 	l1ContractDeploymentConfig, err := json.Marshal(dtos.DeployL1ContractsRequest{
 		L1RpcUrl:                 config.L1RpcUrl,
 		L2BlockTime:              config.L2BlockTime,
@@ -1785,6 +1802,8 @@ func getThanosStackDeployments(
 		SequencerAccount:         config.SequencerAccount,
 		BatcherAccount:           config.BatcherAccount,
 		ProposerAccount:          config.ProposerAccount,
+		RegisterCandidate:        config.RegisterCandidate,
+		RegisterCandidateParams:  registerCandidateParams,
 	})
 	if err != nil {
 		return nil, err

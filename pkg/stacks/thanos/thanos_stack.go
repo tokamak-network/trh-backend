@@ -16,6 +16,7 @@ func NewThanosSDKClient(
 	logPath string,
 	network string,
 	deploymentPath string,
+	registerCandidate bool,
 	awsAccessKey string,
 	awsSecretAccessKey string,
 	awsRegion string,
@@ -41,6 +42,10 @@ func NewThanosSDKClient(
 	if err != nil {
 		logger.Errorf("Failed to create thanos stacks: %s", err)
 		return nil, err
+	}
+
+	if registerCandidate {
+		s.SetRegisterCandidate(true)
 	}
 
 	return s, nil
@@ -100,6 +105,16 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		ChainConfiguration: &chainConfig,
 		Operators:          &operators,
 	}
+
+	if req.RegisterCandidate {
+		contractDeploymentInput.RegisterCandidate = &thanosStack.RegisterCandidateInput{
+			Amount:   req.RegisterCandidateParams.Amount,
+			Memo:     req.RegisterCandidateParams.Memo,
+			NameInfo: req.RegisterCandidateParams.NameInfo,
+			UseTon:   true, // TODO: we only support TON for now
+		}
+	}
+
 	err := sdkClient.DeployContracts(ctx, &contractDeploymentInput)
 	if err != nil {
 		return err

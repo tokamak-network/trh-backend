@@ -49,6 +49,19 @@ func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 		return
 	}
 
+	if request.RegisterCandidate {
+		if request.RegisterCandidateParams == nil {
+			c.JSON(http.StatusBadRequest, &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "registerCandidateParams is required",
+				Data:    nil,
+			})
+			return
+		}
+	} else {
+		request.RegisterCandidateParams = nil
+	}
+
 	request.AdminAccount = utils.TrimPrivateKey(request.AdminAccount)
 	request.SequencerAccount = utils.TrimPrivateKey(request.SequencerAccount)
 	request.BatcherAccount = utils.TrimPrivateKey(request.BatcherAccount)
