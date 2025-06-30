@@ -325,8 +325,18 @@ github.com/tklauser/go-sysconf v0.3.14 h1:g5vzr9iPFFz24v2KZXs/pvpvh8/V9Fw6vQK5ZZ
 github.com/tklauser/go-sysconf v0.3.14/go.mod h1:1ym4lWMLUOhuBOPGtRcJm7tEGX4SCYNEEEtghGG/8uY=
 github.com/tklauser/numcpus v0.9.0 h1:lmyCHtANi8aRUgkckBgoDk1nHCux3n2cgkJLXdQGPDo=
 github.com/tklauser/numcpus v0.9.0/go.mod h1:SN6Nq1O3VychhC1npsWostA+oW+VOQTxZrS604NSRyI=
+github.com/tokamak-network/trh-sdk v1.0.0 h1:PsbHJ4wyye42darZPUTwTrjFY2pSXgNQrYGkpg9Tv8Q=
+github.com/tokamak-network/trh-sdk v1.0.0/go.mod h1:g2kPuHNSlLC/03qikqBCfF5Nmd/R27Q6UZhjRgbpFLQ=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250628121308-6e18b0cffb29 h1:m+CyhIAQyNhBqYwC3Xg0lKIAyGKVmQ0Ik+vui0HFu5s=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250628121308-6e18b0cffb29/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250628145937-dadc1bb19e6f h1:1vbioxU2nlk5bhowlyCtnGZJ8L7y5RmIadks/iPBJVA=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250628145937-dadc1bb19e6f/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250630132856-1e00c5fabced h1:1MAJM2QlE89ZYR7AhScsD6Jsp2OOESUO2DsZZltT8zE=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250630132856-1e00c5fabced/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
 github.com/tokamak-network/trh-sdk v1.0.1-0.20250630154312-955d15b6fef1 h1:q+kue3PFaFqYKgPRk01MSTOHKurMR5uDznkSl8RmmB0=
 github.com/tokamak-network/trh-sdk v1.0.1-0.20250630154312-955d15b6fef1/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250630181738-ce36f270c22c h1:Z12G5xl2xW2/cJUwJfrjQKQFRQ8BDxbz8rC1ZVYfUe8=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250630181738-ce36f270c22c/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/tyler-smith/go-bip32 v1.0.0 h1:sDR9juArbUgX+bO/iblgZnMPeWY1KZMUC2AFUJdv5KE=
@@ -337,6 +347,8 @@ github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65E
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/urfave/cli/v2 v2.27.1 h1:8xSQ6szndafKVRmfyeUMxkNUJQMjL1F2zmsZ+qHpfho=
 github.com/urfave/cli/v2 v2.27.1/go.mod h1:8qnjx1vcq5s2/wpsqoZFndg2CE5tNFyrTvS6SinrnYQ=
+github.com/urfave/cli/v3 v3.0.0-beta1 h1:6DTaaUarcM0wX7qj5Hcvs+5Dm3dyUTBbEwIWAjcw9Zg=
+github.com/urfave/cli/v3 v3.0.0-beta1/go.mod h1:FnIeEMYu+ko8zP1F9Ypr3xkZMIDqW3DR92yUtY39q1Y=
 github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 h1:bAn7/zixMGCfxrRTfdpNzjtPYqr8smhKouy9mxVdGPU=
 github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673/go.mod h1:N3UwUGtsrSj3ccvlPHLoLsHnpR27oXr4ZE984MbSER8=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
