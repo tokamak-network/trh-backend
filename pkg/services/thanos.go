@@ -51,6 +51,11 @@ type IntegrationRepository interface {
 		id string,
 		status entities.DeploymentStatus,
 	) error
+	UpdateIntegrationStatusWithReason(
+		id string,
+		status entities.DeploymentStatus,
+		reason string,
+	) error
 	GetInstalledIntegration(
 		stackId string,
 		integrationType string,
@@ -520,11 +525,21 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		blockExplorerUrl, err = thanos.InstallBlockExplorer(ctx, sdkClient, &request)
 		if err != nil {
 			logger.Error("failed to install block explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+			err = s.integrationRepo.UpdateIntegrationStatusWithReason(blockExplorerIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+			if err != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err), zap.String("integrationId", blockExplorerIntegration.ID.String()))
+				return
+			}
 			return
 		}
 
 		if blockExplorerUrl == "" {
 			logger.Error("block explorer URL is empty", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()))
+			err = s.integrationRepo.UpdateIntegrationStatusWithReason(blockExplorerIntegration.ID.String(), entities.DeploymentStatusFailed, "Block explorer URL is empty")
+			if err != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err), zap.String("integrationId", blockExplorerIntegration.ID.String()))
+				return
+			}
 			return
 		}
 
@@ -771,11 +786,19 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		bridgeUrl, err = thanos.InstallBridge(ctx, sdkClient)
 		if err != nil {
 			logger.Error("failed to install bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+			err = s.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+			if err != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err), zap.String("integrationId", bridgeIntegration.ID.String()))
+			}
 			return
 		}
 
 		if bridgeUrl == "" {
 			logger.Error("bridge URL is empty", zap.String("plugin", enum.IntegrationTypeBridge.String()))
+			err = s.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, "Bridge URL is empty")
+			if err != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err), zap.String("integrationId", bridgeIntegration.ID.String()))
+			}
 			return
 		}
 
@@ -2000,7 +2023,7 @@ func (s *ThanosStackDeploymentService) RegisterCandidate(ctx context.Context, st
 		err = thanos.VerifyRegisterCandidates(ctx, sdkClient, &req)
 		if err != nil {
 			logger.Error("failed to register candidate", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("stackId", stackId.String()))
-			err = s.integrationRepo.UpdateIntegrationStatus(integrationId.String(), entities.DeploymentStatusFailed)
+			err = s.integrationRepo.UpdateIntegrationStatusWithReason(integrationId.String(), entities.DeploymentStatusFailed, err.Error())
 			if err != nil {
 				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("integrationId", integrationId.String()))
 			}

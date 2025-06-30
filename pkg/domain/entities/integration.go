@@ -29,4 +29,5 @@ type IntegrationEntity struct {
 	Config  json.RawMessage `json:"config"`
 	Info    json.RawMessage `json:"info"`
 	LogPath string          `json:"log_path"`
+	Reason  string          `json:"reason"`
 }

@@ -17,6 +17,7 @@ type Integration struct {
 	Status    entities.DeploymentStatus `gorm:"column:status;not null"`
 	Config    datatypes.JSON            `gorm:"column:config;type:jsonb;default:null"`
 	Info      datatypes.JSON            `gorm:"column:info;type:jsonb;default:null"`
+	Reason    string                    `gorm:"column:reason;default:null"`
 	CreatedAt time.Time                 `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt time.Time                 `gorm:"autoUpdateTime;column:updated_at"`
 	DeletedAt time.Time                 `gorm:"autoUpdateTime;column:deleted_at"`
