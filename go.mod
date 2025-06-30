@@ -11,7 +11,7 @@ require (
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
-	github.com/tokamak-network/trh-sdk v1.0.1-0.20250628145937-dadc1bb19e6f
+	github.com/tokamak-network/trh-sdk v1.0.1-0.20250630132856-1e00c5fabced
 	go.uber.org/zap v1.27.0
 	gorm.io/datatypes v1.2.5
 	gorm.io/driver/postgres v1.5.11

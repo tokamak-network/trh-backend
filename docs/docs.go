@@ -579,6 +579,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/stacks/thanos/{id}/register-candidates": {
+            "post": {
+                "description": "Register Candidates",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Register Candidates",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/stacks/thanos/{id}/resume": {
             "post": {
                 "description": "Resume Thanos Stack",

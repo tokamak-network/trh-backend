@@ -39,6 +39,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server) {
 	router.DELETE("/:id", handler.Terminate)
 	router.GET("", handler.GetAllStacks)
 	router.GET("/:id", handler.GetStackByID)
+	router.POST("/:id/register-candidates", handler.RegisterCandidates)
 	router.POST("/:id/integrations/bridge", handler.InstallBridge)
 	router.POST("/:id/integrations/block-explorer", handler.InstallBlockExplorer)
 	router.POST("/:id/integrations/monitoring", handler.InstallMonitoring)

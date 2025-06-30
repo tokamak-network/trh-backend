@@ -1,6 +1,7 @@
 package dtos
 
 import (
+	"context"
 	"errors"
 	"regexp"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	trhSdkAws "github.com/tokamak-network/trh-sdk/pkg/cloud-provider/aws"
+	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	trhSdkTypes "github.com/tokamak-network/trh-sdk/pkg/types"
 	trhSdkUtils "github.com/tokamak-network/trh-sdk/pkg/utils"
 	"go.uber.org/zap"
@@ -20,6 +22,21 @@ type RegisterCandidateRequest struct {
 	Amount   float64 `json:"amount" binding:"required" validate:"min=0"`
 	Memo     string  `json:"memo" binding:"required"`
 	NameInfo string  `json:"nameInfo"`
+}
+
+func (r *RegisterCandidateRequest) Validate(ctx context.Context) error {
+	registerCandidateParams := thanosStack.RegisterCandidateInput{
+		Amount:   r.Amount,
+		Memo:     r.Memo,
+		NameInfo: r.NameInfo,
+		UseTon:   true,
+	}
+
+	if err := registerCandidateParams.Validate(ctx); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type DeployThanosRequest struct {

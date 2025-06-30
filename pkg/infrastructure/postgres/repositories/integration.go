@@ -41,7 +41,10 @@ func (r *IntegrationRepository) UpdateMetadataAfterInstalled(
 	metadata *entities.IntegrationInfo,
 ) error {
 	if metadata == nil {
-		return nil // No metadata to update
+		return r.db.Model(&schemas.Integration{}).
+			Where("id = ?", id).
+			Update("status", entities.DeploymentStatusCompleted).
+			Error
 	}
 	return r.db.Model(&schemas.Integration{}).
 		Where("id = ?", id).

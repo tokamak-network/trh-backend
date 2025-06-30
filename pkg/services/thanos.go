@@ -11,6 +11,7 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
@@ -30,7 +31,7 @@ type StackRepository interface {
 	CreateStackByTx(
 		stack *entities.StackEntity,
 		deployments []*entities.DeploymentEntity,
-		integration *entities.IntegrationEntity,
+		integrations []*entities.IntegrationEntity,
 	) error
 	UpdateStatus(stackId string, status entities.StackStatus, reason string) error
 	GetStackByID(stackId string) (*entities.StackEntity, error)
@@ -144,11 +145,23 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 	}
 
 	// We install the bridge by default
+	integrations := make([]*entities.IntegrationEntity, 0)
 	bridgeIntegration := &entities.IntegrationEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Type:    "bridge",
+		Type:    enum.IntegrationTypeBridge.String(),
 		Status:  string(entities.DeploymentStatusPending),
+	}
+	integrations = append(integrations, bridgeIntegration)
+
+	if request.RegisterCandidate {
+		registerCandidateIntegration := &entities.IntegrationEntity{
+			ID:      uuid.New(),
+			StackID: &stack.ID,
+			Type:    enum.IntegrationTypeRegisterCandidate.String(),
+			Status:  string(entities.DeploymentStatusPending),
+		}
+		integrations = append(integrations, registerCandidateIntegration)
 	}
 
 	deployments, err := getThanosStackDeployments(stackId, &request)
@@ -160,7 +173,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		}, err
 	}
 
-	err = s.stackRepo.CreateStackByTx(stack, deployments, bridgeIntegration)
+	err = s.stackRepo.CreateStackByTx(stack, deployments, integrations)
 	if err != nil {
 		logger.Error("Failed to create thanos stack", zap.Error(err))
 		return &entities.Response{
@@ -493,29 +506,29 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 		blockExplorerIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
-			Type:    "block-explorer",
+			Type:    enum.IntegrationTypeBlockExplorer.String(),
 			Status:  string(entities.DeploymentStatusInProgress),
 			Config:  confifgBytes,
 			LogPath: logPath,
 		}
 		err = s.integrationRepo.CreateIntegration(blockExplorerIntegration)
 		if err != nil {
-			logger.Error("failed to create integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 			return
 		}
 
 		blockExplorerUrl, err = thanos.InstallBlockExplorer(ctx, sdkClient, &request)
 		if err != nil {
-			logger.Error("failed to install block explorer", zap.String("plugin", "block-explorer"), zap.Error(err))
+			logger.Error("failed to install block explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 			return
 		}
 
 		if blockExplorerUrl == "" {
-			logger.Error("block explorer URL is empty", zap.String("plugin", "block-explorer"))
+			logger.Error("block explorer URL is empty", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()))
 			return
 		}
 
-		logger.Debug("block explorer successfully installed", zap.String("plugin", "block-explorer"), zap.String("url", blockExplorerUrl))
+		logger.Debug("block explorer successfully installed", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.String("url", blockExplorerUrl))
 		// create integration
 		config, err := json.Marshal(request)
 		if err != nil {
@@ -528,7 +541,7 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 			json.RawMessage(config),
 		)
 		if err != nil {
-			logger.Error("failed to update block explorer integration config", zap.String("plugin", "block-explorer"), zap.Error(err))
+			logger.Error("failed to update block explorer integration config", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 			return
 		}
 
@@ -540,7 +553,7 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 			blockExplorerMedata,
 		)
 		if err != nil {
-			logger.Error("failed to create integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 			return
 		}
 		stack.Metadata.BlockExplorerUrl = blockExplorerUrl
@@ -613,30 +626,30 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 
 	taskId := fmt.Sprintf("uninstall-block-explorer-%s", stackId)
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
-		integration, err := s.integrationRepo.GetInstalledIntegration(stackId, "block-explorer")
+		integration, err := s.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBlockExplorer.String())
 		if err != nil {
-			logger.Error("failed to get integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 			return
 		}
 
 		if integration == nil {
-			logger.Error("integration not found", zap.String("plugin", "block-explorer"))
+			logger.Error("integration not found", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()))
 			return
 		}
 		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating)
 		if err != nil {
-			logger.Error("failed to update integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 			return
 		}
 		err = thanos.UninstallBlockExplorer(ctx, sdkClient)
 		if err != nil {
-			logger.Error("failed to install block-explorer", zap.String("plugin", "block-explorer"), zap.Error(err))
+			logger.Error("failed to install block-explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 			return
 		}
 
 		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated)
 		if err != nil {
-			logger.Error("failed to update integration", zap.String("plugin", "block-explorer"), zap.Error(err))
+			logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 			return
 		}
 		stack.Metadata.BlockExplorerUrl = ""
@@ -685,9 +698,9 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 	}
 
 	// check if bridge is already in non-terminated state
-	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId, "bridge")
+	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId, enum.IntegrationTypeBridge.String())
 	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -696,7 +709,7 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 	}
 
 	if len(integrations) > 0 {
-		logger.Error("There is already an active bridge", zap.String("plugin", "bridge"))
+		logger.Error("There is already an active bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()))
 		return &entities.Response{
 			Status:  http.StatusBadRequest,
 			Message: "There is already an active bridge",
@@ -745,28 +758,28 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		bridgeIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
-			Type:    "bridge",
+			Type:    enum.IntegrationTypeBridge.String(),
 			Status:  string(entities.DeploymentStatusInProgress),
 			LogPath: logPath,
 		}
 		err = s.integrationRepo.CreateIntegration(bridgeIntegration)
 		if err != nil {
-			logger.Error("failed to create integration", zap.String("plugin", "bridge"), zap.Error(err))
+			logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 			return
 		}
 
 		bridgeUrl, err = thanos.InstallBridge(ctx, sdkClient)
 		if err != nil {
-			logger.Error("failed to install bridge", zap.String("plugin", "bridge"), zap.Error(err))
+			logger.Error("failed to install bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 			return
 		}
 
 		if bridgeUrl == "" {
-			logger.Error("bridge URL is empty", zap.String("plugin", "bridge"))
+			logger.Error("bridge URL is empty", zap.String("plugin", enum.IntegrationTypeBridge.String()))
 			return
 		}
 
-		logger.Debug("bridge successfully installed", zap.String("plugin", "bridge"), zap.String("url", bridgeUrl))
+		logger.Debug("bridge successfully installed", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.String("url", bridgeUrl))
 
 		// create integration
 		bridgeMetadata := &entities.IntegrationInfo{
@@ -778,7 +791,7 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 			bridgeMetadata,
 		)
 		if err != nil {
-			logger.Error("failed to update bridge integration metadata", zap.String("plugin", "bridge"), zap.Error(err))
+			logger.Error("failed to update bridge integration metadata", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 			return
 		}
 
@@ -858,34 +871,34 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 
 	taskId := fmt.Sprintf("uninstall-bridge-%s", stackId)
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
-		integration, err := s.integrationRepo.GetInstalledIntegration(stackId, "bridge")
+		integration, err := s.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBridge.String())
 		if err != nil {
-			logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
+			logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 			return
 		}
 
 		if integration == nil {
-			logger.Error("integration not found", zap.String("plugin", "bridge"))
+			logger.Error("integration not found", zap.String("plugin", enum.IntegrationTypeBridge.String()))
 			return
 		}
 
 		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating)
 		if err != nil {
-			logger.Error("failed to update integration", zap.String("plugin", "bridge"), zap.Error(err))
+			logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 			return
 		}
 
-		logger.Info("Uninstalling bridge", zap.String("plugin", "bridge"))
+		logger.Info("Uninstalling bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()))
 
 		err = thanos.UninstallBridge(ctx, sdkClient)
 		if err != nil {
-			logger.Error("failed to install bridge", zap.String("plugin", "bridge"), zap.Error(err))
+			logger.Error("failed to install bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 			return
 		}
 
 		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated)
 		if err != nil {
-			logger.Error("failed to update integration", zap.String("plugin", "bridge"), zap.Error(err))
+			logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 			return
 		}
 		stack.Metadata.BridgeUrl = ""
@@ -1238,14 +1251,14 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 		monitoringIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
-			Type:    "monitoring",
+			Type:    enum.IntegrationTypeMonitoring.String(),
 			Status:  string(entities.DeploymentStatusInProgress),
 			Config:  confifgBytes,
 			LogPath: logPath,
 		}
 		err = s.integrationRepo.CreateIntegration(monitoringIntegration)
 		if err != nil {
-			logger.Error("failed to create integration", zap.String("plugin", "monitoring"), zap.Error(err))
+			logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			return
 		}
 
@@ -1257,16 +1270,16 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 
 		grafanaURL, err = thanos.InstallMonitoring(ctx, sdkClient, config)
 		if err != nil {
-			logger.Error("failed to install monitoring", zap.String("plugin", "monitoring"), zap.Error(err))
+			logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			return
 		}
 
 		if grafanaURL == "" {
-			logger.Error("monitoring URL is empty", zap.String("plugin", "monitoring"))
+			logger.Error("monitoring URL is empty", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
 			return
 		}
 
-		logger.Debug("monitoring successfully installed", zap.String("plugin", "monitoring"), zap.String("url", grafanaURL))
+		logger.Debug("monitoring successfully installed", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.String("url", grafanaURL))
 
 		// create integration
 		monitoringMetadata := &entities.IntegrationInfo{
@@ -1278,7 +1291,7 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 			monitoringMetadata,
 		)
 		if err != nil {
-			logger.Error("failed to update monitoring integration metadata", zap.String("plugin", "monitoring"), zap.Error(err))
+			logger.Error("failed to update monitoring integration metadata", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			return
 		}
 
@@ -1361,34 +1374,34 @@ func (s *ThanosStackDeploymentService) UninstallMonitoring(
 
 	taskId := fmt.Sprintf("uninstall-monitoring-%s", stackId.String())
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
-		integration, err := s.integrationRepo.GetInstalledIntegration(stackId.String(), "monitoring")
+		integration, err := s.integrationRepo.GetInstalledIntegration(stackId.String(), enum.IntegrationTypeMonitoring.String())
 		if err != nil {
-			logger.Error("failed to get integration", zap.String("plugin", "monitoring"), zap.Error(err))
+			logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			return
 		}
 
 		if integration == nil {
-			logger.Error("integration not found", zap.String("plugin", "monitoring"))
+			logger.Error("integration not found", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
 			return
 		}
 
 		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating)
 		if err != nil {
-			logger.Error("failed to update integration", zap.String("plugin", "monitoring"), zap.Error(err))
+			logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			return
 		}
 
-		logger.Info("Uninstalling monitoring", zap.String("plugin", "monitoring"))
+		logger.Info("Uninstalling monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
 
 		err = thanos.UninstallMonitoring(ctx, sdkClient)
 		if err != nil {
-			logger.Error("failed to uninstall monitoring", zap.String("plugin", "monitoring"), zap.Error(err))
+			logger.Error("failed to uninstall monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			return
 		}
 
 		err = s.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated)
 		if err != nil {
-			logger.Error("failed to update integration", zap.String("plugin", "monitoring"), zap.Error(err))
+			logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			return
 		}
 		stack.Metadata.MonitoringUrl = ""
@@ -1438,6 +1451,13 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
 		}
+
+		err = s.integrationRepo.UpdateIntegrationsStatusByStackID(stackId.String(), entities.DeploymentStatusFailed)
+		if err != nil {
+			logger.Error("failed to update integrations status", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
+		}
+
 		return
 	}
 
@@ -1508,14 +1528,14 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 	}
 
 	// bridgeIntegration
-	bridgeIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), "bridge")
+	bridgeIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeBridge.String())
 	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", "bridge"), zap.Error(err))
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
 
 	if bridgeIntegration == nil {
-		logger.Error("bridge integration not found", zap.String("plugin", "bridge"))
+		logger.Error("bridge integration not found", zap.String("plugin", enum.IntegrationTypeBridge.String()))
 		return
 	}
 
@@ -1528,6 +1548,27 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 
 	if err != nil {
 		logger.Error("failed to create integration", zap.Error(err))
+		return
+	}
+
+	registerCandidateIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeRegisterCandidate.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+		return
+	}
+
+	if registerCandidateIntegration == nil {
+		logger.Error("register candidate integration not found", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()))
+		return
+	}
+
+	err = s.integrationRepo.UpdateMetadataAfterInstalled(
+		registerCandidateIntegration.ID.String(),
+		nil,
+	)
+
+	if err != nil {
+		logger.Error("failed to update register candidate integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
 		return
 	}
 
@@ -1853,4 +1894,129 @@ func getThanosStackDeployments(
 	deployments = append(deployments, thanosInfrastructureDeployment)
 
 	return deployments, nil
+}
+
+func (s *ThanosStackDeploymentService) RegisterCandidate(ctx context.Context, stackId uuid.UUID, req dtos.RegisterCandidateRequest) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack by id", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if stack.Status != entities.StackStatusDeployed {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack has not been deployed yet",
+			Data:    nil,
+		}, nil
+	}
+
+	// check if register candidate is already in non-terminated state
+	integrations, err := s.integrationRepo.GetActiveIntegrations(stackId.String(), enum.IntegrationTypeRegisterCandidate.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if len(integrations) > 0 {
+		logger.Error("There is already an active register candidate", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "There is already an active register candidate",
+			Data:    nil,
+		}, nil
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	err = json.Unmarshal(stack.Config, &stackConfig)
+	if err != nil {
+		logger.Error("failed to unmarshal stack config", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	registerCandidateLogPath := utils.GetLogPath(stackId, "register-candidate")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		registerCandidateLogPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	taskId := fmt.Sprintf("register-candidate-%s", stackId.String())
+
+	s.taskManager.AddTask(taskId, func(ctx context.Context) {
+		integrationConfig, err := json.Marshal(req)
+		if err != nil {
+			logger.Error("failed to marshal integration config", zap.Error(err))
+			return
+		}
+
+		integrationId := uuid.New()
+		integration := &entities.IntegrationEntity{
+			ID:      integrationId,
+			StackID: &stackId,
+			Type:    enum.IntegrationTypeRegisterCandidate.String(),
+			Status:  string(entities.DeploymentStatusPending),
+			Config:  integrationConfig,
+			LogPath: registerCandidateLogPath,
+		}
+		err = s.integrationRepo.CreateIntegration(integration)
+		if err != nil {
+			logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+			return
+		}
+		err = thanos.VerifyRegisterCandidates(ctx, sdkClient, &req)
+		if err != nil {
+			logger.Error("failed to register candidate", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("stackId", stackId.String()))
+			err = s.integrationRepo.UpdateIntegrationStatus(integrationId.String(), entities.DeploymentStatusFailed)
+			if err != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("integrationId", integrationId.String()))
+			}
+			return
+		}
+		err = s.integrationRepo.UpdateIntegrationStatus(integrationId.String(), entities.DeploymentStatusCompleted)
+		if err != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("integrationId", integrationId.String()))
+		}
+
+		logger.Info("Register candidate successfully", zap.String("stackId", stackId.String()))
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Candidate registered successfully",
+		Data:    nil,
+	}, nil
 }

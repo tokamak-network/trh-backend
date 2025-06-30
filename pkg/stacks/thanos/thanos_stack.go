@@ -198,3 +198,16 @@ func UpdateNetwork(
 		L1BeaconURL: req.L1BeaconUrl,
 	})
 }
+
+func VerifyRegisterCandidates(
+	ctx context.Context,
+	s *thanosStack.ThanosStack,
+	req *dtos.RegisterCandidateRequest,
+) error {
+	return s.VerifyRegisterCandidates(ctx, &thanosStack.RegisterCandidateInput{
+		Amount:   req.Amount,
+		Memo:     req.Memo,
+		NameInfo: req.NameInfo,
+		UseTon:   true, // TODO: we only support TON for now
+	})
+}
