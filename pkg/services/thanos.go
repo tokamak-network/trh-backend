@@ -485,11 +485,17 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 
 	taskId := fmt.Sprintf("install-block-explorer-%s", stackId)
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
+		confifgBytes, err := json.Marshal(request)
+		if err != nil {
+			logger.Error("failed to marshal block explorer config", zap.Error(err))
+			return
+		}
 		blockExplorerIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
 			Type:    "block-explorer",
 			Status:  string(entities.DeploymentStatusInProgress),
+			Config:  confifgBytes,
 			LogPath: logPath,
 		}
 		err = s.integrationRepo.CreateIntegration(blockExplorerIntegration)
