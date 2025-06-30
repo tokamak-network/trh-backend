@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN ln -sf /usr/share/zoneinfo/UTC /etc/localtime && \
     echo 'UTC' > /etc/timezone
 
-WORKDIR /
+WORKDIR /app
 
 COPY --from=builder /app/main .
 
