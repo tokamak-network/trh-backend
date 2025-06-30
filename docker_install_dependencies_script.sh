@@ -237,6 +237,8 @@ echo
 
 # 10. Verify npx availability
 echo "[$STEP/$TOTAL_STEPS] Verifying npx availability..."
+# Add npm global bin to PATH for npx access
+export PATH="$PATH:$(npm config get prefix)/bin"
 if command -v npx &> /dev/null; then
     echo "✅ npx is available and ready to use"
     npx --version
@@ -252,6 +254,23 @@ else
         exit 1
     fi
 fi
+
+# Add npm global bin to PATH in config files if not already present
+NPM_GLOBAL_BIN="$(npm config get prefix)/bin"
+if ! grep -Fq "export PATH=\"\$PATH:$NPM_GLOBAL_BIN\"" "$CONFIG_FILE"; then
+    {
+        echo ''
+        echo "export PATH=\"\$PATH:$NPM_GLOBAL_BIN\""
+    } >> "$CONFIG_FILE"
+fi
+
+if ! grep -Fq "export PATH=\"\$PATH:$NPM_GLOBAL_BIN\"" "$PROFILE_FILE"; then
+    {
+        echo ''
+        echo "export PATH=\"\$PATH:$NPM_GLOBAL_BIN\""
+    } >> "$PROFILE_FILE"
+fi
+
 STEP=$((STEP + 1))
 echo
 
