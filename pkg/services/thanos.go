@@ -1224,11 +1224,17 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 
 	taskId := fmt.Sprintf("install-monitoring-%s", stackId.String())
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
+		confifgBytes, err := json.Marshal(req)
+		if err != nil {
+			logger.Error("failed to marshal monitoring config", zap.Error(err))
+			return
+		}
 		monitoringIntegration := &entities.IntegrationEntity{
 			ID:      uuid.New(),
 			StackID: &stack.ID,
 			Type:    "monitoring",
 			Status:  string(entities.DeploymentStatusInProgress),
+			Config:  confifgBytes,
 			LogPath: logPath,
 		}
 		err = s.integrationRepo.CreateIntegration(monitoringIntegration)
