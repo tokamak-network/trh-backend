@@ -20,7 +20,7 @@ fi
 
 OS_TYPE=$(uname)
 
-TOTAL_STEPS=11
+TOTAL_STEPS=12
 STEP=1
 SUCCESS="false"
 
@@ -235,7 +235,27 @@ fi
 STEP=$((STEP + 1))
 echo
 
-# 10. Install Foundry
+# 10. Verify npx availability
+echo "[$STEP/$TOTAL_STEPS] Verifying npx availability..."
+if command -v npx &> /dev/null; then
+    echo "✅ npx is available and ready to use"
+    npx --version
+else
+    echo "❌ npx is not available. This should not happen as npx comes with npm."
+    echo "Attempting to install npx separately..."
+    npm install -g npx
+    if command -v npx &> /dev/null; then
+        echo "✅ npx has been installed successfully"
+        npx --version
+    else
+        echo "❌ Failed to install npx"
+        exit 1
+    fi
+fi
+STEP=$((STEP + 1))
+echo
+
+# 11. Install Foundry
 echo "[$STEP/$TOTAL_STEPS] Installing Foundry..."
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then
@@ -277,7 +297,7 @@ fi
 STEP=$((STEP + 1))
 echo
 
-# 11. Install Go
+# 12. Install Go
 echo "[$STEP/$TOTAL_STEPS] Installing Go (v1.22.6)..."
 export PATH="$PATH:/usr/local/go/bin"
 
@@ -387,6 +407,7 @@ check_command_version make "" "make --version"
 check_command_version gcc "" "gcc --version"
 check_command_version node "v20.16.0" "node -v"
 check_command_version pnpm "" "pnpm --version"
+check_command_version npx "" "npx --version"
 check_command_version terraform "" "terraform --version"
 check_command_version aws "" "aws --version"
 check_command_version helm "" "helm version"
