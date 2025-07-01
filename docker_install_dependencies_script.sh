@@ -201,12 +201,16 @@ if [[ "$current_node_version" != "v20.16.0" ]]; then
             } >> "$PROFILE_FILE"
         fi
     fi
+    # Load NVM in current session
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     nvm install v20.16.0
     nvm use v20.16.0
     nvm alias default v20.16.0
 else
     echo "Node.js v20.16.0 is already installed."
+    # Load NVM in current session even if Node.js is already installed
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 fi
 STEP=$((STEP + 1))
 echo
@@ -232,13 +236,13 @@ if ! command -v pnpm &> /dev/null; then
 else
     echo "pnpm is already installed."
 fi
+# Ensure pnpm PATH is set in current session
+export PATH="$HOME/.local/share/pnpm:$PATH"
 STEP=$((STEP + 1))
 echo
 
 # 10. Verify npx availability
 echo "[$STEP/$TOTAL_STEPS] Verifying npx availability..."
-# Add npm global bin to PATH for npx access
-export PATH="$PATH:$(npm config get prefix)/bin"
 if command -v npx &> /dev/null; then
     echo "✅ npx is available and ready to use"
     npx --version
@@ -254,23 +258,6 @@ else
         exit 1
     fi
 fi
-
-# Add npm global bin to PATH in config files if not already present
-NPM_GLOBAL_BIN="$(npm config get prefix)/bin"
-if ! grep -Fq "export PATH=\"\$PATH:$NPM_GLOBAL_BIN\"" "$CONFIG_FILE"; then
-    {
-        echo ''
-        echo "export PATH=\"\$PATH:$NPM_GLOBAL_BIN\""
-    } >> "$CONFIG_FILE"
-fi
-
-if ! grep -Fq "export PATH=\"\$PATH:$NPM_GLOBAL_BIN\"" "$PROFILE_FILE"; then
-    {
-        echo ''
-        echo "export PATH=\"\$PATH:$NPM_GLOBAL_BIN\""
-    } >> "$PROFILE_FILE"
-fi
-
 STEP=$((STEP + 1))
 echo
 
@@ -369,6 +356,8 @@ if ! echo "$current_go_version" | grep 'go1.22.6' &>/dev/null ; then
     export PATH="$PATH:/usr/local/go/bin"
 else
     echo "Go 1.22.6 is already installed."
+    # Ensure Go PATH is set in current session even if already installed
+    export PATH="$PATH:/usr/local/go/bin"
 fi
 
 # Add required PATH exports if not already present
@@ -384,6 +373,14 @@ STEP=$((STEP + 1))
 echo
 
 SUCCESS="true"
+
+# Final setup: Ensure all PATH variables are set in current session
+echo "Setting up environment for current session..."
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+export PATH="$HOME/.local/share/pnpm:$PATH"
+export PATH="$PATH:/usr/local/go/bin"
+export PATH="$HOME/.foundry/bin:$PATH"
 
 # Function to check if a command exists and its version if necessary
 function check_command_version {
