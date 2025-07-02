@@ -83,7 +83,7 @@ type IntegrationRepository interface {
 	) error
 	UpdateMetadataAfterInstalled(
 		id string,
-		metadata *entities.IntegrationInfo,
+		metadata entities.IntegrationInfo,
 	) error
 	UpdateConfig(
 		id string,
@@ -560,12 +560,17 @@ func (s *ThanosStackDeploymentService) InstallBlockExplorer(ctx context.Context,
 			return
 		}
 
-		blockExplorerMedata := &entities.IntegrationInfo{
-			Url: blockExplorerUrl,
+		blockExplorerMedata := map[string]string{
+			"url": blockExplorerUrl,
+		}
+		bytes, err := json.Marshal(blockExplorerMedata)
+		if err != nil {
+			logger.Error("failed to marshal block explorer metadata", zap.Error(err))
+			return
 		}
 		err = s.integrationRepo.UpdateMetadataAfterInstalled(
 			blockExplorerIntegration.ID.String(),
-			blockExplorerMedata,
+			entities.IntegrationInfo(bytes),
 		)
 		if err != nil {
 			logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
@@ -805,13 +810,18 @@ func (s *ThanosStackDeploymentService) InstallBridge(ctx context.Context, stackI
 		logger.Debug("bridge successfully installed", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.String("url", bridgeUrl))
 
 		// create integration
-		bridgeMetadata := &entities.IntegrationInfo{
-			Url: bridgeUrl,
+		bridgeMetadata := map[string]string{
+			"url": bridgeUrl,
+		}
+		bytes, err := json.Marshal(bridgeMetadata)
+		if err != nil {
+			logger.Error("failed to marshal bridge metadata", zap.Error(err))
+			return
 		}
 
 		err = s.integrationRepo.UpdateMetadataAfterInstalled(
 			bridgeIntegration.ID.String(),
-			bridgeMetadata,
+			entities.IntegrationInfo(bytes),
 		)
 		if err != nil {
 			logger.Error("failed to update bridge integration metadata", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
@@ -1305,13 +1315,18 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 		logger.Debug("monitoring successfully installed", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.String("url", grafanaURL))
 
 		// create integration
-		monitoringMetadata := &entities.IntegrationInfo{
-			Url: grafanaURL,
+		monitoringMetadata := map[string]string{
+			"url": grafanaURL,
+		}
+		bytes, err := json.Marshal(monitoringMetadata)
+		if err != nil {
+			logger.Error("failed to marshal monitoring metadata", zap.Error(err))
+			return
 		}
 
 		err = s.integrationRepo.UpdateMetadataAfterInstalled(
 			monitoringIntegration.ID.String(),
-			monitoringMetadata,
+			entities.IntegrationInfo(bytes),
 		)
 		if err != nil {
 			logger.Error("failed to update monitoring integration metadata", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
@@ -1562,11 +1577,19 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 		return
 	}
 
+	metadata := map[string]string{
+		"url": bridgeUrl,
+	}
+
+	bytes, err := json.Marshal(metadata)
+	if err != nil {
+		logger.Error("failed to marshal bridge metadata", zap.Error(err))
+		return
+	}
+
 	err = s.integrationRepo.UpdateMetadataAfterInstalled(
 		bridgeIntegration.ID.String(),
-		&entities.IntegrationInfo{
-			Url: bridgeUrl,
-		},
+		entities.IntegrationInfo(bytes),
 	)
 
 	if err != nil {
@@ -1574,25 +1597,39 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 		return
 	}
 
-	registerCandidateIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeRegisterCandidate.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
-		return
-	}
+	if stackConfig.RegisterCandidate {
+		registerCandidateIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeRegisterCandidate.String())
+		if err != nil {
+			logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+			return
+		}
 
-	if registerCandidateIntegration == nil {
-		logger.Error("register candidate integration not found", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()))
-		return
-	}
+		if registerCandidateIntegration == nil {
+			logger.Error("register candidate integration not found", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()))
+			return
+		}
 
-	err = s.integrationRepo.UpdateMetadataAfterInstalled(
-		registerCandidateIntegration.ID.String(),
-		nil,
-	)
+		registerCandidateInfo, err := thanos.GetRegisterCandidatesInfo(ctx, sdkClient, stackConfig.RegisterCandidateParams)
+		if err != nil {
+			logger.Error("failed to get register candidate info", zap.Error(err))
+			return
+		}
 
-	if err != nil {
-		logger.Error("failed to update register candidate integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
-		return
+		bytes, err := json.Marshal(registerCandidateInfo)
+		if err != nil {
+			logger.Error("failed to marshal register candidate info", zap.Error(err))
+			return
+		}
+
+		err = s.integrationRepo.UpdateMetadataAfterInstalled(
+			registerCandidateIntegration.ID.String(),
+			bytes,
+		)
+
+		if err != nil {
+			logger.Error("failed to update register candidate integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+			return
+		}
 	}
 
 	logger.Info("Thanos stack deployed successfully",
@@ -2032,6 +2069,28 @@ func (s *ThanosStackDeploymentService) RegisterCandidate(ctx context.Context, st
 		err = s.integrationRepo.UpdateIntegrationStatus(integrationId.String(), entities.DeploymentStatusCompleted)
 		if err != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("integrationId", integrationId.String()))
+		}
+
+		registerCandidateInfo, err := thanos.GetRegisterCandidatesInfo(ctx, sdkClient, &req)
+		if err != nil {
+			logger.Error("failed to get register candidate info", zap.Error(err))
+			return
+		}
+
+		bytes, err := json.Marshal(registerCandidateInfo)
+		if err != nil {
+			logger.Error("failed to marshal register candidate info", zap.Error(err))
+			return
+		}
+
+		err = s.integrationRepo.UpdateMetadataAfterInstalled(
+			integrationId.String(),
+			bytes,
+		)
+
+		if err != nil {
+			logger.Error("failed to update register candidate integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+			return
 		}
 
 		logger.Info("Register candidate successfully", zap.String("stackId", stackId.String()))

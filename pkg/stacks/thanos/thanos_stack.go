@@ -211,3 +211,12 @@ func VerifyRegisterCandidates(
 		UseTon:   true, // TODO: we only support TON for now
 	})
 }
+
+func GetRegisterCandidatesInfo(ctx context.Context, s *thanosStack.ThanosStack, registerCandidate *dtos.RegisterCandidateRequest) (*thanosTypes.RegistrationAdditionalInfo, error) {
+	return s.GetRegistrationAdditionalInfo(ctx, &thanosStack.RegisterCandidateInput{
+		Amount:   registerCandidate.Amount,
+		Memo:     registerCandidate.Memo,
+		NameInfo: registerCandidate.NameInfo,
+		UseTon:   true, // TODO: we only support TON for now
+	})
+}

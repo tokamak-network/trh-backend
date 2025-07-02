@@ -46,7 +46,7 @@ func (r *IntegrationRepository) UpdateIntegrationStatusWithReason(
 
 func (r *IntegrationRepository) UpdateMetadataAfterInstalled(
 	id string,
-	metadata *entities.IntegrationInfo,
+	metadata entities.IntegrationInfo,
 ) error {
 	if metadata == nil {
 		return r.db.Model(&schemas.Integration{}).
