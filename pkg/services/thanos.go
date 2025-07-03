@@ -268,7 +268,7 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 	}
 
 	if stack.Status != entities.StackStatusStopped &&
-		stack.Status != entities.StackStatusFailedToDeploy {
+		stack.Status != entities.StackStatusFailedToDeploy && stack.Status != entities.StackStatusTerminated {
 		return &entities.Response{
 			Status:  http.StatusBadRequest,
 			Message: "Stack is not stopped, yet. Please wait for it to finish",
