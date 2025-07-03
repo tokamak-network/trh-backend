@@ -6,19 +6,13 @@ import (
 	"github.com/google/uuid"
 )
 
-type IntegrationInfo struct {
-	Url string `json:"url"`
-}
+type IntegrationInfo []byte
 
-func (info *IntegrationInfo) ToJson() (json.RawMessage, error) {
+func (info IntegrationInfo) ToJson() (json.RawMessage, error) {
 	if info == nil {
 		return nil, nil // Return nil if no info is provided
 	}
-	data, err := json.Marshal(info)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
+	return json.RawMessage(info), nil
 }
 
 type IntegrationEntity struct {
