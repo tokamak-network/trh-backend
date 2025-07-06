@@ -86,7 +86,13 @@ func (r *IntegrationRepository) GetInstalledIntegration(
 	integrationType string,
 ) (*entities.IntegrationEntity, error) {
 	var integration schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status = ?", entities.DeploymentStatusCompleted).First(&integration).Error; err != nil {
+	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status IN (?)", []string{
+		string(entities.DeploymentStatusCompleted),
+		string(entities.DeploymentStatusFailed),
+		string(entities.DeploymentStatusInProgress),
+		string(entities.DeploymentStatusPending),
+		string(entities.DeploymentStatusUnknown),
+	}).First(&integration).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No integration found
 		}
