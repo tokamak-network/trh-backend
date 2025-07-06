@@ -1304,6 +1304,12 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 		grafanaURL, err = thanos.InstallMonitoring(ctx, sdkClient, config)
 		if err != nil {
 			logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
+			err = s.integrationRepo.UpdateIntegrationStatus(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed)
+			if err != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
+				return
+			}
+
 			return
 		}
 
