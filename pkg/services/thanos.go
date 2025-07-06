@@ -1846,6 +1846,14 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
+	err = s.integrationRepo.UpdateIntegrationsStatusByStackID(stackId.String(), entities.DeploymentStatusTerminating)
+	if err != nil {
+		logger.Error("failed to update integrations status to terminating",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
+
 	err = thanos.DestroyAWSInfrastructure(ctx, sdkClient)
 	if err != nil {
 		logger.Error("failed to destroy AWS infrastructure",
