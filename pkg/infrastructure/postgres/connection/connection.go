@@ -31,7 +31,7 @@ func Init(
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&schemas.Stack{}, &schemas.Deployment{}, &schemas.Integration{})
+	err = db.AutoMigrate(&schemas.Stack{}, &schemas.Deployment{}, &schemas.Integration{}, &schemas.User{})
 	if err != nil {
 		logger.Errorf("Failed to auto migrate DB schemas", "err", err.Error())
 		return nil, err

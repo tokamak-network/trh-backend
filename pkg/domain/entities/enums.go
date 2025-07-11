@@ -36,3 +36,10 @@ const (
 	DeploymentStatusTerminated  DeploymentStatus = "Terminated"
 	DeploymentStatusUnknown     DeploymentStatus = "Unknown"
 )
+
+type UserRole string
+
+const (
+	UserRoleAdmin UserRole = "Admin"
+	UserRoleUser  UserRole = "User"
+)

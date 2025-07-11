@@ -22,12 +22,15 @@ type ThanosDeploymentHandler struct {
 }
 
 // @Summary      Deploy Thanos Stack
-// @Description  Deploy Thanos Stack
+// @Description  Deploy Thanos Stack (Admin only)
 // @Tags         Thanos Stack
 // @Accept       json
 // @Produce      json
+// @Security     BearerAuth
 // @Param        request  body      dtos.DeployThanosRequest  true  "Deploy Thanos Stack Request"
 // @Success      200      {object}  entities.Response
+// @Failure      401      {object}  map[string]interface{}
+// @Failure      403      {object}  map[string]interface{}
 // @Router       /stacks/thanos [post]
 func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 	var request dtos.DeployThanosRequest
@@ -195,11 +198,14 @@ func (h *ThanosDeploymentHandler) Resume(c *gin.Context) {
 }
 
 // @Summary      Get All Stacks
-// @Description  Get All Stacks
+// @Description  Get All Stacks (Authenticated users)
 // @Tags         Thanos Stack
 // @Accept       json
 // @Produce      json
+// @Security     BearerAuth
 // @Success      200      {object}  entities.Response
+// @Failure      401      {object}  map[string]interface{}
+// @Router       /stacks/thanos [get]
 // @Router       /stacks/thanos [get]
 func (h *ThanosDeploymentHandler) GetAllStacks(c *gin.Context) {
 	response, err := h.ThanosDeploymentService.GetAllStacks()
