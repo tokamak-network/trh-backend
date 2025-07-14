@@ -22,7 +22,7 @@ func (r *UserRepository) Create(user *schemas.User) error {
 
 func (r *UserRepository) FindByID(id uuid.UUID) (*schemas.User, error) {
 	var user schemas.User
-	err := r.db.Where("id = ?", id).First(&user).Error
+	err := r.db.Select("id, email, password, role, created_at, updated_at").Where("id = ?", id).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -34,7 +34,7 @@ func (r *UserRepository) FindByID(id uuid.UUID) (*schemas.User, error) {
 
 func (r *UserRepository) FindByEmail(email string) (*schemas.User, error) {
 	var user schemas.User
-	err := r.db.Where("email = ?", email).First(&user).Error
+	err := r.db.Select("id, email, password, role, created_at, updated_at").Where("email = ?", email).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -53,8 +53,15 @@ func (r *UserRepository) Delete(id uuid.UUID) error {
 }
 
 func (r *UserRepository) List(offset, limit int) ([]schemas.User, error) {
+	if limit <= 0 {
+		limit = 10 // Default limit
+	}
+	if limit > 100 {
+		limit = 100 // Maximum limit
+	}
+
 	var users []schemas.User
-	err := r.db.Offset(offset).Limit(limit).Find(&users).Error
+	err := r.db.Select("id, email, role, created_at, updated_at").Offset(offset).Limit(limit).Order("created_at DESC").Find(&users).Error
 	return users, err
 }
 

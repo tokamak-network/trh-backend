@@ -4,12 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
+
+// JSON encoder pool to reduce memory allocations
+var jsonEncoderPool = sync.Pool{
+	New: func() interface{} {
+		return json.NewEncoder(nil)
+	},
+}
 
 type StackRepository struct {
 	db *gorm.DB
@@ -127,18 +135,19 @@ func (r *StackRepository) GetStackByID(
 
 func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 	var stacks []schemas.Stack
-	err := r.db.Find(&stacks).Error
+	err := r.db.Select("id, name, network, config, metadata, deployment_path, status").Find(&stacks).Error
 	if err != nil {
 		return nil, err
 	}
-	stacksEntities := make([]*entities.StackEntity, len(stacks))
-	for i, stack := range stacks {
+
+	stacksEntities := make([]*entities.StackEntity, 0, len(stacks))
+	for _, stack := range stacks {
 		metadata, err := entities.FromJSONToStackMetadata(json.RawMessage(stack.Metadata))
 		if err != nil {
 			return nil, err
 		}
 
-		stacksEntities[i] = &entities.StackEntity{
+		stacksEntities = append(stacksEntities, &entities.StackEntity{
 			ID:             stack.ID,
 			Name:           stack.Name,
 			Network:        stack.Network,
@@ -146,7 +155,7 @@ func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 			Metadata:       metadata,
 			DeploymentPath: stack.DeploymentPath,
 			Status:         stack.Status,
-		}
+		})
 	}
 	return stacksEntities, nil
 }
