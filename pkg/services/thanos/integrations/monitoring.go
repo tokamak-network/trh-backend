@@ -244,7 +244,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	monitoringConfig, err := thanos.GetMonitoringConfig(ctx, thanosClient, req.GrafanaPassword)
+	monitoringConfig, err := thanos.GetMonitoringConfig(ctx, thanosClient, req.GrafanaPassword, req.AlertManager)
 	if err != nil {
 		logger.Error("failed to get monitoring config", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -253,7 +253,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	monitoringUrl, err := thanos.InstallMonitoring(ctx, thanosClient, monitoringConfig)
+	monitoringInfo, err := thanos.InstallMonitoring(ctx, thanosClient, monitoringConfig)
 	if err != nil {
 		logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -262,7 +262,15 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	if monitoringUrl == "" {
+	if monitoringInfo == nil {
+		logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
+		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, "Failed to install monitoring"); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(updateErr), zap.String("integrationId", monitoringIntegration.ID.String()))
+		}
+		return
+	}
+
+	if monitoringInfo.GrafanaURL == "" {
 		logger.Error("monitoring URL is empty", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, "Monitoring URL is empty"); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(updateErr), zap.String("integrationId", monitoringIntegration.ID.String()))
@@ -270,7 +278,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	logger.Debug("monitoring successfully installed", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.String("url", monitoringUrl))
+	logger.Debug("monitoring successfully installed", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.String("url", monitoringInfo.GrafanaURL))
 
 	config, err := json.Marshal(req)
 	if err != nil {
@@ -283,7 +291,12 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	monitoringMetadata := map[string]string{"url": monitoringUrl}
+	monitoringMetadata := map[string]interface{}{
+		"url":           monitoringInfo.GrafanaURL,
+		"username":      monitoringInfo.Username,
+		"password":      monitoringInfo.Password,
+		"alert_manager": monitoringConfig.AlertManager,
+	}
 	bytes, err := json.Marshal(monitoringMetadata)
 	if err != nil {
 		logger.Error("failed to marshal monitoring metadata", zap.Error(err))
@@ -295,7 +308,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	stack.Metadata.MonitoringUrl = monitoringUrl
+	stack.Metadata.MonitoringUrl = monitoringInfo.GrafanaURL
 	if err = m.stackRepo.UpdateMetadata(stackId, stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 		return

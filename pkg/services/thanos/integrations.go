@@ -13,6 +13,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
+	thanosTypes "github.com/tokamak-network/trh-sdk/pkg/types"
 	"go.uber.org/zap"
 )
 
@@ -623,7 +624,7 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 	}
 
 	var (
-		monitoringUrl string
+		monitoringInfo *thanosTypes.MonitoringInfo
 	)
 
 	logPath := utils.GetLogPath(stack.ID, "monitoring")
@@ -668,7 +669,7 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 			return
 		}
 
-		monitoringConfig, err := thanos.GetMonitoringConfig(ctx, sdkClient, req.GrafanaPassword)
+		monitoringConfig, err := thanos.GetMonitoringConfig(ctx, sdkClient, req.GrafanaPassword, req.AlertManager)
 		if err != nil {
 			logger.Error("failed to get monitoring config", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			err = s.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
@@ -679,7 +680,7 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 			return
 		}
 
-		monitoringUrl, err = thanos.InstallMonitoring(ctx, sdkClient, monitoringConfig)
+		monitoringInfo, err = thanos.InstallMonitoring(ctx, sdkClient, monitoringConfig)
 		if err != nil {
 			logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			err = s.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
@@ -690,7 +691,17 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 			return
 		}
 
-		if monitoringUrl == "" {
+		if monitoringInfo == nil {
+			logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
+			err = s.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, "Failed to install monitoring")
+			if err != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err), zap.String("integrationId", monitoringIntegration.ID.String()))
+				return
+			}
+			return
+		}
+
+		if monitoringInfo.GrafanaURL == "" {
 			logger.Error("monitoring URL is empty", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
 			err = s.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, "Monitoring URL is empty")
 			if err != nil {
@@ -700,7 +711,7 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 			return
 		}
 
-		logger.Debug("monitoring successfully installed", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.String("url", monitoringUrl))
+		logger.Debug("monitoring successfully installed", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.String("url", monitoringInfo.GrafanaURL))
 		// create integration
 		config, err := json.Marshal(req)
 		if err != nil {
@@ -717,8 +728,11 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 			return
 		}
 
-		monitoringMetadata := map[string]string{
-			"url": monitoringUrl,
+		monitoringMetadata := map[string]interface{}{
+			"url":           monitoringInfo.GrafanaURL,
+			"username":      monitoringInfo.Username,
+			"password":      monitoringInfo.Password,
+			"alert_manager": monitoringConfig.AlertManager,
 		}
 		bytes, err := json.Marshal(monitoringMetadata)
 		if err != nil {
@@ -733,7 +747,7 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(
 			logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 			return
 		}
-		stack.Metadata.MonitoringUrl = monitoringUrl
+		stack.Metadata.MonitoringUrl = monitoringInfo.GrafanaURL
 
 		err = s.stackRepo.UpdateMetadata(
 			stackId.String(),
