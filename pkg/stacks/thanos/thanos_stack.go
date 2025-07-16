@@ -169,15 +169,37 @@ func GetMonitoringConfig(
 	ctx context.Context,
 	s *thanosStack.ThanosStack,
 	password string,
-) (*thanosStack.MonitoringConfig, error) {
-	return s.GetMonitoringConfig(ctx, password)
+	alertManager dtos.AlertManagerConfig,
+) (*thanosTypes.MonitoringConfig, error) {
+	telegramReceivers := make([]thanosTypes.TelegramReceiver, len(alertManager.Telegram.CriticalReceivers))
+	for i, receiver := range alertManager.Telegram.CriticalReceivers {
+		telegramReceivers[i] = thanosTypes.TelegramReceiver{
+			ChatId: receiver.ChatId,
+		}
+	}
+
+	thanosAlertManagerConfig := thanosTypes.AlertManagerConfig{
+		Telegram: thanosTypes.TelegramConfig{
+			Enabled:           alertManager.Telegram.Enabled,
+			ApiToken:          alertManager.Telegram.ApiToken,
+			CriticalReceivers: telegramReceivers,
+		},
+		Email: thanosTypes.EmailConfig{
+			Enabled:          alertManager.Email.Enabled,
+			SmtpSmarthost:    alertManager.Email.SmtpSmarthost,
+			SmtpFrom:         alertManager.Email.SmtpFrom,
+			SmtpAuthUsername: alertManager.Email.SmtpAuthUsername,
+			SmtpAuthPassword: alertManager.Email.SmtpAuthPassword,
+		},
+	}
+	return s.GetMonitoringConfig(ctx, password, thanosAlertManagerConfig)
 }
 
 func InstallMonitoring(
 	ctx context.Context,
 	s *thanosStack.ThanosStack,
-	config *thanosStack.MonitoringConfig,
-) (string, error) {
+	config *thanosTypes.MonitoringConfig,
+) (*thanosTypes.MonitoringInfo, error) {
 	return s.InstallMonitoring(ctx, config)
 }
 

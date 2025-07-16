@@ -1,0 +1,346 @@
+package thanos
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/internal/utils"
+	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	"github.com/tokamak-network/trh-backend/pkg/enum"
+	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
+	"go.uber.org/zap"
+)
+
+// New helper method to handle deployment logic
+func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context, stackId uuid.UUID) {
+	logger.Info("Updating stacks status to creating", zap.String("stackId", stackId.String()))
+
+	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusDeploying, "")
+	if err != nil {
+		logger.Error("failed to update stacks status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
+
+	err = s.deployThanosStack(ctx, stackId)
+	if err != nil {
+		if err == context.Canceled {
+			return
+		}
+		logger.Error("failed to deploy thanos stacks",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+
+		// Update stacks status to failed
+		updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusFailedToDeploy, err.Error())
+		if updateErr != nil {
+			logger.Error("failed to update stacks status",
+				zap.String("stackId", stackId.String()),
+				zap.Error(updateErr))
+		}
+
+		err = s.integrationRepo.UpdateIntegrationsStatusByStackID(stackId.String(), entities.DeploymentStatusFailed)
+		if err != nil {
+			logger.Error("failed to update integrations status", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
+		}
+
+		return
+	}
+
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack by id", zap.String("stackId", stackId.String()))
+		return
+	}
+
+	// Update stacks status to active on success
+	updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusDeployed, "")
+	if updateErr != nil {
+		logger.Error("failed to update stacks status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(updateErr))
+	}
+
+	config, err := json.Marshal(stack.Config)
+	if err != nil {
+		logger.Error("failed to marshal stack config", zap.Error(err))
+		return
+	}
+	var stackConfig dtos.DeployThanosRequest
+	if err := json.Unmarshal(config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.Error(err))
+		return
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "information")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
+
+	// Get chain information
+	chainInformation, err := thanos.ShowChainInformation(ctx, sdkClient)
+	if err != nil || chainInformation == nil {
+		logger.Error("failed to show chain information", zap.Error(err))
+		return
+	}
+
+	err = s.stackRepo.UpdateMetadata(stackId.String(), &entities.StackMetadata{
+		L2Url:            chainInformation.L2RpcUrl,
+		BridgeUrl:        chainInformation.BridgeUrl,
+		BlockExplorerUrl: chainInformation.BlockExplorer,
+	})
+	if err != nil {
+		logger.Error("failed to update stack metadata", zap.Error(err))
+		return
+	}
+
+	bridgeUrl := chainInformation.BridgeUrl
+	if bridgeUrl == "" {
+		logger.Error("bridge url is empty", zap.String("stackId", stackId.String()))
+		return
+	}
+
+	// bridgeIntegration
+	bridgeIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeBridge.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		return
+	}
+
+	if bridgeIntegration == nil {
+		logger.Error("bridge integration not found", zap.String("plugin", enum.IntegrationTypeBridge.String()))
+		return
+	}
+
+	metadata := map[string]string{
+		"url": bridgeUrl,
+	}
+
+	bytes, err := json.Marshal(metadata)
+	if err != nil {
+		logger.Error("failed to marshal bridge metadata", zap.Error(err))
+		return
+	}
+
+	err = s.integrationRepo.UpdateMetadataAfterInstalled(
+		bridgeIntegration.ID.String(),
+		entities.IntegrationInfo(bytes),
+	)
+
+	if err != nil {
+		logger.Error("failed to create integration", zap.Error(err))
+		return
+	}
+
+	if stackConfig.RegisterCandidate {
+		registerCandidateIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeRegisterCandidate.String())
+		if err != nil {
+			logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+			return
+		}
+
+		if registerCandidateIntegration == nil {
+			logger.Error("register candidate integration not found", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()))
+			return
+		}
+
+		registerCandidateInfo, err := thanos.GetRegisterCandidatesInfo(ctx, sdkClient, stackConfig.RegisterCandidateParams)
+		if err != nil {
+			logger.Error("failed to get register candidate info", zap.Error(err))
+			return
+		}
+
+		bytes, err := json.Marshal(registerCandidateInfo)
+		if err != nil {
+			logger.Error("failed to marshal register candidate info", zap.Error(err))
+			return
+		}
+
+		err = s.integrationRepo.UpdateMetadataAfterInstalled(
+			registerCandidateIntegration.ID.String(),
+			bytes,
+		)
+
+		if err != nil {
+			logger.Error("failed to update register candidate integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+			return
+		}
+	}
+
+	logger.Info("Thanos stack deployed successfully",
+		zap.String("stackId", stackId.String()),
+	)
+}
+
+func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, stackId uuid.UUID) error {
+	statusChan := make(chan entities.DeploymentStatusWithID)
+	defer close(statusChan)
+
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return fmt.Errorf("failed to get stack: %w", err)
+	}
+
+	if stack == nil {
+		return fmt.Errorf("stack %s not found", stackId)
+	}
+
+	var deploymentConfig dtos.DeployThanosRequest
+	if err := json.Unmarshal(stack.Config, &deploymentConfig); err != nil {
+		return fmt.Errorf("failed to unmarshal stack config: %w", err)
+	}
+
+	deployments, err := s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
+	if err != nil {
+		return fmt.Errorf("failed to get deployments: %w", err)
+	}
+
+	if len(deployments) == 0 {
+		return fmt.Errorf("no deployments found for stacks %s", stackId)
+	}
+
+	// Start a goroutine to handle status updates
+	errChan := make(chan error, 1)
+	go func() {
+		for status := range statusChan {
+			if err := s.deploymentRepo.UpdateDeploymentStatus(status.DeploymentID.String(), status.Status); err != nil {
+				errChan <- fmt.Errorf("failed to update deployment status: %w", err)
+				return
+			}
+			// If we've processed all deployments successfully, send nil to errChan
+			if status.Status == entities.DeploymentStatusCompleted {
+				select {
+				case errChan <- nil:
+				default:
+				}
+			}
+		}
+	}()
+
+	for _, deployment := range deployments {
+		logger.Info("Processing deployment",
+			zap.String("deploymentId", deployment.ID.String()),
+			zap.String("status", string(deployment.Status)),
+			zap.Int("step", deployment.Step))
+
+		// Skip already completed deployments
+		if deployment.Status == entities.DeploymentStatusCompleted {
+			continue
+		}
+
+		sdkClient, err := thanos.NewThanosSDKClient(
+			ctx,
+			deployment.LogPath,
+			string(stack.Network),
+			stack.DeploymentPath,
+			deploymentConfig.RegisterCandidate,
+			deploymentConfig.AwsAccessKey,
+			deploymentConfig.AwsSecretAccessKey,
+			deploymentConfig.AwsRegion,
+		)
+		if err != nil {
+			logger.Error("failed to create thanos sdk client",
+				zap.String("deploymentId", deployment.ID.String()),
+				zap.Error(err))
+			statusChan <- entities.DeploymentStatusWithID{
+				DeploymentID: deployment.ID,
+				Status:       entities.DeploymentStatusFailed,
+			}
+			return err
+		}
+
+		// Update status to in-progress before starting deployment
+		statusChan <- entities.DeploymentStatusWithID{
+			DeploymentID: deployment.ID,
+			Status:       entities.DeploymentStatusInProgress,
+		}
+
+		switch deployment.Step {
+		case 1:
+			var deployL1ContractsConfig dtos.DeployL1ContractsRequest
+			if err := json.Unmarshal(deployment.Config, &deployL1ContractsConfig); err != nil {
+				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
+			}
+
+			if err := thanos.DeployL1Contracts(ctx, sdkClient, &deployL1ContractsConfig); err != nil {
+				if err == context.Canceled {
+					logger.Info("deployment cancelled",
+						zap.String("deploymentId", deployment.ID.String()),
+						zap.Int("step", deployment.Step))
+					statusChan <- entities.DeploymentStatusWithID{
+						DeploymentID: deployment.ID,
+						Status:       entities.DeploymentStatusStopped,
+					}
+					return err
+				}
+				logger.Error("deployment failed",
+					zap.String("deploymentId", deployment.ID.String()),
+					zap.Int("step", deployment.Step),
+					zap.Error(err))
+				statusChan <- entities.DeploymentStatusWithID{
+					DeploymentID: deployment.ID,
+					Status:       entities.DeploymentStatusFailed,
+				}
+				return err
+			}
+			statusChan <- entities.DeploymentStatusWithID{
+				DeploymentID: deployment.ID,
+				Status:       entities.DeploymentStatusCompleted,
+			}
+		case 2:
+			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
+			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
+				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
+			}
+
+			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
+				if err == context.Canceled {
+					logger.Info("deployment cancelled",
+						zap.String("deploymentId", deployment.ID.String()),
+						zap.Int("step", deployment.Step))
+					statusChan <- entities.DeploymentStatusWithID{
+						DeploymentID: deployment.ID,
+						Status:       entities.DeploymentStatusStopped,
+					}
+					return err
+				}
+				logger.Error("deployment failed",
+					zap.String("deploymentId", deployment.ID.String()),
+					zap.Int("step", deployment.Step),
+					zap.Error(err))
+				statusChan <- entities.DeploymentStatusWithID{
+					DeploymentID: deployment.ID,
+					Status:       entities.DeploymentStatusFailed,
+				}
+				return err
+			}
+			statusChan <- entities.DeploymentStatusWithID{
+				DeploymentID: deployment.ID,
+				Status:       entities.DeploymentStatusCompleted,
+			}
+		}
+
+	}
+
+	// Wait for final status update
+	return <-errChan
+}

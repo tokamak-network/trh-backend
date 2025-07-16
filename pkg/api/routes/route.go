@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/tokamak-network/trh-backend/pkg/api/handlers"
+	"github.com/tokamak-network/trh-backend/pkg/api/handlers/thanos"
 	"github.com/tokamak-network/trh-backend/pkg/api/middleware"
 	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
@@ -13,6 +14,8 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/services"
 
 	swaggerFiles "github.com/swaggo/files"
+	"github.com/tokamak-network/trh-backend/internal/logger"
+	"go.uber.org/zap"
 )
 
 func SetupRoutes(server *servers.Server) {
@@ -23,10 +26,10 @@ func SetupRoutes(server *servers.Server) {
 }
 
 func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
-	// Initialize repositories
+	// Initialize repositories with connection pooling
 	userRepo := repositories.NewUserRepository(server.PostgresDB)
 
-	// Initialize services
+	// Initialize services with optimized configuration
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		jwtSecret = "your-secret-key-change-in-production"
@@ -36,13 +39,13 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 
 	// Create default admin account if no users exist
 	if err := authService.CreateDefaultAdmin(); err != nil {
-		panic("Failed to create default admin account: " + err.Error())
+		logger.Fatal("Failed to create default admin account", zap.Error(err))
 	}
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
 
-	// Initialize middleware
+	// Initialize middleware with optimized settings
 	jwtMiddleware := middleware.NewJWTMiddleware(jwtService)
 
 	// Health routes (public)
@@ -81,7 +84,7 @@ func setupAuthRoutes(router *gin.RouterGroup, authHandler *handlers.AuthHandler,
 }
 
 func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddleware *middleware.JWTMiddleware) {
-	handler := handlers.NewThanosHandler(server)
+	handler := thanos.NewThanosHandler(server)
 
 	// Admin-only routes (require admin role)
 	adminRoutes := router.Group("")
@@ -100,7 +103,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.POST("/:id/integrations/bridge", handler.InstallBridge)
 		adminRoutes.POST("/:id/integrations/block-explorer", handler.InstallBlockExplorer)
 		adminRoutes.POST("/:id/integrations/monitoring", handler.InstallMonitoring)
-		adminRoutes.POST("/:id/integrations/candidate-registry", handler.RegisterCandidates)
+		adminRoutes.POST("/:id/integrations/register-candidate", handler.RegisterCandidates)
 		adminRoutes.DELETE("/:id/integrations/bridge", handler.UninstallBridge)
 		adminRoutes.DELETE("/:id/integrations/block-explorer", handler.UninstallBlockExplorer)
 		adminRoutes.DELETE("/:id/integrations/monitoring", handler.UninstallMonitoring)

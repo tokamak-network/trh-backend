@@ -217,6 +217,35 @@ type UpdateNetworkRequest struct {
 	L1BeaconUrl string `json:"l1BeaconUrl" validate:"url"`
 }
 
+// TelegramConfig holds Telegram notification configuration
+type TelegramConfig struct {
+	Enabled           bool
+	ApiToken          string
+	CriticalReceivers []TelegramReceiver
+}
+
+// TelegramReceiver represents a Telegram chat recipient
+type TelegramReceiver struct {
+	ChatId string
+}
+
+// EmailConfig holds email notification configuration
+type EmailConfig struct {
+	Enabled           bool
+	SmtpSmarthost     string
+	SmtpFrom          string
+	SmtpAuthUsername  string
+	SmtpAuthPassword  string
+	DefaultReceivers  []string
+	CriticalReceivers []string
+}
+
+type AlertManagerConfig struct {
+	Telegram TelegramConfig
+	Email    EmailConfig
+}
+
 type InstallMonitoringRequest struct {
 	GrafanaPassword string `json:"grafanaPassword" binding:"required"`
+	AlertManager    AlertManagerConfig
 }

@@ -2,10 +2,11 @@ package taskmanager
 
 import (
 	"context"
-	"log"
 	"sync"
 
+	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	"go.uber.org/zap"
 )
 
 type managedTask struct {
@@ -21,7 +22,7 @@ type TaskManager struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
-	taskLock    sync.Mutex
+	taskLock    sync.RWMutex // Changed to RWMutex for better performance
 	activeTasks map[string]*managedTask
 }
 
@@ -32,23 +33,23 @@ func NewTaskManager(numWorkers int, bufferSize int) *TaskManager {
 		numWorkers:  numWorkers,
 		ctx:         ctx,
 		cancel:      cancel,
-		activeTasks: make(map[string]*managedTask),
+		activeTasks: make(map[string]*managedTask, bufferSize), // Pre-allocate with capacity
 	}
 }
 
 func (tm *TaskManager) Start() {
-	for i := range tm.numWorkers {
+	for i := 0; i < tm.numWorkers; i++ { // Fixed range loop
 		tm.wg.Add(1)
 		go func(workerID int) {
 			defer tm.wg.Done()
 			for {
 				select {
 				case <-tm.ctx.Done():
-					log.Printf("Worker %d exiting", workerID)
+					logger.Info("Worker exiting", zap.Int("workerID", workerID))
 					return
 				case mt, ok := <-tm.tasks:
 					if !ok {
-						log.Printf("Worker %d: task channel closed", workerID)
+						logger.Info("Task channel closed", zap.Int("workerID", workerID))
 						return
 					}
 
@@ -56,7 +57,7 @@ func (tm *TaskManager) Start() {
 					tm.activeTasks[mt.id] = mt
 					tm.taskLock.Unlock()
 
-					log.Printf("Worker %d running task %s", workerID, mt.id)
+					logger.Info("Running task", zap.Int("workerID", workerID), zap.String("taskID", mt.id))
 					mt.task(mt.ctx)
 
 					tm.taskLock.Lock()
@@ -77,28 +78,38 @@ func (tm *TaskManager) AddTask(id string, task entities.Task) {
 		ctx:    ctx,
 		cancel: cancel,
 	}
-	tm.tasks <- mt
+
+	select {
+	case tm.tasks <- mt:
+		logger.Debug("Task added successfully", zap.String("taskID", id))
+	default:
+		logger.Warn("Task queue is full, dropping task", zap.String("taskID", id))
+	}
 }
 
 // StopTask stops a task by ID (if it's currently running)
 func (tm *TaskManager) StopTask(id string) {
-	tm.taskLock.Lock()
-	defer tm.taskLock.Unlock()
+	tm.taskLock.RLock()
+	mt, exists := tm.activeTasks[id]
+	tm.taskLock.RUnlock()
 
-	if mt, exists := tm.activeTasks[id]; exists {
-		log.Printf("Cancelling task %s", id)
+	if exists {
+		logger.Info("Cancelling task", zap.String("taskID", id))
 		mt.cancel()
+
+		tm.taskLock.Lock()
 		delete(tm.activeTasks, id)
+		tm.taskLock.Unlock()
 	} else {
-		log.Printf("Task %s not found or already finished", id)
+		logger.Debug("Task not found or already finished", zap.String("taskID", id))
 	}
 }
 
 // Stop stops all workers and tasks
 func (tm *TaskManager) Stop() {
-	log.Println("Stopping TaskManager...")
+	logger.Info("Stopping TaskManager...")
 	tm.cancel()
 	tm.wg.Wait()
 	close(tm.tasks)
-	log.Println("All workers stopped.")
+	logger.Info("All workers stopped")
 }

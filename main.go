@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/tokamak-network/trh-backend/docs"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -14,8 +18,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
-
-	_ "github.com/tokamak-network/trh-backend/docs"
 )
 
 // @title           TRH Backend
@@ -30,7 +32,6 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
 func main() {
-
 	logger.Init()
 
 	// Load .env file if it exists (optional for Docker runtime)
@@ -38,17 +39,12 @@ func main() {
 		logger.Infof("No .env file found, using environment variables: %s", err)
 	}
 
-	port := os.Getenv("PORT")
-
-	if port == "" {
-		port = "8000"
-	}
-
-	postgresUser := os.Getenv("POSTGRES_USER")
-	postgresHost := os.Getenv("POSTGRES_HOST")
-	postgresPassword := os.Getenv("POSTGRES_PASSWORD")
-	postgresDatabase := os.Getenv("POSTGRES_DB")
-	postgresPort := os.Getenv("POSTGRES_PORT")
+	port := getEnv("PORT", "8000")
+	postgresUser := getEnv("POSTGRES_USER", "postgres")
+	postgresHost := getEnv("POSTGRES_HOST", "localhost")
+	postgresPassword := getEnv("POSTGRES_PASSWORD", "postgres")
+	postgresDatabase := getEnv("POSTGRES_DB", "postgres")
+	postgresPort := getEnv("POSTGRES_PORT", "5432")
 
 	postgresDB, err := connection.Init(
 		postgresUser,
@@ -70,18 +66,48 @@ func main() {
 	docs.SwaggerInfo.BasePath = "/api/v1"
 
 	server := servers.NewServer(postgresDB)
+
+	// Configure CORS with optimized settings
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"*"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"*"}
+	config.MaxAge = 12 * time.Hour // Cache preflight requests
 
 	server.Use(cors.New(config))
 
 	routes.SetupRoutes(server)
 
-	err = server.Start(port)
-	if err != nil {
-		logger.Error("Failed to start server", zap.Error(err))
-		log.Fatal(err)
+	// Start server in a goroutine
+	go func() {
+		logger.Infof("Starting server on port %s", port)
+		if err := server.Start(port); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start server", zap.Error(err))
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("Shutting down server...")
+
+	// Create a deadline for server shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
+
+	logger.Info("Server exited")
+}
+
+// getEnv gets an environment variable or returns a default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
