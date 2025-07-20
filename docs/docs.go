@@ -15,6 +15,174 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/auth/login": {
+            "post": {
+                "description": "Login user with email and password",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login user",
+                "parameters": [
+                    {
+                        "description": "Login request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get current user profile information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get user profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.UserResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get paginated list of all users",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get all users (Admin only)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default: 10, max: 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Get health",
@@ -40,7 +208,12 @@ const docTemplate = `{
         },
         "/stacks/thanos": {
             "get": {
-                "description": "Get All Stacks",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get All Stacks (Authenticated users)",
                 "consumes": [
                     "application/json"
                 ],
@@ -57,11 +230,23 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/entities.Response"
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
                     }
                 }
             },
             "post": {
-                "description": "Deploy Thanos Stack",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deploy Thanos Stack (Admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -88,6 +273,20 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/entities.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -709,6 +908,28 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dtos.AlertManagerConfig": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "$ref": "#/definitions/dtos.EmailConfig"
+                },
+                "telegram": {
+                    "$ref": "#/definitions/dtos.TelegramConfig"
+                }
+            }
+        },
+        "dtos.AuthResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/dtos.UserResponse"
+                }
+            }
+        },
         "dtos.DeployThanosRequest": {
             "type": "object",
             "required": [
@@ -802,6 +1023,38 @@ const docTemplate = `{
                 }
             }
         },
+        "dtos.EmailConfig": {
+            "type": "object",
+            "properties": {
+                "criticalReceivers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "defaultReceivers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "smtpAuthPassword": {
+                    "type": "string"
+                },
+                "smtpAuthUsername": {
+                    "type": "string"
+                },
+                "smtpFrom": {
+                    "type": "string"
+                },
+                "smtpSmarthost": {
+                    "type": "string"
+                }
+            }
+        },
         "dtos.InstallBlockExplorerRequest": {
             "type": "object",
             "required": [
@@ -831,7 +1084,25 @@ const docTemplate = `{
                 "grafanaPassword"
             ],
             "properties": {
+                "alertManager": {
+                    "$ref": "#/definitions/dtos.AlertManagerConfig"
+                },
                 "grafanaPassword": {
+                    "type": "string"
+                }
+            }
+        },
+        "dtos.LoginRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
                     "type": "string"
                 }
             }
@@ -855,6 +1126,31 @@ const docTemplate = `{
                 }
             }
         },
+        "dtos.TelegramConfig": {
+            "type": "object",
+            "properties": {
+                "apiToken": {
+                    "type": "string"
+                },
+                "criticalReceivers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dtos.TelegramReceiver"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "dtos.TelegramReceiver": {
+            "type": "object",
+            "properties": {
+                "chatId": {
+                    "type": "string"
+                }
+            }
+        },
         "dtos.UpdateNetworkRequest": {
             "type": "object",
             "properties": {
@@ -863,6 +1159,20 @@ const docTemplate = `{
                 },
                 "l1RpcUrl": {
                     "type": "string"
+                }
+            }
+        },
+        "dtos.UserResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/entities.UserRole"
                 }
             }
         },
@@ -890,11 +1200,25 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
+        },
+        "entities.UserRole": {
+            "type": "string",
+            "enum": [
+                "Admin",
+                "User"
+            ],
+            "x-enum-varnames": [
+                "UserRoleAdmin",
+                "UserRoleUser"
+            ]
         }
     },
     "securityDefinitions": {
-        "NoAuth": {
-            "type": "basic"
+        "BearerAuth": {
+            "description": "Type \"Bearer\" followed by a space and JWT token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

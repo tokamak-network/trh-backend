@@ -12,14 +12,14 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
-// @Summary      Register Candidates
-// @Description  Register Candidates
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/register-candidates [post]
+// @Summary		Register Candidates
+// @Description	Register Candidates
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/register-candidates [post]
 func (h *ThanosDeploymentHandler) RegisterCandidates(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

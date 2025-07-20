@@ -13,17 +13,17 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
-// @Summary      Deploy Thanos Stack
-// @Description  Deploy Thanos Stack (Admin only)
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        request  body      dtos.DeployThanosRequest  true  "Deploy Thanos Stack Request"
-// @Success      200      {object}  entities.Response
-// @Failure      401      {object}  map[string]interface{}
-// @Failure      403      {object}  map[string]interface{}
-// @Router       /stacks/thanos [post]
+// @Summary		Deploy Thanos Stack
+// @Description	Deploy Thanos Stack (Admin only)
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			request	body		dtos.DeployThanosRequest	true	"Deploy Thanos Stack Request"
+// @Success		200		{object}	entities.Response
+// @Failure		401		{object}	map[string]interface{}
+// @Failure		403		{object}	map[string]interface{}
+// @Router			/stacks/thanos [post]
 func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 	var request dtos.DeployThanosRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -78,14 +78,14 @@ func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Stop Thanos Stack
-// @Description  Stop Thanos Stack
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/stop [post]
+// @Summary		Stop Thanos Stack
+// @Description	Stop Thanos Stack
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/stop [post]
 func (h *ThanosDeploymentHandler) Stop(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -103,14 +103,14 @@ func (h *ThanosDeploymentHandler) Stop(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Resume Thanos Stack
-// @Description  Resume Thanos Stack
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/resume [post]
+// @Summary		Resume Thanos Stack
+// @Description	Resume Thanos Stack
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/resume [post]
 func (h *ThanosDeploymentHandler) Resume(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -128,14 +128,14 @@ func (h *ThanosDeploymentHandler) Resume(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Terminate Thanos Stack
-// @Description  Terminate Thanos Stack
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id} [delete]
+// @Summary		Terminate Thanos Stack
+// @Description	Terminate Thanos Stack
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id} [delete]
 func (h *ThanosDeploymentHandler) Terminate(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

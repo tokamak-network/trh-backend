@@ -11,14 +11,14 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
-// @Summary      Get Deployments
-// @Description  Get Deployments
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/deployments [get]
+// @Summary		Get Deployments
+// @Description	Get Deployments
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/deployments [get]
 func (h *ThanosDeploymentHandler) GetDeployments(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -36,15 +36,15 @@ func (h *ThanosDeploymentHandler) GetDeployments(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Get Stack Deployment
-// @Description  Get Stack Deployment
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Param        deploymentId   path      string  true  "Deployment ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/deployments/{deploymentId} [get]
+// @Summary		Get Stack Deployment
+// @Description	Get Stack Deployment
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id				path		string	true	"Thanos Stack ID"
+// @Param			deploymentId	path		string	true	"Deployment ID"
+// @Success		200				{object}	entities.Response
+// @Router			/stacks/thanos/{id}/deployments/{deploymentId} [get]
 func (h *ThanosDeploymentHandler) GetStackDeployment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -74,15 +74,15 @@ func (h *ThanosDeploymentHandler) GetStackDeployment(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Get Stack Deployment Status
-// @Description  Get Stack Deployment Status
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Param        deploymentId   path      string  true  "Deployment ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/deployments/{deploymentId}/status [get]
+// @Summary		Get Stack Deployment Status
+// @Description	Get Stack Deployment Status
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id				path		string	true	"Thanos Stack ID"
+// @Param			deploymentId	path		string	true	"Deployment ID"
+// @Success		200				{object}	entities.Response
+// @Router			/stacks/thanos/{id}/deployments/{deploymentId}/status [get]
 func (h *ThanosDeploymentHandler) GetStackDeploymentStatus(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

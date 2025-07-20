@@ -12,15 +12,15 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
-// @Summary      Update Network
-// @Description  Update Network
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Param        request  body      dtos.UpdateNetworkRequest  true  "Update Network Request"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id} [put]
+// @Summary		Update Network
+// @Description	Update Network
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id		path		string						true	"Thanos Stack ID"
+// @Param			request	body		dtos.UpdateNetworkRequest	true	"Update Network Request"
+// @Success		200		{object}	entities.Response
+// @Router			/stacks/thanos/{id} [put]
 func (h *ThanosDeploymentHandler) UpdateNetwork(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

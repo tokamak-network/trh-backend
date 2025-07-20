@@ -1,5 +1,19 @@
 basePath: /api/v1
 definitions:
+  dtos.AlertManagerConfig:
+    properties:
+      email:
+        $ref: '#/definitions/dtos.EmailConfig'
+      telegram:
+        $ref: '#/definitions/dtos.TelegramConfig'
+    type: object
+  dtos.AuthResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/dtos.UserResponse'
+    type: object
   dtos.DeployThanosRequest:
     properties:
       adminAccount:
@@ -68,6 +82,27 @@ definitions:
     - proposerAccount
     - sequencerAccount
     type: object
+  dtos.EmailConfig:
+    properties:
+      criticalReceivers:
+        items:
+          type: string
+        type: array
+      defaultReceivers:
+        items:
+          type: string
+        type: array
+      enabled:
+        type: boolean
+      smtpAuthPassword:
+        type: string
+      smtpAuthUsername:
+        type: string
+      smtpFrom:
+        type: string
+      smtpSmarthost:
+        type: string
+    type: object
   dtos.InstallBlockExplorerRequest:
     properties:
       coinmarketcapKey:
@@ -86,10 +121,22 @@ definitions:
     type: object
   dtos.InstallMonitoringRequest:
     properties:
+      alertManager:
+        $ref: '#/definitions/dtos.AlertManagerConfig'
       grafanaPassword:
         type: string
     required:
     - grafanaPassword
+    type: object
+  dtos.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
     type: object
   dtos.RegisterCandidateRequest:
     properties:
@@ -104,12 +151,37 @@ definitions:
     - amount
     - memo
     type: object
+  dtos.TelegramConfig:
+    properties:
+      apiToken:
+        type: string
+      criticalReceivers:
+        items:
+          $ref: '#/definitions/dtos.TelegramReceiver'
+        type: array
+      enabled:
+        type: boolean
+    type: object
+  dtos.TelegramReceiver:
+    properties:
+      chatId:
+        type: string
+    type: object
   dtos.UpdateNetworkRequest:
     properties:
       l1BeaconUrl:
         type: string
       l1RpcUrl:
         type: string
+    type: object
+  dtos.UserResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: string
+      role:
+        $ref: '#/definitions/entities.UserRole'
     type: object
   entities.DeploymentNetwork:
     enum:
@@ -129,6 +201,14 @@ definitions:
       status:
         type: integer
     type: object
+  entities.UserRole:
+    enum:
+    - Admin
+    - User
+    type: string
+    x-enum-varnames:
+    - UserRoleAdmin
+    - UserRoleUser
 host: localhost:${PORT}
 info:
   contact: {}
@@ -136,6 +216,117 @@ info:
   title: TRH Backend
   version: "1.0"
 paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Login user with email and password
+      parameters:
+      - description: Login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Login user
+      tags:
+      - auth
+  /api/v1/auth/profile:
+    get:
+      consumes:
+      - application/json
+      description: Get current user profile information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - auth
+  /api/v1/auth/users:
+    get:
+      consumes:
+      - application/json
+      description: Get paginated list of all users
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get all users (Admin only)
+      tags:
+      - auth
   /health:
     get:
       consumes:
@@ -155,7 +346,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get All Stacks
+      description: Get All Stacks (Authenticated users)
       produces:
       - application/json
       responses:
@@ -163,13 +354,20 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/entities.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
       summary: Get All Stacks
       tags:
       - Thanos Stack
     post:
       consumes:
       - application/json
-      description: Deploy Thanos Stack
+      description: Deploy Thanos Stack (Admin only)
       parameters:
       - description: Deploy Thanos Stack Request
         in: body
@@ -184,6 +382,18 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/entities.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
       summary: Deploy Thanos Stack
       tags:
       - Thanos Stack
@@ -594,6 +804,9 @@ paths:
       tags:
       - Thanos Stack
 securityDefinitions:
-  NoAuth:
-    type: basic
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

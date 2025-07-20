@@ -12,14 +12,14 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
-// @Summary      Get Integrations
-// @Description  Get Integrations
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/integrations [get]
+// @Summary		Get Integrations
+// @Description	Get Integrations
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations [get]
 func (h *ThanosDeploymentHandler) GetIntegrations(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -37,15 +37,15 @@ func (h *ThanosDeploymentHandler) GetIntegrations(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Get Integration By ID
-// @Description  Get Integration By ID
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Param        integrationId   path      string  true  "Integration ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/integrations/{integrationId} [get]
+// @Summary		Get Integration By ID
+// @Description	Get Integration By ID
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id				path		string	true	"Thanos Stack ID"
+// @Param			integrationId	path		string	true	"Integration ID"
+// @Success		200				{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/{integrationId} [get]
 func (h *ThanosDeploymentHandler) GetIntegrationById(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -75,14 +75,14 @@ func (h *ThanosDeploymentHandler) GetIntegrationById(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Install Bridge
-// @Description  Install Bridge
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/integrations/bridge [post]
+// @Summary		Install Bridge
+// @Description	Install Bridge
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/bridge [post]
 func (h *ThanosDeploymentHandler) InstallBridge(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -101,14 +101,14 @@ func (h *ThanosDeploymentHandler) InstallBridge(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Uninstall Bridge
-// @Description  Uninstall Bridge
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/integrations/bridge [delete]
+// @Summary		Uninstall Bridge
+// @Description	Uninstall Bridge
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/bridge [delete]
 func (h *ThanosDeploymentHandler) UninstallBridge(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -127,15 +127,15 @@ func (h *ThanosDeploymentHandler) UninstallBridge(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Install Block Explorer
-// @Description  Install Block Explorer
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Param        request  body      dtos.InstallBlockExplorerRequest  true  "Install Block Explorer Request"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/integrations/block-explorer [post]
+// @Summary		Install Block Explorer
+// @Description	Install Block Explorer
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id		path		string								true	"Thanos Stack ID"
+// @Param			request	body		dtos.InstallBlockExplorerRequest	true	"Install Block Explorer Request"
+// @Success		200		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/block-explorer [post]
 func (h *ThanosDeploymentHandler) InstallBlockExplorer(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -164,14 +164,14 @@ func (h *ThanosDeploymentHandler) InstallBlockExplorer(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Uninstall Block Explorer
-// @Description  Uninstall Block Explorer
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/integrations/block-explorer [delete]
+// @Summary		Uninstall Block Explorer
+// @Description	Uninstall Block Explorer
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/block-explorer [delete]
 func (h *ThanosDeploymentHandler) UninstallBlockExplorer(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -190,15 +190,15 @@ func (h *ThanosDeploymentHandler) UninstallBlockExplorer(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Install Monitoring
-// @Description  Install Monitoring
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Param        request  body      dtos.InstallMonitoringRequest  true  "Install Monitoring Request"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/integrations/monitoring [post]
+// @Summary		Install Monitoring
+// @Description	Install Monitoring
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id		path		string							true	"Thanos Stack ID"
+// @Param			request	body		dtos.InstallMonitoringRequest	true	"Install Monitoring Request"
+// @Success		200		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/monitoring [post]
 func (h *ThanosDeploymentHandler) InstallMonitoring(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -227,14 +227,14 @@ func (h *ThanosDeploymentHandler) InstallMonitoring(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
-// @Summary      Uninstall Monitoring
-// @Description  Uninstall Monitoring
-// @Tags         Thanos Stack
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "Thanos Stack ID"
-// @Success      200      {object}  entities.Response
-// @Router       /stacks/thanos/{id}/integrations/monitoring [delete]
+// @Summary		Uninstall Monitoring
+// @Description	Uninstall Monitoring
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/monitoring [delete]
 func (h *ThanosDeploymentHandler) UninstallMonitoring(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

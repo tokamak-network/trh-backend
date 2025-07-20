@@ -20,17 +20,17 @@ import (
 	"go.uber.org/zap"
 )
 
-// @title           TRH Backend
-// @version         1.0
-// @description     TRH Backend API
+//	@title			TRH Backend
+//	@version		1.0
+//	@description	TRH Backend API
 
-// @host      localhost:${PORT}
-// @BasePath  /api/v1
+//	@host		localhost:${PORT}
+//	@BasePath	/api/v1
 
-// @securityDefinitions.apikey BearerAuth
-// @in header
-// @name Authorization
-// @description Type "Bearer" followed by a space and JWT token.
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				Type "Bearer" followed by a space and JWT token.
 func main() {
 	logger.Init()
 
