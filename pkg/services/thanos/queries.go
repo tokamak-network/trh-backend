@@ -3,13 +3,19 @@ package thanos
 import (
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"go.uber.org/zap"
 )
 
-func (s *ThanosStackDeploymentService) GetAllStacks() (*entities.Response, error) {
+func (s *ThanosStackDeploymentService) GetAllStacks(c *gin.Context) (*entities.Response, error) {
+	userIDStr, exists := c.Get("user_id")
+	var userID uuid.UUID
+	if exists {
+		userID, _ = uuid.Parse(userIDStr.(string))
+	}
 	stacks, err := s.stackRepo.GetAllStacks()
 	if err != nil {
 		logger.Error("failed to get stacks", zap.Error(err))
@@ -19,11 +25,17 @@ func (s *ThanosStackDeploymentService) GetAllStacks() (*entities.Response, error
 			Data:    nil,
 		}, err
 	}
-
+	// Filter stacks by deployer_id
+	userStacks := make([]*entities.StackEntity, 0)
+	for _, stack := range stacks {
+		if stack.DeployerID == userID {
+			userStacks = append(userStacks, stack)
+		}
+	}
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",
-		Data:    map[string]interface{}{"stacks": stacks},
+		Data:    map[string]interface{}{"stacks": userStacks},
 	}, nil
 }
 
@@ -63,10 +75,7 @@ func (s *ThanosStackDeploymentService) GetStackStatus(stackId uuid.UUID) (*entit
 	}, nil
 }
 
-func (s *ThanosStackDeploymentService) GetDeployments(
-	stackId uuid.UUID,
-) (*entities.Response, error) {
-
+func (s *ThanosStackDeploymentService) GetDeployments(c *gin.Context, stackId uuid.UUID) (*entities.Response, error) {
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
@@ -76,7 +85,6 @@ func (s *ThanosStackDeploymentService) GetDeployments(
 			Data:    nil,
 		}, err
 	}
-
 	if stack == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
@@ -84,7 +92,17 @@ func (s *ThanosStackDeploymentService) GetDeployments(
 			Data:    nil,
 		}, nil
 	}
-
+	userIDStr, exists := c.Get("user_id")
+	if exists {
+		userID, _ := uuid.Parse(userIDStr.(string))
+		if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+			return &entities.Response{
+				Status:  http.StatusForbidden,
+				Message: "You are not authorized to access this stack's deployments.",
+				Data:    nil,
+			}, nil
+		}
+	}
 	deployments, err := s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get deployments", zap.String("stackId", stackId.String()), zap.Error(err))
@@ -94,7 +112,6 @@ func (s *ThanosStackDeploymentService) GetDeployments(
 			Data:    nil,
 		}, err
 	}
-
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",
@@ -102,9 +119,34 @@ func (s *ThanosStackDeploymentService) GetDeployments(
 	}, nil
 }
 
-func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(
-	deploymentId uuid.UUID,
-) (*entities.Response, error) {
+func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(c *gin.Context, stackId uuid.UUID, deploymentId uuid.UUID) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+	userIDStr, exists := c.Get("user_id")
+	if exists {
+		userID, _ := uuid.Parse(userIDStr.(string))
+		if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+			return &entities.Response{
+				Status:  http.StatusForbidden,
+				Message: "You are not authorized to access this stack's deployments.",
+				Data:    nil,
+			}, nil
+		}
+	}
 	status, err := s.deploymentRepo.GetDeploymentStatus(deploymentId.String())
 	if err != nil {
 		logger.Error("failed to get deployment status", zap.String("deploymentId", deploymentId.String()), zap.Error(err))
@@ -114,7 +156,6 @@ func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(
 			Data:    nil,
 		}, err
 	}
-
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",
@@ -122,10 +163,34 @@ func (s *ThanosStackDeploymentService) GetStackDeploymentStatus(
 	}, nil
 }
 
-func (s *ThanosStackDeploymentService) GetStackDeployment(
-	_ uuid.UUID,
-	deploymentId uuid.UUID,
-) (*entities.Response, error) {
+func (s *ThanosStackDeploymentService) GetStackDeployment(c *gin.Context, stackId uuid.UUID, deploymentId uuid.UUID) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+	userIDStr, exists := c.Get("user_id")
+	if exists {
+		userID, _ := uuid.Parse(userIDStr.(string))
+		if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+			return &entities.Response{
+				Status:  http.StatusForbidden,
+				Message: "You are not authorized to access this stack's deployments.",
+				Data:    nil,
+			}, nil
+		}
+	}
 	deployment, err := s.deploymentRepo.GetDeploymentByID(deploymentId.String())
 	if err != nil {
 		logger.Error("failed to get deployment", zap.String("deploymentId", deploymentId.String()), zap.Error(err))
@@ -135,7 +200,6 @@ func (s *ThanosStackDeploymentService) GetStackDeployment(
 			Data:    nil,
 		}, err
 	}
-
 	if deployment == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
@@ -143,7 +207,6 @@ func (s *ThanosStackDeploymentService) GetStackDeployment(
 			Data:    nil,
 		}, nil
 	}
-
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",
@@ -152,6 +215,7 @@ func (s *ThanosStackDeploymentService) GetStackDeployment(
 }
 
 func (s *ThanosStackDeploymentService) GetStackByID(
+	c *gin.Context,
 	stackId uuid.UUID,
 ) (*entities.Response, error) {
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
@@ -170,6 +234,19 @@ func (s *ThanosStackDeploymentService) GetStackByID(
 			Message: "Stack not found",
 			Data:    nil,
 		}, nil
+	}
+
+	// Secure: Only deployer can access
+	userIDStr, exists := c.Get("user_id")
+	if exists {
+		userID, _ := uuid.Parse(userIDStr.(string))
+		if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+			return &entities.Response{
+				Status:  http.StatusForbidden,
+				Message: "You are not authorized to access this stack.",
+				Data:    nil,
+			}, nil
+		}
 	}
 
 	return &entities.Response{
@@ -179,9 +256,7 @@ func (s *ThanosStackDeploymentService) GetStackByID(
 	}, nil
 }
 
-func (s *ThanosStackDeploymentService) GetIntegrations(
-	stackId uuid.UUID,
-) (*entities.Response, error) {
+func (s *ThanosStackDeploymentService) GetIntegrations(c *gin.Context, stackId uuid.UUID) (*entities.Response, error) {
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
@@ -191,13 +266,23 @@ func (s *ThanosStackDeploymentService) GetIntegrations(
 			Data:    nil,
 		}, err
 	}
-
 	if stack == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
 			Message: "Stack not found",
 			Data:    nil,
 		}, nil
+	}
+	userIDStr, exists := c.Get("user_id")
+	if exists {
+		userID, _ := uuid.Parse(userIDStr.(string))
+		if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+			return &entities.Response{
+				Status:  http.StatusForbidden,
+				Message: "You are not authorized to access this stack's integrations.",
+				Data:    nil,
+			}, nil
+		}
 	}
 	integrations, err := s.integrationRepo.GetActiveIntegrationsByStackID(stackId.String())
 	if err != nil {
@@ -215,10 +300,34 @@ func (s *ThanosStackDeploymentService) GetIntegrations(
 	}, nil
 }
 
-func (s *ThanosStackDeploymentService) GetIntegration(
-	stackId uuid.UUID,
-	integrationId uuid.UUID,
-) (*entities.Response, error) {
+func (s *ThanosStackDeploymentService) GetIntegration(c *gin.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+	userIDStr, exists := c.Get("user_id")
+	if exists {
+		userID, _ := uuid.Parse(userIDStr.(string))
+		if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+			return &entities.Response{
+				Status:  http.StatusForbidden,
+				Message: "You are not authorized to access this stack's integrations.",
+				Data:    nil,
+			}, nil
+		}
+	}
 	integration, err := s.integrationRepo.GetIntegrationById(integrationId.String())
 	if err != nil {
 		logger.Error("failed to get integrations", zap.String("stackId", stackId.String()), zap.Error(err))
@@ -228,7 +337,6 @@ func (s *ThanosStackDeploymentService) GetIntegration(
 			Data:    nil,
 		}, err
 	}
-
 	if integration == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
@@ -236,7 +344,6 @@ func (s *ThanosStackDeploymentService) GetIntegration(
 			Data:    nil,
 		}, nil
 	}
-
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",

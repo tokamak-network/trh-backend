@@ -21,7 +21,7 @@ import (
 // @Failure		401	{object}	map[string]interface{}
 // @Router			/stacks/thanos [get]
 func (h *ThanosDeploymentHandler) GetAllStacks(c *gin.Context) {
-	response, err := h.ThanosDeploymentService.GetAllStacks()
+	response, err := h.ThanosDeploymentService.GetAllStacks(c)
 	if err != nil {
 		logger.Error("failed to get all stacks", zap.Error(err))
 	}
@@ -71,7 +71,7 @@ func (h *ThanosDeploymentHandler) GetStackByID(c *gin.Context) {
 		})
 		return
 	}
-	response, err := h.ThanosDeploymentService.GetStackByID(uuid.MustParse(id))
+	response, err := h.ThanosDeploymentService.GetStackByID(c, uuid.MustParse(id))
 	if err != nil {
 		logger.Error("failed to get stack by id", zap.Error(err), zap.String("id", id))
 	}

@@ -41,4 +41,5 @@ type StackEntity struct {
 	DeploymentPath string            `json:"deployment_path"`
 	Metadata       *StackMetadata    `json:"metadata"`
 	Status         StackStatus       `json:"status"`
+	DeployerID     uuid.UUID         `json:"deployer_id"`
 }

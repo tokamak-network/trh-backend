@@ -29,7 +29,7 @@ func (h *ThanosDeploymentHandler) GetDeployments(c *gin.Context) {
 		})
 		return
 	}
-	response, err := h.ThanosDeploymentService.GetDeployments(uuid.MustParse(id))
+	response, err := h.ThanosDeploymentService.GetDeployments(c, uuid.MustParse(id))
 	if err != nil {
 		logger.Error("failed to get deployments", zap.Error(err), zap.String("id", id))
 	}
@@ -64,10 +64,7 @@ func (h *ThanosDeploymentHandler) GetStackDeployment(c *gin.Context) {
 		})
 		return
 	}
-	response, err := h.ThanosDeploymentService.GetStackDeployment(
-		uuid.MustParse(id),
-		uuid.MustParse(deploymentId),
-	)
+	response, err := h.ThanosDeploymentService.GetStackDeployment(c, uuid.MustParse(id), uuid.MustParse(deploymentId))
 	if err != nil {
 		logger.Error("failed to get stack deployment", zap.Error(err), zap.String("id", id), zap.String("deploymentId", deploymentId))
 	}
@@ -102,7 +99,7 @@ func (h *ThanosDeploymentHandler) GetStackDeploymentStatus(c *gin.Context) {
 		})
 		return
 	}
-	response, err := h.ThanosDeploymentService.GetStackDeploymentStatus(uuid.MustParse(deploymentId))
+	response, err := h.ThanosDeploymentService.GetStackDeploymentStatus(c, uuid.MustParse(id), uuid.MustParse(deploymentId))
 	if err != nil {
 		logger.Error("failed to get stack deployment status", zap.Error(err), zap.String("id", id), zap.String("deploymentId", deploymentId))
 	}

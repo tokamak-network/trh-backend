@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
@@ -31,6 +32,16 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 			Data:    nil,
 		}, err
 	}
+
+	// Extract deployer_id from context
+	var deployerID uuid.UUID
+	if ginCtx, ok := ctx.(*gin.Context); ok {
+		userIDStr, exists := ginCtx.Get("user_id")
+		if exists {
+			deployerID, _ = uuid.Parse(userIDStr.(string))
+		}
+	}
+
 	stack := &entities.StackEntity{
 		ID:             stackId,
 		Name:           s.name,
@@ -38,6 +49,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		Config:         config,
 		DeploymentPath: deploymentPath,
 		Status:         entities.StackStatusPending,
+		DeployerID:     deployerID,
 	}
 
 	// We install the bridge by default
@@ -94,6 +106,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 }
 
 func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	ginCtx, _ := ctx.(*gin.Context)
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		return &entities.Response{
@@ -102,13 +115,25 @@ func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Cont
 			Data:    nil,
 		}, err
 	}
-
 	if stack == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
 			Message: "Stack not found",
 			Data:    nil,
 		}, nil
+	}
+	if ginCtx != nil {
+		userIDStr, exists := ginCtx.Get("user_id")
+		if exists {
+			userID, _ := uuid.Parse(userIDStr.(string))
+			if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+				return &entities.Response{
+					Status:  http.StatusForbidden,
+					Message: "You are not authorized to stop this stack.",
+					Data:    nil,
+				}, nil
+			}
+		}
 	}
 
 	if stack.Status != entities.StackStatusDeploying {
@@ -141,6 +166,7 @@ func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Cont
 }
 
 func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	ginCtx, _ := ctx.(*gin.Context)
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		return &entities.Response{
@@ -149,13 +175,25 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 			Data:    nil,
 		}, err
 	}
-
 	if stack == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
 			Message: "Stack not found",
 			Data:    nil,
 		}, nil
+	}
+	if ginCtx != nil {
+		userIDStr, exists := ginCtx.Get("user_id")
+		if exists {
+			userID, _ := uuid.Parse(userIDStr.(string))
+			if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+				return &entities.Response{
+					Status:  http.StatusForbidden,
+					Message: "You are not authorized to resume this stack.",
+					Data:    nil,
+				}, nil
+			}
+		}
 	}
 
 	if stack.Status != entities.StackStatusStopped &&
@@ -180,6 +218,7 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 }
 
 func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackId uuid.UUID, request dtos.UpdateNetworkRequest) (*entities.Response, error) {
+	ginCtx, _ := ctx.(*gin.Context)
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		return &entities.Response{
@@ -188,13 +227,25 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 			Data:    nil,
 		}, err
 	}
-
 	if stack == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
 			Message: "Stack not found",
 			Data:    nil,
 		}, nil
+	}
+	if ginCtx != nil {
+		userIDStr, exists := ginCtx.Get("user_id")
+		if exists {
+			userID, _ := uuid.Parse(userIDStr.(string))
+			if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+				return &entities.Response{
+					Status:  http.StatusForbidden,
+					Message: "You are not authorized to update this stack.",
+					Data:    nil,
+				}, nil
+			}
+		}
 	}
 
 	if stack.Status != entities.StackStatusDeployed {
@@ -266,7 +317,7 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 }
 
 func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	// Check if stacks exists
+	ginCtx, _ := ctx.(*gin.Context)
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		return &entities.Response{
@@ -274,6 +325,28 @@ func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context,
 			Message: "Internal server error",
 			Data:    nil,
 		}, err
+	}
+	if ginCtx != nil {
+		userIDStr, exists := ginCtx.Get("user_id")
+		if exists {
+			userID, _ := uuid.Parse(userIDStr.(string))
+			if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+				return &entities.Response{
+					Status:  http.StatusForbidden,
+					Message: "You are not authorized to terminate this stack.",
+					Data:    nil,
+				}, nil
+			}
+		}
+	}
+
+	// Check if stacks exists
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
 	}
 
 	// Check if stacks is in a valid state to be terminated

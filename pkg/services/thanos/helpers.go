@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
@@ -81,6 +82,13 @@ func getThanosStackDeployments(
 }
 
 func (s *ThanosStackDeploymentService) RegisterCandidate(ctx context.Context, stackId uuid.UUID, req dtos.RegisterCandidateRequest) (*entities.Response, error) {
+	var userID uuid.UUID
+	if ginCtx, ok := ctx.(*gin.Context); ok {
+		userIDStr, exists := ginCtx.Get("user_id")
+		if exists {
+			userID, _ = uuid.Parse(userIDStr.(string))
+		}
+	}
 	stack, err := s.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get stack by id", zap.Error(err))
@@ -90,11 +98,17 @@ func (s *ThanosStackDeploymentService) RegisterCandidate(ctx context.Context, st
 			Data:    nil,
 		}, err
 	}
-
 	if stack == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
 			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+	if stack.DeployerID != uuid.Nil && userID != uuid.Nil && stack.DeployerID != userID {
+		return &entities.Response{
+			Status:  http.StatusForbidden,
+			Message: "You are not authorized to register candidates for this stack.",
 			Data:    nil,
 		}, nil
 	}

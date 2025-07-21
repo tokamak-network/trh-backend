@@ -130,6 +130,7 @@ func (r *StackRepository) GetStackByID(
 		Metadata:       metadata,
 		DeploymentPath: stack.DeploymentPath,
 		Status:         stack.Status,
+		DeployerID:     stack.DeployerID,
 	}, nil
 }
 
@@ -155,6 +156,7 @@ func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 			Metadata:       metadata,
 			DeploymentPath: stack.DeploymentPath,
 			Status:         stack.Status,
+			DeployerID:     stack.DeployerID,
 		})
 	}
 	return stacksEntities, nil
@@ -179,5 +181,6 @@ func ToStackEntity(s *entities.StackEntity) *schemas.Stack {
 		Config:         datatypes.JSON(s.Config),
 		DeploymentPath: s.DeploymentPath,
 		Status:         s.Status,
+		DeployerID:     s.DeployerID,
 	}
 }

@@ -30,7 +30,7 @@ func (h *ThanosDeploymentHandler) GetIntegrations(c *gin.Context) {
 		})
 		return
 	}
-	response, err := h.ThanosDeploymentService.GetIntegrations(uuid.MustParse(id))
+	response, err := h.ThanosDeploymentService.GetIntegrations(c, uuid.MustParse(id))
 	if err != nil {
 		logger.Error("failed to get integrations", zap.Error(err), zap.String("id", id))
 	}
@@ -65,10 +65,7 @@ func (h *ThanosDeploymentHandler) GetIntegrationById(c *gin.Context) {
 		})
 		return
 	}
-	response, err := h.ThanosDeploymentService.GetIntegration(
-		uuid.MustParse(id),
-		uuid.MustParse(integrationId),
-	)
+	response, err := h.ThanosDeploymentService.GetIntegration(c, uuid.MustParse(id), uuid.MustParse(integrationId))
 	if err != nil {
 		logger.Error("failed to get integration", zap.Error(err), zap.String("id", id), zap.String("integrationId", integrationId))
 	}
