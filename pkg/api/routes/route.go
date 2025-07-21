@@ -67,6 +67,7 @@ func setupHealthRoutes(router *gin.RouterGroup) {
 func setupAuthRoutes(router *gin.RouterGroup, authHandler *handlers.AuthHandler, jwtMiddleware *middleware.JWTMiddleware) {
 	// Public routes
 	router.POST("/login", authHandler.Login)
+	router.POST("/signup", authHandler.Signup)
 
 	// Protected routes (any authenticated user)
 	protected := router.Group("")

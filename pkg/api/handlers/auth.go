@@ -55,6 +55,41 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// Signup godoc
+//
+//	@Summary		Signup user
+//	@Description	Register a new user with email and password
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		dtos.SignupRequest	true	"Signup request"
+//	@Success		200		{object}	dtos.UserResponse
+//	@Failure		400		{object}	map[string]interface{}
+//	@Failure		409		{object}	map[string]interface{}
+//	@Failure		500		{object}	map[string]interface{}
+//	@Router			/api/v1/auth/signup [post]
+func (h *AuthHandler) Signup(c *gin.Context) {
+	var req dtos.SignupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, err := h.authService.Signup(&req)
+	if err != nil {
+		switch err {
+		case dtos.ErrInvalidEmail, dtos.ErrPasswordRequired:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		// You may want to add a custom error for duplicate email
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
 // GetProfile godoc
 //
 //	@Summary		Get user profile

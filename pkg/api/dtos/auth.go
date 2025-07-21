@@ -36,6 +36,21 @@ type UserResponse struct {
 	Role  entities.UserRole `json:"role"`
 }
 
+type SignupRequest struct {
+	Email    string `json:"email" binding:"required" validate:"email"`
+	Password string `json:"password" binding:"required"`
+}
+
+func (r *SignupRequest) Validate() error {
+	if !emailRegex.MatchString(r.Email) {
+		return ErrInvalidEmail
+	}
+	if r.Password == "" {
+		return ErrPasswordRequired
+	}
+	return nil
+}
+
 // Custom errors
 var (
 	ErrInvalidEmail       = &ValidationError{Message: "invalid email format"}

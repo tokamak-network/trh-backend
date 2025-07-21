@@ -99,6 +99,41 @@ func (s *AuthService) Login(req *dtos.LoginRequest) (*dtos.AuthResponse, error) 
 	}, nil
 }
 
+func (s *AuthService) Signup(req *dtos.SignupRequest) (*dtos.UserResponse, error) {
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Check if user already exists
+	existingUser, err := s.userRepo.FindByEmail(req.Email)
+	if err != nil {
+		return nil, err
+	}
+	if existingUser != nil {
+		return nil, dtos.ErrInvalidEmail // Or a new error: ErrUserAlreadyExists
+	}
+
+	// Create user
+	user := &schemas.User{
+		Email:    req.Email,
+		Password: req.Password,
+		Role:     entities.UserRoleUser,
+	}
+	if err := user.HashPassword(); err != nil {
+		return nil, err
+	}
+	if err := s.userRepo.Create(user); err != nil {
+		return nil, err
+	}
+
+	return &dtos.UserResponse{
+		ID:    user.ID.String(),
+		Email: user.Email,
+		Role:  user.Role,
+	}, nil
+}
+
 func (s *AuthService) GetUserByID(userID uuid.UUID) (*dtos.UserResponse, error) {
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
