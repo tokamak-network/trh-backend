@@ -19,7 +19,7 @@ func NewAWSCredentialsService(repo *repositories.AWSCredentialsRepository) *AWSC
 	}
 }
 
-func (s *AWSCredentialsService) Create(req *dtos.CreateAWSCredentialsRequest) (*dtos.AWSCredentialsResponse, error) {
+func (s *AWSCredentialsService) Create(req *dtos.CreateAWSCredentialsRequest) (*dtos.AWSCredentialsCreateResponse, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -49,7 +49,9 @@ func (s *AWSCredentialsService) Create(req *dtos.CreateAWSCredentialsRequest) (*
 	}
 
 	// Convert to response
-	return s.entityToResponse(credentials), nil
+	return &dtos.AWSCredentialsCreateResponse{
+		Credential: *s.entityToResponse(credentials),
+	}, nil
 }
 
 func (s *AWSCredentialsService) GetByID(id uuid.UUID) (*dtos.AWSCredentialsResponse, error) {
@@ -78,7 +80,7 @@ func (s *AWSCredentialsService) GetAll() (*dtos.AWSCredentialsListResponse, erro
 	}, nil
 }
 
-func (s *AWSCredentialsService) Update(id uuid.UUID, req *dtos.UpdateAWSCredentialsRequest) (*dtos.AWSCredentialsResponse, error) {
+func (s *AWSCredentialsService) Update(id uuid.UUID, req *dtos.UpdateAWSCredentialsRequest) (*dtos.AWSCredentialsUpdateResponse, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -118,7 +120,9 @@ func (s *AWSCredentialsService) Update(id uuid.UUID, req *dtos.UpdateAWSCredenti
 		return nil, err
 	}
 
-	return s.entityToResponse(existing), nil
+	return &dtos.AWSCredentialsUpdateResponse{
+		Credential: *s.entityToResponse(existing),
+	}, nil
 }
 
 func (s *AWSCredentialsService) Delete(id uuid.UUID) error {

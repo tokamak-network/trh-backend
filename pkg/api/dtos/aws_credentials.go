@@ -9,8 +9,8 @@ import (
 
 type CreateAWSCredentialsRequest struct {
 	Name            string `json:"name" binding:"required"`
-	AccessKeyID     string `json:"access_key_id" binding:"required"`
-	SecretAccessKey string `json:"secret_access_key" binding:"required"`
+	AccessKeyID     string `json:"accessKeyId" binding:"required"`
+	SecretAccessKey string `json:"secretAccessKey" binding:"required"`
 }
 
 func (r *CreateAWSCredentialsRequest) Validate() error {
@@ -43,8 +43,8 @@ func (r *CreateAWSCredentialsRequest) Validate() error {
 
 type UpdateAWSCredentialsRequest struct {
 	Name            *string `json:"name,omitempty"`
-	AccessKeyID     *string `json:"access_key_id,omitempty"`
-	SecretAccessKey *string `json:"secret_access_key,omitempty"`
+	AccessKeyID     *string `json:"accessKeyId,omitempty"`
+	SecretAccessKey *string `json:"secretAccessKey,omitempty"`
 }
 
 func (r *UpdateAWSCredentialsRequest) Validate() error {
@@ -90,16 +90,24 @@ func (r *UpdateAWSCredentialsRequest) Validate() error {
 type AWSCredentialsResponse struct {
 	ID              uuid.UUID `json:"id"`
 	Name            string    `json:"name"`
-	AccessKeyID     string    `json:"access_key_id"`
-	SecretAccessKey string    `json:"secret_access_key"`
-	CreatedAt       string    `json:"created_at"`
-	UpdatedAt       string    `json:"updated_at"`
-	DeletedAt       *string   `json:"deleted_at,omitempty"`
+	AccessKeyID     string    `json:"accessKeyId"`
+	SecretAccessKey string    `json:"secretAccessKey"`
+	CreatedAt       string    `json:"createdAt"`
+	UpdatedAt       string    `json:"updatedAt"`
+	DeletedAt       *string   `json:"deletedAt,omitempty"`
 }
 
 type AWSCredentialsListResponse struct {
 	Credentials []AWSCredentialsResponse `json:"credentials"`
 	Total       int                      `json:"total"`
+}
+
+type AWSCredentialsCreateResponse struct {
+	Credential AWSCredentialsResponse `json:"credential"`
+}
+
+type AWSCredentialsUpdateResponse struct {
+	Credential AWSCredentialsResponse `json:"credential"`
 }
 
 // Custom errors

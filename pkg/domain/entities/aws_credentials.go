@@ -9,9 +9,9 @@ import (
 type AWSCredentialsEntity struct {
 	ID              uuid.UUID  `json:"id"`
 	Name            string     `json:"name"`
-	AccessKeyID     string     `json:"access_key_id"`
-	SecretAccessKey string     `json:"secret_access_key"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	DeletedAt       *time.Time `json:"deleted_at,omitempty"`
+	AccessKeyID     string     `json:"accessKeyId"`
+	SecretAccessKey string     `json:"secretAccessKey"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+	DeletedAt       *time.Time `json:"deletedAt,omitempty"`
 }

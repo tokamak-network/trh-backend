@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tokamak-network/trh-backend/pkg/api/middleware"
 	"gorm.io/gorm"
 )
 
@@ -50,6 +51,7 @@ func NewServer(db *gorm.DB) *Server {
 
 	// Use optimized middleware
 	app.Use(gin.Recovery())
+	app.Use(middleware.RequestLoggerMiddleware())
 
 	return &Server{
 		Router:     app,

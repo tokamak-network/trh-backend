@@ -1238,13 +1238,13 @@ const docTemplate = `{
         "dtos.AWSCredentialsResponse": {
             "type": "object",
             "properties": {
-                "access_key_id": {
+                "accessKeyId": {
                     "type": "string"
                 },
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "id": {
@@ -1253,10 +1253,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "secret_access_key": {
+                "secretAccessKey": {
                     "type": "string"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
                 }
             }
@@ -1286,18 +1286,18 @@ const docTemplate = `{
         "dtos.CreateAWSCredentialsRequest": {
             "type": "object",
             "required": [
-                "access_key_id",
+                "accessKeyId",
                 "name",
-                "secret_access_key"
+                "secretAccessKey"
             ],
             "properties": {
-                "access_key_id": {
+                "accessKeyId": {
                     "type": "string"
                 },
                 "name": {
                     "type": "string"
                 },
-                "secret_access_key": {
+                "secretAccessKey": {
                     "type": "string"
                 }
             }
@@ -1526,13 +1526,13 @@ const docTemplate = `{
         "dtos.UpdateAWSCredentialsRequest": {
             "type": "object",
             "properties": {
-                "access_key_id": {
+                "accessKeyId": {
                     "type": "string"
                 },
                 "name": {
                     "type": "string"
                 },
-                "secret_access_key": {
+                "secretAccessKey": {
                     "type": "string"
                 }
             }

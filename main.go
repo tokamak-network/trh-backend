@@ -70,7 +70,7 @@ func main() {
 	// Configure CORS with optimized settings
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"*"}
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"}
 	config.AllowHeaders = []string{"*"}
 	config.MaxAge = 12 * time.Hour // Cache preflight requests
 

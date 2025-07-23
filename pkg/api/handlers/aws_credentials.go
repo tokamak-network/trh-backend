@@ -5,9 +5,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/services"
+	"go.uber.org/zap"
 )
 
 type AWSCredentialsHandler struct {
@@ -37,6 +39,7 @@ func NewAWSCredentialsHandler(service *services.AWSCredentialsService) *AWSCrede
 func (h *AWSCredentialsHandler) Create(c *gin.Context) {
 	var req dtos.CreateAWSCredentialsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("failed to bind JSON", zap.Error(err))
 		c.JSON(http.StatusBadRequest, &entities.Response{
 			Status:  uint64(http.StatusBadRequest),
 			Message: err.Error(),
@@ -50,18 +53,21 @@ func (h *AWSCredentialsHandler) Create(c *gin.Context) {
 		switch err {
 		case dtos.ErrNameRequired, dtos.ErrAccessKeyIDRequired, dtos.ErrSecretAccessKeyRequired,
 			dtos.ErrInvalidAccessKeyID, dtos.ErrInvalidSecretAccessKey:
+			logger.Error("validation error", zap.Error(err))
 			c.JSON(http.StatusBadRequest, &entities.Response{
 				Status:  uint64(http.StatusBadRequest),
 				Message: err.Error(),
 				Data:    nil,
 			})
 		case dtos.ErrNameAlreadyExists:
+			logger.Error("name already exists", zap.Error(err))
 			c.JSON(http.StatusConflict, &entities.Response{
 				Status:  uint64(http.StatusConflict),
 				Message: err.Error(),
 				Data:    nil,
 			})
 		default:
+			logger.Error("internal server error", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, &entities.Response{
 				Status:  uint64(http.StatusInternalServerError),
 				Message: "internal server error",
