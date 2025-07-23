@@ -31,7 +31,7 @@ func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 //	@Failure		400		{object}	map[string]interface{}
 //	@Failure		401		{object}	map[string]interface{}
 //	@Failure		500		{object}	map[string]interface{}
-//	@Router			/api/v1/auth/login [post]
+//	@Router			/auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dtos.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -67,7 +67,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 //	@Failure		401	{object}	map[string]interface{}
 //	@Failure		404	{object}	map[string]interface{}
 //	@Failure		500	{object}	map[string]interface{}
-//	@Router			/api/v1/auth/profile [get]
+//	@Router			/auth/profile [get]
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	userIDStr, exists := c.Get("user_id")
 	if !exists {
@@ -109,7 +109,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 //	@Failure		401		{object}	map[string]interface{}
 //	@Failure		403		{object}	map[string]interface{}
 //	@Failure		500		{object}	map[string]interface{}
-//	@Router			/api/v1/auth/users [get]
+//	@Router			/auth/users [get]
 func (h *AuthHandler) GetUsers(c *gin.Context) {
 	// This would need to be implemented in the auth service
 	// For now, just return a placeholder response

@@ -1,5 +1,31 @@
 basePath: /api/v1
 definitions:
+  dtos.AWSCredentialsListResponse:
+    properties:
+      credentials:
+        items:
+          $ref: '#/definitions/dtos.AWSCredentialsResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  dtos.AWSCredentialsResponse:
+    properties:
+      access_key_id:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      secret_access_key:
+        type: string
+      updated_at:
+        type: string
+    type: object
   dtos.AlertManagerConfig:
     properties:
       email:
@@ -13,6 +39,19 @@ definitions:
         type: string
       user:
         $ref: '#/definitions/dtos.UserResponse'
+    type: object
+  dtos.CreateAWSCredentialsRequest:
+    properties:
+      access_key_id:
+        type: string
+      name:
+        type: string
+      secret_access_key:
+        type: string
+    required:
+    - access_key_id
+    - name
+    - secret_access_key
     type: object
   dtos.DeployThanosRequest:
     properties:
@@ -167,6 +206,15 @@ definitions:
       chatId:
         type: string
     type: object
+  dtos.UpdateAWSCredentialsRequest:
+    properties:
+      access_key_id:
+        type: string
+      name:
+        type: string
+      secret_access_key:
+        type: string
+    type: object
   dtos.UpdateNetworkRequest:
     properties:
       l1BeaconUrl:
@@ -216,7 +264,7 @@ info:
   title: TRH Backend
   version: "1.0"
 paths:
-  /api/v1/auth/login:
+  /auth/login:
     post:
       consumes:
       - application/json
@@ -253,7 +301,7 @@ paths:
       summary: Login user
       tags:
       - auth
-  /api/v1/auth/profile:
+  /auth/profile:
     get:
       consumes:
       - application/json
@@ -285,7 +333,7 @@ paths:
       summary: Get user profile
       tags:
       - auth
-  /api/v1/auth/users:
+  /auth/users:
     get:
       consumes:
       - application/json
@@ -327,6 +375,196 @@ paths:
       summary: Get all users (Admin only)
       tags:
       - auth
+  /aws-credentials:
+    get:
+      consumes:
+      - application/json
+      description: Get all AWS credentials (excluding soft deleted ones)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.AWSCredentialsListResponse'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Get all AWS credentials
+      tags:
+      - aws-credentials
+    post:
+      consumes:
+      - application/json
+      description: Create new AWS credentials with name, access key ID, and secret
+        access key
+      parameters:
+      - description: Create AWS credentials request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.CreateAWSCredentialsRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.AWSCredentialsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Create AWS credentials
+      tags:
+      - aws-credentials
+  /aws-credentials/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete AWS credentials by ID
+      parameters:
+      - description: AWS credentials ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Delete AWS credentials
+      tags:
+      - aws-credentials
+    get:
+      consumes:
+      - application/json
+      description: Get AWS credentials by their unique ID
+      parameters:
+      - description: AWS credentials ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.AWSCredentialsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Get AWS credentials by ID
+      tags:
+      - aws-credentials
+    patch:
+      consumes:
+      - application/json
+      description: Update existing AWS credentials by ID (partial update)
+      parameters:
+      - description: AWS credentials ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update AWS credentials request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.UpdateAWSCredentialsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.AWSCredentialsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Update AWS credentials
+      tags:
+      - aws-credentials
   /health:
     get:
       consumes:

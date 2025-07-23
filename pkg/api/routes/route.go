@@ -28,6 +28,7 @@ func SetupRoutes(server *servers.Server) {
 func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 	// Initialize repositories with connection pooling
 	userRepo := repositories.NewUserRepository(server.PostgresDB)
+	awsCredentialsRepo := repositories.NewAWSCredentialsRepository(server.PostgresDB)
 
 	// Initialize services with optimized configuration
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -36,6 +37,7 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 	}
 	jwtService := services.NewJWTService(jwtSecret)
 	authService := services.NewAuthService(userRepo, jwtService)
+	awsCredentialsService := services.NewAWSCredentialsService(awsCredentialsRepo)
 
 	// Create default admin account if no users exist
 	if err := authService.CreateDefaultAdmin(); err != nil {
@@ -44,6 +46,7 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
+	awsCredentialsHandler := handlers.NewAWSCredentialsHandler(awsCredentialsService)
 
 	// Initialize middleware with optimized settings
 	jwtMiddleware := middleware.NewJWTMiddleware(jwtService)
@@ -53,6 +56,9 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 
 	// Auth routes
 	setupAuthRoutes(router.Group("/auth"), authHandler, jwtMiddleware)
+
+	// AWS Credentials routes (protected)
+	setupAWSCredentialsRoutes(router.Group("/aws-credentials"), awsCredentialsHandler, jwtMiddleware)
 
 	// Stack routes (protected)
 	stacks := router.Group("/stacks")
@@ -80,6 +86,25 @@ func setupAuthRoutes(router *gin.RouterGroup, authHandler *handlers.AuthHandler,
 	admin.Use(jwtMiddleware.AuthMiddleware(entities.UserRoleAdmin))
 	{
 		admin.GET("/users", authHandler.GetUsers)
+	}
+}
+
+func setupAWSCredentialsRoutes(router *gin.RouterGroup, awsCredentialsHandler *handlers.AWSCredentialsHandler, jwtMiddleware *middleware.JWTMiddleware) {
+	// Admin-only routes (require admin role)
+	adminRoutes := router.Group("")
+	adminRoutes.Use(jwtMiddleware.AuthMiddleware(entities.UserRoleAdmin))
+	{
+		adminRoutes.POST("", awsCredentialsHandler.Create)
+		adminRoutes.PATCH("/:id", awsCredentialsHandler.Update)
+		adminRoutes.DELETE("/:id", awsCredentialsHandler.Delete)
+	}
+
+	// Authenticated routes (require valid JWT token - any role)
+	authenticatedRoutes := router.Group("")
+	authenticatedRoutes.Use(jwtMiddleware.AuthMiddleware())
+	{
+		authenticatedRoutes.GET("", awsCredentialsHandler.GetAll)
+		authenticatedRoutes.GET("/:id", awsCredentialsHandler.GetByID)
 	}
 }
 
