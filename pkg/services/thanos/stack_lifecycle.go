@@ -35,6 +35,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		ID:             stackId,
 		Name:           s.name,
 		Network:        request.Network,
+		Type:           enum.StackTypeOptimisticRollup.String(),
 		Config:         config,
 		DeploymentPath: deploymentPath,
 		Status:         entities.StackStatusPending,

@@ -125,6 +125,7 @@ func (r *StackRepository) GetStackByID(
 	return &entities.StackEntity{
 		ID:             stack.ID,
 		Name:           stack.Name,
+		Type:           stack.Type,
 		Network:        stack.Network,
 		Config:         json.RawMessage(stack.Config),
 		Metadata:       metadata,
@@ -135,7 +136,7 @@ func (r *StackRepository) GetStackByID(
 
 func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 	var stacks []schemas.Stack
-	err := r.db.Select("id, name, network, config, metadata, deployment_path, status").Find(&stacks).Error
+	err := r.db.Select("id, name, type, network, config, metadata, deployment_path, status").Find(&stacks).Error
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +151,7 @@ func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 		stacksEntities = append(stacksEntities, &entities.StackEntity{
 			ID:             stack.ID,
 			Name:           stack.Name,
+			Type:           stack.Type,
 			Network:        stack.Network,
 			Config:         json.RawMessage(stack.Config),
 			Metadata:       metadata,
@@ -175,6 +177,7 @@ func ToStackEntity(s *entities.StackEntity) *schemas.Stack {
 	return &schemas.Stack{
 		ID:             s.ID,
 		Name:           s.Name,
+		Type:           s.Type,
 		Network:        s.Network,
 		Config:         datatypes.JSON(s.Config),
 		DeploymentPath: s.DeploymentPath,

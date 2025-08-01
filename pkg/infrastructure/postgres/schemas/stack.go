@@ -11,6 +11,7 @@ import (
 type Stack struct {
 	ID             uuid.UUID                  `gorm:"type:uuid;primaryKey;default:gen_random_uuid();column:id"`
 	Name           string                     `gorm:"column:name"`
+	Type           string                     `gorm:"not null;column:type"`
 	Status         entities.StackStatus       `gorm:"not null;column:status"`
 	Reason         string                     `gorm:"column:reason"`
 	Network        entities.DeploymentNetwork `gorm:"not null;column:network"`

@@ -36,6 +36,7 @@ func FromJSONToStackMetadata(data json.RawMessage) (*StackMetadata, error) {
 type StackEntity struct {
 	ID             uuid.UUID         `json:"id"`
 	Name           string            `json:"name"`
+	Type           string            `json:"type"`
 	Network        DeploymentNetwork `json:"network"`
 	Config         json.RawMessage   `json:"config"`
 	DeploymentPath string            `json:"deployment_path"`
