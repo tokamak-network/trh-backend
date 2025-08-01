@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type User struct {
@@ -15,7 +16,7 @@ type User struct {
 	Role      entities.UserRole `gorm:"column:role;not null;default:'User'"`
 	CreatedAt time.Time         `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt time.Time         `gorm:"autoUpdateTime;column:updated_at"`
-	DeletedAt time.Time         `gorm:"autoUpdateTime;column:deleted_at"`
+	DeletedAt gorm.DeletedAt    `gorm:"column:deleted_at;default:null"`
 }
 
 func (User) TableName() string {

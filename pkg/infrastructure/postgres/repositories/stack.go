@@ -131,12 +131,15 @@ func (r *StackRepository) GetStackByID(
 		Metadata:       metadata,
 		DeploymentPath: stack.DeploymentPath,
 		Status:         stack.Status,
+		CreatedAt:      stack.CreatedAt,
+		UpdatedAt:      stack.UpdatedAt,
+		DeletedAt:      stack.DeletedAt,
 	}, nil
 }
 
 func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 	var stacks []schemas.Stack
-	err := r.db.Select("id, name, type, network, config, metadata, deployment_path, status").Find(&stacks).Error
+	err := r.db.Select("id, name, type, network, config, metadata, deployment_path, status, created_at, updated_at, deleted_at").Find(&stacks).Error
 	if err != nil {
 		return nil, err
 	}
@@ -157,6 +160,9 @@ func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 			Metadata:       metadata,
 			DeploymentPath: stack.DeploymentPath,
 			Status:         stack.Status,
+			CreatedAt:      stack.CreatedAt,
+			UpdatedAt:      stack.UpdatedAt,
+			DeletedAt:      stack.DeletedAt,
 		})
 	}
 	return stacksEntities, nil
@@ -182,5 +188,8 @@ func ToStackEntity(s *entities.StackEntity) *schemas.Stack {
 		Config:         datatypes.JSON(s.Config),
 		DeploymentPath: s.DeploymentPath,
 		Status:         s.Status,
+		CreatedAt:      s.CreatedAt,
+		UpdatedAt:      s.UpdatedAt,
+		DeletedAt:      s.DeletedAt,
 	}
 }

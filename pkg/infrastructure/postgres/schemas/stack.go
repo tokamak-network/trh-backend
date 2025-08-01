@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 type Stack struct {
@@ -20,7 +21,7 @@ type Stack struct {
 	Metadata       datatypes.JSON             `gorm:"type:jsonb;column:metadata"`
 	CreatedAt      time.Time                  `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt      time.Time                  `gorm:"autoUpdateTime;column:updated_at"`
-	DeletedAt      time.Time                  `gorm:"autoUpdateTime;column:deleted_at"`
+	DeletedAt      gorm.DeletedAt             `gorm:"column:deleted_at;default:null"`
 }
 
 func (Stack) TableName() string {
