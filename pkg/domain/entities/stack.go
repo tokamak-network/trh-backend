@@ -9,11 +9,15 @@ import (
 )
 
 type StackMetadata struct {
-	L2Url            string `json:"l2_url"`
-	BridgeUrl        string `json:"bridge_url,omitempty"`
-	BlockExplorerUrl string `json:"block_explorer_url,omitempty"`
-	L2ChainID        string `json:"l2_chain_id,omitempty"`
-	MonitoringUrl    string `json:"monitoring_url,omitempty"`
+	Layer1          string `json:"layer1"`
+	Layer2          string `json:"layer2"`
+	L2RpcUrl        string `json:"l2RpcUrl"`
+	BridgeUrl       string `json:"bridgeUrl,omitempty"`
+	L1ChainId       int    `json:"l1ChainId"`
+	L2ChainId       int    `json:"l2ChainId"`
+	GrafanaUrl      string `json:"grafanaUrl,omitempty"`
+	ExplorerUrl     string `json:"explorerUrl,omitempty"`
+	RollupConfigUrl string `json:"rollupConfigUrl,omitempty"`
 }
 
 func (m *StackMetadata) Marshal() ([]byte, error) {

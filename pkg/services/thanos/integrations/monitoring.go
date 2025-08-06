@@ -308,7 +308,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	stack.Metadata.MonitoringUrl = monitoringInfo.GrafanaURL
+	stack.Metadata.GrafanaUrl = monitoringInfo.GrafanaURL
 	if err = m.stackRepo.UpdateMetadata(stackId, stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 		return
@@ -349,7 +349,7 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 		return
 	}
 
-	stack.Metadata.MonitoringUrl = ""
+	stack.Metadata.GrafanaUrl = ""
 	if err = m.stackRepo.UpdateMetadata(stackId, stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 		return

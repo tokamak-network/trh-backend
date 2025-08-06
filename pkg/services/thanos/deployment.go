@@ -104,9 +104,11 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 	}
 
 	err = s.stackRepo.UpdateMetadata(stackId.String(), &entities.StackMetadata{
-		L2Url:            chainInformation.L2RpcUrl,
-		BridgeUrl:        chainInformation.BridgeUrl,
-		BlockExplorerUrl: chainInformation.BlockExplorer,
+		Layer1:      "Ethereum",
+		Layer2:      "Thanos Stack",
+		L2RpcUrl:    chainInformation.L2RpcUrl,
+		BridgeUrl:   chainInformation.BridgeUrl,
+		ExplorerUrl: chainInformation.BlockExplorer,
 	})
 	if err != nil {
 		logger.Error("failed to update stack metadata", zap.Error(err))

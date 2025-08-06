@@ -288,7 +288,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 		return
 	}
 
-	stack.Metadata.BlockExplorerUrl = blockExplorerUrl
+	stack.Metadata.ExplorerUrl = blockExplorerUrl
 	if err = b.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stack.ID.String()), zap.Error(err))
 		return
@@ -328,7 +328,7 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 		return
 	}
 
-	stack.Metadata.BlockExplorerUrl = ""
+	stack.Metadata.ExplorerUrl = ""
 	if err = b.stackRepo.UpdateMetadata(stackId, stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 		return
