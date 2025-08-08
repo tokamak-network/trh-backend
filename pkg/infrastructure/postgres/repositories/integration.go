@@ -77,8 +77,13 @@ func (r *IntegrationRepository) UpdateConfig(
 func (r *IntegrationRepository) UpdateIntegrationsStatusByStackID(
 	stackID string,
 	status entities.DeploymentStatus,
+	exceptStatuses []entities.DeploymentStatus,
 ) error {
-	return r.db.Model(&schemas.Integration{}).Where("stack_id = ?", stackID).Update("status", status).Error
+	query := r.db.Model(&schemas.Integration{}).Where("stack_id = ?", stackID)
+	if len(exceptStatuses) > 0 {
+		query = query.Where("status NOT IN (?)", exceptStatuses)
+	}
+	return query.Update("status", status).Error
 }
 
 func (r *IntegrationRepository) GetInstalledIntegration(

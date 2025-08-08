@@ -44,7 +44,7 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 				zap.Error(updateErr))
 		}
 
-		err = s.integrationRepo.UpdateIntegrationsStatusByStackID(stackId.String(), entities.DeploymentStatusFailed)
+		err = s.integrationRepo.UpdateIntegrationsStatusByStackID(stackId.String(), entities.DeploymentStatusFailed, []entities.DeploymentStatus{entities.DeploymentStatusTerminated})
 		if err != nil {
 			logger.Error("failed to update integrations status", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
