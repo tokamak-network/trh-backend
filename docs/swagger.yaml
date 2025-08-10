@@ -992,6 +992,36 @@ paths:
       summary: Install Monitoring
       tags:
       - Thanos Stack
+  /stacks/thanos/{id}/logs:
+    get:
+      consumes:
+      - application/json
+      description: Get logs across all deployments for a stack (paginated)
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 200
+        description: Max logs to return
+        in: query
+        name: limit
+        type: integer
+      - description: Return logs after this log id (exclusive)
+        in: query
+        name: afterId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Get Stack Logs
+      tags:
+      - Thanos Stack
   /stacks/thanos/{id}/register-candidates:
     post:
       consumes:
