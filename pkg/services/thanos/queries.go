@@ -151,6 +151,61 @@ func (s *ThanosStackDeploymentService) GetStackDeployment(
 	}, nil
 }
 
+func (s *ThanosStackDeploymentService) GetDeploymentLogs(
+	stackId uuid.UUID,
+	deploymentId uuid.UUID,
+	limit int,
+	afterID *string,
+) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Internal server error"}, err
+	}
+	if stack == nil {
+		return &entities.Response{Status: http.StatusNotFound, Message: "Stack not found"}, nil
+	}
+
+	logs, err := s.logRepo.GetLogsByDeploymentID(deploymentId.String(), limit, afterID)
+	if err != nil {
+		logger.Error("failed to get logs", zap.String("deploymentId", deploymentId.String()), zap.Error(err))
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Internal server error"}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"logs": logs},
+	}, nil
+}
+
+func (s *ThanosStackDeploymentService) GetStackLogs(
+	stackId uuid.UUID,
+	limit int,
+	afterID *string,
+) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Internal server error"}, err
+	}
+	if stack == nil {
+		return &entities.Response{Status: http.StatusNotFound, Message: "Stack not found"}, nil
+	}
+
+	logs, err := s.logRepo.GetLogsByStackID(stackId.String(), limit, afterID)
+	if err != nil {
+		logger.Error("failed to get logs", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Internal server error"}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    map[string]interface{}{"logs": logs},
+	}, nil
+}
+
 func (s *ThanosStackDeploymentService) GetStackByID(
 	stackId uuid.UUID,
 ) (*entities.Response, error) {

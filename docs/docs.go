@@ -777,6 +777,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/stacks/thanos/{id}/deployments/{deploymentId}/logs": {
+            "get": {
+                "description": "Get logs for a deployment (paginated)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Get Deployment Logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "deploymentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 200,
+                        "description": "Max logs to return",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Return logs after this log id (exclusive)",
+                        "name": "afterId",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/stacks/thanos/{id}/deployments/{deploymentId}/status": {
             "get": {
                 "description": "Get Stack Deployment Status",

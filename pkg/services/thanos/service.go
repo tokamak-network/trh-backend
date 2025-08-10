@@ -16,6 +16,7 @@ type ThanosStackDeploymentService struct {
 	integrationRepo IntegrationRepository
 	taskManager     TaskManager
 	integrationMgr  *integrations.IntegrationManager
+	logRepo         LogRepository
 }
 
 // taskManagerWrapper wraps TaskManager to match the interface expected by IntegrationManager
@@ -32,6 +33,7 @@ func NewThanosService(
 	stackRepo StackRepository,
 	integrationRepo IntegrationRepository,
 	taskManager TaskManager,
+	logRepo LogRepository,
 ) *ThanosStackDeploymentService {
 	taskManagerWrapper := &taskManagerWrapper{taskManager: taskManager}
 
@@ -42,6 +44,7 @@ func NewThanosService(
 		integrationRepo: integrationRepo,
 		taskManager:     taskManager,
 		integrationMgr:  integrations.NewIntegrationManager(stackRepo, integrationRepo, taskManagerWrapper),
+		logRepo:         logRepo,
 	}
 
 	thanosDeploymentSrv.taskManager.Start()

@@ -287,6 +287,10 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
 			}
 
+			// Start log ingestion for this deployment step
+			ingestCtx, cancel := context.WithCancel(ctx)
+			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
+
 			if err := thanos.DeployL1Contracts(ctx, sdkClient, &deployL1ContractsConfig); err != nil {
 				if err == context.Canceled {
 					logger.Info("deployment cancelled",
@@ -296,6 +300,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 						DeploymentID: deployment.ID,
 						Status:       entities.DeploymentStatusStopped,
 					}
+					cancel()
 					return err
 				}
 				logger.Error("deployment failed",
@@ -306,17 +311,23 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentStatusFailed,
 				}
+				cancel()
 				return err
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
 				Status:       entities.DeploymentStatusCompleted,
 			}
+			cancel()
 		case 2:
 			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
 			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
 			}
+
+			// Start log ingestion for this deployment step
+			ingestCtx, cancel := context.WithCancel(ctx)
+			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
 
 			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
 				if err == context.Canceled {
@@ -327,6 +338,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 						DeploymentID: deployment.ID,
 						Status:       entities.DeploymentStatusStopped,
 					}
+					cancel()
 					return err
 				}
 				logger.Error("deployment failed",
@@ -337,12 +349,14 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentStatusFailed,
 				}
+				cancel()
 				return err
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
 				Status:       entities.DeploymentStatusCompleted,
 			}
+			cancel()
 		}
 
 	}

@@ -147,5 +147,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		authenticatedRoutes.GET("/:id/integrations/:integrationId", handler.GetIntegrationById)
 		authenticatedRoutes.GET("/:id/deployments/:deploymentId", handler.GetStackDeployment)
 		authenticatedRoutes.GET("/:id/deployments/:deploymentId/status", handler.GetStackDeploymentStatus)
+		authenticatedRoutes.GET("/:id/deployments/:deploymentId/logs", handler.GetDeploymentLogs)
+		authenticatedRoutes.GET("/:id/logs", handler.GetStackLogs)
 	}
 }

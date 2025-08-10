@@ -47,7 +47,7 @@ func Init(
 	sqlDB.SetMaxOpenConns(100)          // Maximum number of open connections
 	sqlDB.SetConnMaxLifetime(time.Hour) // Maximum lifetime of a connection
 
-	err = db.AutoMigrate(&schemas.Stack{}, &schemas.Deployment{}, &schemas.Integration{}, &schemas.User{}, &schemas.AWSCredentials{})
+	err = db.AutoMigrate(&schemas.Stack{}, &schemas.Deployment{}, &schemas.Integration{}, &schemas.User{}, &schemas.AWSCredentials{}, &schemas.Log{})
 	if err != nil {
 		logger.Errorf("Failed to auto migrate DB schemas", "err", err.Error())
 		return nil, err
@@ -107,6 +107,17 @@ func createIndexes(db *gorm.DB) error {
 
 	// AWS Credentials indexes
 	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_aws_credentials_name ON aws_credentials(name)").Error; err != nil {
+		return err
+	}
+
+	// Logs indexes
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_stack_id ON logs(stack_id)").Error; err != nil {
+		return err
+	}
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_deployment_id ON logs(deployment_id)").Error; err != nil {
+		return err
+	}
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at)").Error; err != nil {
 		return err
 	}
 

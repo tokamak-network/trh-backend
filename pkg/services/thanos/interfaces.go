@@ -82,6 +82,12 @@ type IntegrationRepository interface {
 	) error
 }
 
+type LogRepository interface {
+	CreateLog(log *entities.LogEntity) error
+	GetLogsByDeploymentID(deploymentId string, limit int, afterID *string) ([]*entities.LogEntity, error)
+	GetLogsByStackID(stackId string, limit int, afterID *string) ([]*entities.LogEntity, error)
+}
+
 type TaskManager interface {
 	Start()
 	AddTask(id string, task entities.Task)

@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
@@ -151,4 +152,77 @@ func (h *ThanosDeploymentHandler) Terminate(c *gin.Context) {
 		logger.Error("failed to terminate thanos stack", zap.Error(err), zap.String("id", id))
 	}
 	c.JSON(int(response.Status), response)
+}
+
+// @Summary     Get Deployment Logs
+// @Description Get logs for a deployment (paginated)
+// @Tags        Thanos Stack
+// @Accept      json
+// @Produce     json
+// @Param       id path string true "Thanos Stack ID"
+// @Param       deploymentId path string true "Deployment ID"
+// @Param       limit query int false "Max logs to return" default(200)
+// @Param       afterId query string false "Return logs after this log id (exclusive)"
+// @Success     200 {object} entities.Response
+// @Router      /stacks/thanos/{id}/deployments/{deploymentId}/logs [get]
+func (h *ThanosDeploymentHandler) GetDeploymentLogs(c *gin.Context) {
+	id := c.Param("id")
+	deploymentId := c.Param("deploymentId")
+
+	if id == "" || deploymentId == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{Status: http.StatusBadRequest, Message: "id and deploymentId are required"})
+		return
+	}
+
+	limit := 200
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 1000 {
+			limit = parsed
+		}
+	}
+	var afterIDPtr *string
+	if after := c.Query("afterId"); after != "" {
+		afterIDPtr = &after
+	}
+
+	resp, err := h.ThanosDeploymentService.GetDeploymentLogs(uuid.MustParse(id), uuid.MustParse(deploymentId), limit, afterIDPtr)
+	if err != nil {
+		logger.Error("failed to get deployment logs", zap.Error(err))
+	}
+	c.JSON(int(resp.Status), resp)
+}
+
+// @Summary     Get Stack Logs
+// @Description Get logs across all deployments for a stack (paginated)
+// @Tags        Thanos Stack
+// @Accept      json
+// @Produce     json
+// @Param       id path string true "Thanos Stack ID"
+// @Param       limit query int false "Max logs to return" default(200)
+// @Param       afterId query string false "Return logs after this log id (exclusive)"
+// @Success     200 {object} entities.Response
+// @Router      /stacks/thanos/{id}/logs [get]
+func (h *ThanosDeploymentHandler) GetStackLogs(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{Status: http.StatusBadRequest, Message: "id is required"})
+		return
+	}
+
+	limit := 200
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 1000 {
+			limit = parsed
+		}
+	}
+	var afterIDPtr *string
+	if after := c.Query("afterId"); after != "" {
+		afterIDPtr = &after
+	}
+
+	resp, err := h.ThanosDeploymentService.GetStackLogs(uuid.MustParse(id), limit, afterIDPtr)
+	if err != nil {
+		logger.Error("failed to get stack logs", zap.Error(err))
+	}
+	c.JSON(int(resp.Status), resp)
 }
