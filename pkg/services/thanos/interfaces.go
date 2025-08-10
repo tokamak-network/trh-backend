@@ -7,6 +7,7 @@ import (
 )
 
 type DeploymentRepository interface {
+	CreateDeployment(deployment *entities.DeploymentEntity) error
 	GetDeploymentsByStackID(stackId string) ([]*entities.DeploymentEntity, error)
 	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentStatus) error
 	GetDeploymentByID(deploymentId string) (*entities.DeploymentEntity, error)
