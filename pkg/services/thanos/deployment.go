@@ -224,6 +224,34 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		return fmt.Errorf("no deployments found for stacks %s", stackId)
 	}
 
+	// Filter to only the core deployment steps we want to execute here
+	filtered := make([]*entities.DeploymentEntity, 0, 2)
+	var l1Step, awsStep *entities.DeploymentEntity
+	for _, d := range deployments {
+		if d.Step == "deploy-l1-contracts" {
+			// keep the earliest unfinished occurrence
+			if l1Step == nil || (l1Step.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
+				l1Step = d
+			}
+		}
+		if d.Step == "deploy-aws-infra" {
+			if awsStep == nil || (awsStep.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
+				awsStep = d
+			}
+		}
+	}
+	if l1Step != nil {
+		filtered = append(filtered, l1Step)
+	}
+	if awsStep != nil {
+		filtered = append(filtered, awsStep)
+	}
+
+	// Overwrite deployments with filtered list to enforce order L1 first then AWS infra
+	if len(filtered) > 0 {
+		deployments = filtered
+	}
+
 	// Start a goroutine to handle status updates
 	errChan := make(chan error, 1)
 	go func() {
