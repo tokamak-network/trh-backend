@@ -48,7 +48,7 @@ func getThanosStackDeployments(
 	l1ContractDeployment := &entities.DeploymentEntity{
 		ID:      l1ContractDeploymentID,
 		StackID: &stackId,
-		Step:    1,
+		Step:    "deploy-l1-contracts",
 		Status:  entities.DeploymentStatusPending,
 		LogPath: l1ContractDeploymentLogPath,
 		Config:  l1ContractDeploymentConfig,
@@ -70,7 +70,7 @@ func getThanosStackDeployments(
 	thanosInfrastructureDeployment := &entities.DeploymentEntity{
 		ID:      thanosInfrastructureDeploymentID,
 		StackID: &stackId,
-		Step:    2,
+		Step:    "deploy-aws-infra",
 		Status:  entities.DeploymentStatusPending,
 		LogPath: thanosInfrastructureDeploymentLogPath,
 		Config:  thanosInfrastructureDeploymentConfig,

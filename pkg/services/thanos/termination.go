@@ -92,17 +92,6 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
-	err = s.deploymentRepo.UpdateStatusesByStackId(
-		stackId.String(),
-		entities.DeploymentStatusTerminated,
-	)
-	if err != nil {
-		logger.Error("failed to update deployments status to terminated",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
-		return
-	}
-
 	// Update integrations status to terminated
 	err = s.integrationRepo.UpdateIntegrationsStatusByStackID(
 		stackId.String(),

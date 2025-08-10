@@ -246,7 +246,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		logger.Info("Processing deployment",
 			zap.String("deploymentId", deployment.ID.String()),
 			zap.String("status", string(deployment.Status)),
-			zap.Int("step", deployment.Step))
+			zap.String("step", deployment.Step))
 
 		// Skip already completed deployments
 		if deployment.Status == entities.DeploymentStatusCompleted {
@@ -281,7 +281,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		}
 
 		switch deployment.Step {
-		case 1:
+		case "deploy-l1-contracts":
 			var deployL1ContractsConfig dtos.DeployL1ContractsRequest
 			if err := json.Unmarshal(deployment.Config, &deployL1ContractsConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
@@ -295,7 +295,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				if err == context.Canceled {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
-						zap.Int("step", deployment.Step))
+						zap.String("step", deployment.Step))
 					statusChan <- entities.DeploymentStatusWithID{
 						DeploymentID: deployment.ID,
 						Status:       entities.DeploymentStatusStopped,
@@ -305,7 +305,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				}
 				logger.Error("deployment failed",
 					zap.String("deploymentId", deployment.ID.String()),
-					zap.Int("step", deployment.Step),
+					zap.String("step", deployment.Step),
 					zap.Error(err))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
@@ -319,7 +319,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				Status:       entities.DeploymentStatusCompleted,
 			}
 			cancel()
-		case 2:
+		case "deploy-aws-infra":
 			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
 			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
@@ -333,7 +333,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				if err == context.Canceled {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
-						zap.Int("step", deployment.Step))
+						zap.String("step", deployment.Step))
 					statusChan <- entities.DeploymentStatusWithID{
 						DeploymentID: deployment.ID,
 						Status:       entities.DeploymentStatusStopped,
@@ -343,7 +343,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				}
 				logger.Error("deployment failed",
 					zap.String("deploymentId", deployment.ID.String()),
-					zap.Int("step", deployment.Step),
+					zap.String("step", deployment.Step),
 					zap.Error(err))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
