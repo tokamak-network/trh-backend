@@ -233,7 +233,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				return
 			}
 			// If we've processed all deployments successfully, send nil to errChan
-			if status.Status == entities.DeploymentStatusCompleted {
+			if status.Status == entities.DeploymentRunStatusSuccess {
 				select {
 				case errChan <- nil:
 				default:
@@ -249,7 +249,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			zap.String("step", deployment.Step))
 
 		// Skip already completed deployments
-		if deployment.Status == entities.DeploymentStatusCompleted {
+		if deployment.Status == entities.DeploymentRunStatusSuccess {
 			continue
 		}
 
@@ -269,7 +269,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				zap.Error(err))
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentStatusFailed,
+				Status:       entities.DeploymentRunStatusFailed,
 			}
 			return err
 		}
@@ -277,7 +277,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		// Update status to in-progress before starting deployment
 		statusChan <- entities.DeploymentStatusWithID{
 			DeploymentID: deployment.ID,
-			Status:       entities.DeploymentStatusInProgress,
+			Status:       entities.DeploymentRunStatusInProgress,
 		}
 
 		switch deployment.Step {
@@ -296,10 +296,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
 						zap.String("step", deployment.Step))
-					statusChan <- entities.DeploymentStatusWithID{
-						DeploymentID: deployment.ID,
-						Status:       entities.DeploymentStatusStopped,
-					}
+					// Keep run status as-is on cancel; no explicit Stopped state in run status
 					cancel()
 					return err
 				}
@@ -309,14 +306,14 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 					zap.Error(err))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
-					Status:       entities.DeploymentStatusFailed,
+					Status:       entities.DeploymentRunStatusFailed,
 				}
 				cancel()
 				return err
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentStatusCompleted,
+				Status:       entities.DeploymentRunStatusSuccess,
 			}
 			cancel()
 		case "deploy-aws-infra":
@@ -334,10 +331,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
 						zap.String("step", deployment.Step))
-					statusChan <- entities.DeploymentStatusWithID{
-						DeploymentID: deployment.ID,
-						Status:       entities.DeploymentStatusStopped,
-					}
+					// Keep run status as-is on cancel; no explicit Stopped state in run status
 					cancel()
 					return err
 				}
@@ -347,14 +341,14 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 					zap.Error(err))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
-					Status:       entities.DeploymentStatusFailed,
+					Status:       entities.DeploymentRunStatusFailed,
 				}
 				cancel()
 				return err
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentStatusCompleted,
+				Status:       entities.DeploymentRunStatusSuccess,
 			}
 			cancel()
 		}

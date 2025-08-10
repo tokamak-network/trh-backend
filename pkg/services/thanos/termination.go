@@ -52,7 +52,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		ID:      terminationDeploymentID,
 		StackID: &stack.ID,
 		Step:    "destroy-aws-infra",
-		Status:  entities.DeploymentStatusPending,
+		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  terminationConfig,
 	}
@@ -100,7 +100,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, terminationDeploymentID, logPath)
 
 	// Update deployment status to in-progress
-	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentStatusInProgress)
+	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusInProgress)
 
 	err = thanos.DestroyAWSInfrastructure(ctx, sdkClient)
 	if err != nil {
@@ -114,7 +114,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
 		}
-		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentStatusFailed)
+		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
 		cancel()
 		return
 	}
@@ -124,7 +124,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		logger.Error("failed to update stacks status to terminated",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
-		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentStatusFailed)
+		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
 		cancel()
 		return
 	}
@@ -139,12 +139,12 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		logger.Error("failed to update integrations status to terminated",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
-		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentStatusFailed)
+		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
 		cancel()
 		return
 	}
 
-	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentStatusCompleted)
+	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusSuccess)
 	cancel()
 
 	logger.Info(

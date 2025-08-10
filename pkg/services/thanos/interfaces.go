@@ -9,12 +9,12 @@ import (
 type DeploymentRepository interface {
 	CreateDeployment(deployment *entities.DeploymentEntity) error
 	GetDeploymentsByStackID(stackId string) ([]*entities.DeploymentEntity, error)
-	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentStatus) error
+	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
 	GetDeploymentByID(deploymentId string) (*entities.DeploymentEntity, error)
-	GetDeploymentStatus(deploymentId string) (entities.DeploymentStatus, error)
+	GetDeploymentStatus(deploymentId string) (entities.DeploymentRunStatus, error)
 	UpdateStatusesByStackId(
 		stackID string,
-		status entities.DeploymentStatus,
+		status entities.DeploymentRunStatus,
 	) error
 }
 
