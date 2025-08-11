@@ -23,6 +23,10 @@ type BridgeIntegration struct {
 		GetStackByID(id string) (*entities.StackEntity, error)
 		UpdateMetadata(id string, metadata *entities.StackMetadata) error
 	}
+	deploymentRepo interface {
+		CreateDeployment(deployment *entities.DeploymentEntity) error
+		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
 		CreateIntegration(integration *entities.IntegrationEntity) error
@@ -43,6 +47,10 @@ func NewBridgeIntegration(
 		GetStackByID(id string) (*entities.StackEntity, error)
 		UpdateMetadata(id string, metadata *entities.StackMetadata) error
 	},
+	deploymentRepo interface {
+		CreateDeployment(deployment *entities.DeploymentEntity) error
+		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
 		CreateIntegration(integration *entities.IntegrationEntity) error
@@ -58,6 +66,7 @@ func NewBridgeIntegration(
 ) *BridgeIntegration {
 	return &BridgeIntegration{
 		stackRepo:       stackRepo,
+		deploymentRepo:  deploymentRepo,
 		integrationRepo: integrationRepo,
 		taskManager:     taskManager,
 	}
@@ -203,7 +212,7 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 
 	taskId := fmt.Sprintf("uninstall-bridge-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.uninstallTask(ctx, stack, sdkClient, stackId)
+		b.uninstallTask(ctx, stack, sdkClient, stackId, logPath)
 	})
 
 	return &entities.Response{
@@ -215,6 +224,24 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 
 // installTask handles the actual installation process
 func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, logPath string) {
+	// Create deployment record for installing bridge
+	deployment := &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    "install-bridge",
+		Status:  entities.DeploymentRunStatusNotStarted,
+		LogPath: logPath,
+		Config:  []byte("{}"),
+	}
+	if err := b.deploymentRepo.CreateDeployment(deployment); err != nil {
+		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		return
+	}
+	if err := b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
+		logger.Error("failed to set deployment in-progress", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		return
+	}
+
 	bridgeIntegration := &entities.IntegrationEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
@@ -244,6 +271,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", bridgeIntegration.ID.String()))
 		}
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -252,6 +280,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, "Bridge URL is empty"); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", bridgeIntegration.ID.String()))
 		}
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -277,19 +306,37 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 
 	if err = b.integrationRepo.UpdateMetadataAfterInstalled(bridgeIntegration.ID.String(), entities.IntegrationInfo(bytes)); err != nil {
 		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
 	stack.Metadata.BridgeUrl = bridgeUrl
 	if err = b.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
+
+	_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
 }
 
 // uninstallTask handles the actual uninstallation process
-func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, stackId string) {
-	integration, err := b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBridge.String())
+func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, stackId string, logPath string) {
+	var uninstallDeployment *entities.DeploymentEntity
+	var integration *entities.IntegrationEntity
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("panic during bridge uninstall", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Any("recover", r))
+			if uninstallDeployment != nil {
+				_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+			}
+			if integration != nil {
+				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
+			}
+		}
+	}()
+	var err error
+	integration, err = b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBridge.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
@@ -311,8 +358,28 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 		return
 	}
 
+	// Create deployment record for uninstalling bridge
+	uninstallDeployment = &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    "uninstall-bridge",
+		Status:  entities.DeploymentRunStatusNotStarted,
+		LogPath: logPath,
+		Config:  []byte("{}"),
+	}
+	if err := b.deploymentRepo.CreateDeployment(uninstallDeployment); err != nil {
+		logger.Error("failed to create uninstall deployment record", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		return
+	}
+	if err := b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
+		logger.Error("failed to set uninstall deployment in-progress", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		return
+	}
+
 	if err = thanos.UninstallBridge(ctx, thanosClient); err != nil {
 		logger.Error("failed to uninstall bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
 		return
 	}
 
@@ -326,4 +393,6 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 		logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 		return
 	}
+
+	_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
 }

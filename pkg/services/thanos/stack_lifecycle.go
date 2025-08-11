@@ -167,6 +167,37 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 			Data:    nil,
 		}, nil
 	}
+	// Create fresh deployment records for this resume
+	var stackConfig dtos.DeployThanosRequest
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	deployments, err := getThanosStackDeployments(stackId, &stackConfig)
+	if err != nil {
+		logger.Error("failed to build deployments for resume", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	for _, d := range deployments {
+		if err := s.deploymentRepo.CreateDeployment(d); err != nil {
+			logger.Error("failed to create deployment record on resume", zap.String("stackId", stackId.String()), zap.Error(err))
+			return &entities.Response{
+				Status:  http.StatusInternalServerError,
+				Message: "Internal server error",
+				Data:    nil,
+			}, err
+		}
+	}
 
 	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
