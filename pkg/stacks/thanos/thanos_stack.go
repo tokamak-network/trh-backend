@@ -192,6 +192,7 @@ func GetMonitoringConfig(
 			SmtpAuthPassword: alertManager.Email.SmtpAuthPassword,
 		},
 	}
+	// TODO: Add logging enabled flag in the future
 	return s.GetMonitoringConfig(ctx, password, thanosAlertManagerConfig, false)
 }
 

@@ -1,5 +1,6 @@
 *.env
 main
+trh-backend
 path/**
 storage/**
 
