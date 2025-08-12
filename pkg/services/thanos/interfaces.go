@@ -70,6 +70,7 @@ type IntegrationRepository interface {
 	UpdateIntegrationsStatusByStackID(
 		stackID string,
 		status entities.DeploymentStatus,
+		exceptStatuses []entities.DeploymentStatus,
 	) error
 	UpdateMetadataAfterInstalled(
 		id string,
