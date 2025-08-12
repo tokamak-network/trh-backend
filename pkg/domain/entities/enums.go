@@ -37,6 +37,16 @@ const (
 	DeploymentStatusUnknown     DeploymentStatus = "Unknown"
 )
 
+// DeploymentRunStatus is used for deployment steps (not integrations)
+type DeploymentRunStatus string
+
+const (
+	DeploymentRunStatusNotStarted DeploymentRunStatus = "Not Started"
+	DeploymentRunStatusInProgress DeploymentRunStatus = "InProgress"
+	DeploymentRunStatusFailed     DeploymentRunStatus = "Failed"
+	DeploymentRunStatusSuccess    DeploymentRunStatus = "Success"
+)
+
 type UserRole string
 
 const (

@@ -22,6 +22,10 @@ type RegisterCandidateIntegration struct {
 	stackRepo interface {
 		GetStackByID(id string) (*entities.StackEntity, error)
 	}
+	deploymentRepo interface {
+		CreateDeployment(deployment *entities.DeploymentEntity) error
+		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
 		CreateIntegration(integration *entities.IntegrationEntity) error
@@ -39,6 +43,10 @@ func NewRegisterCandidateIntegration(
 	stackRepo interface {
 		GetStackByID(id string) (*entities.StackEntity, error)
 	},
+	deploymentRepo interface {
+		CreateDeployment(deployment *entities.DeploymentEntity) error
+		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
 		CreateIntegration(integration *entities.IntegrationEntity) error
@@ -52,6 +60,7 @@ func NewRegisterCandidateIntegration(
 ) *RegisterCandidateIntegration {
 	return &RegisterCandidateIntegration{
 		stackRepo:       stackRepo,
+		deploymentRepo:  deploymentRepo,
 		integrationRepo: integrationRepo,
 		taskManager:     taskManager,
 	}
@@ -156,6 +165,24 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 		return
 	}
 
+	// Create deployment record for register candidate
+	deployment := &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stackId,
+		Step:    "register-candidate",
+		Status:  entities.DeploymentRunStatusNotStarted,
+		LogPath: logPath,
+		Config:  integrationConfig,
+	}
+	if err := r.deploymentRepo.CreateDeployment(deployment); err != nil {
+		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+		return
+	}
+	if err := r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
+		logger.Error("failed to set deployment in-progress", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+		return
+	}
+
 	integrationId := uuid.New()
 	integration := &entities.IntegrationEntity{
 		ID:      integrationId,
@@ -185,6 +212,7 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(integrationId.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(updateErr), zap.String("integrationId", integrationId.String()))
 		}
+		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -210,4 +238,6 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 	}
 
 	logger.Info("Register candidate successfully", zap.String("stackId", stackId.String()))
+
+	_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
 }

@@ -23,6 +23,10 @@ func NewIntegrationManager(
 		GetStackByID(id string) (*entities.StackEntity, error)
 		UpdateMetadata(id string, metadata *entities.StackMetadata) error
 	},
+	deploymentRepo interface {
+		CreateDeployment(deployment *entities.DeploymentEntity) error
+		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
 		CreateIntegration(integration *entities.IntegrationEntity) error
@@ -37,10 +41,10 @@ func NewIntegrationManager(
 	},
 ) *IntegrationManager {
 	return &IntegrationManager{
-		blockExplorer:     NewBlockExplorerIntegration(stackRepo, integrationRepo, taskManager),
-		bridge:            NewBridgeIntegration(stackRepo, integrationRepo, taskManager),
-		monitoring:        NewMonitoringIntegration(stackRepo, integrationRepo, taskManager),
-		registerCandidate: NewRegisterCandidateIntegration(stackRepo, integrationRepo, taskManager),
+		blockExplorer:     NewBlockExplorerIntegration(stackRepo, deploymentRepo, integrationRepo, taskManager),
+		bridge:            NewBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, taskManager),
+		monitoring:        NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, taskManager),
+		registerCandidate: NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, taskManager),
 	}
 }
 

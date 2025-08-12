@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
@@ -37,6 +38,31 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 
 	logPath := utils.GetLogPath(stack.ID, "destroy")
 
+	// Create a deployment record for termination
+	terminationDeploymentID := uuid.New()
+	terminationConfig, _ := json.Marshal(dtos.TerminateThanosRequest{
+		Network:            string(stack.Network),
+		AwsAccessKey:       stackConfig.AwsAccessKey,
+		AwsSecretAccessKey: stackConfig.AwsSecretAccessKey,
+		AwsRegion:          stackConfig.AwsRegion,
+		DeploymentPath:     stack.DeploymentPath,
+		LogPath:            logPath,
+	})
+	terminationDeployment := &entities.DeploymentEntity{
+		ID:      terminationDeploymentID,
+		StackID: &stack.ID,
+		Step:    "destroy-aws-infra",
+		Status:  entities.DeploymentRunStatusNotStarted,
+		LogPath: logPath,
+		Config:  terminationConfig,
+	}
+	if err := s.deploymentRepo.CreateDeployment(terminationDeployment); err != nil {
+		logger.Error("failed to create termination deployment",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
+
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
@@ -69,6 +95,13 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
+	// Start log ingestion for termination
+	ingestCtx, cancel := context.WithCancel(ctx)
+	go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, terminationDeploymentID, logPath)
+
+	// Update deployment status to in-progress
+	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusInProgress)
+
 	err = thanos.DestroyAWSInfrastructure(ctx, sdkClient)
 	if err != nil {
 		logger.Error("failed to destroy AWS infrastructure",
@@ -81,6 +114,8 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 				zap.String("stackId", stackId.String()),
 				zap.Error(updateErr))
 		}
+		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
+		cancel()
 		return
 	}
 
@@ -89,17 +124,8 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		logger.Error("failed to update stacks status to terminated",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
-		return
-	}
-
-	err = s.deploymentRepo.UpdateStatusesByStackId(
-		stackId.String(),
-		entities.DeploymentStatusTerminated,
-	)
-	if err != nil {
-		logger.Error("failed to update deployments status to terminated",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
+		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
+		cancel()
 		return
 	}
 
@@ -113,8 +139,13 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		logger.Error("failed to update integrations status to terminated",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
+		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
+		cancel()
 		return
 	}
+
+	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusSuccess)
+	cancel()
 
 	logger.Info(
 		"AWS infrastructure destroyed successfully",

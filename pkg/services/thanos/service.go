@@ -16,6 +16,7 @@ type ThanosStackDeploymentService struct {
 	integrationRepo IntegrationRepository
 	taskManager     TaskManager
 	integrationMgr  *integrations.IntegrationManager
+	logRepo         LogRepository
 }
 
 // taskManagerWrapper wraps TaskManager to match the interface expected by IntegrationManager
@@ -32,6 +33,7 @@ func NewThanosService(
 	stackRepo StackRepository,
 	integrationRepo IntegrationRepository,
 	taskManager TaskManager,
+	logRepo LogRepository,
 ) *ThanosStackDeploymentService {
 	taskManagerWrapper := &taskManagerWrapper{taskManager: taskManager}
 
@@ -41,7 +43,8 @@ func NewThanosService(
 		stackRepo:       stackRepo,
 		integrationRepo: integrationRepo,
 		taskManager:     taskManager,
-		integrationMgr:  integrations.NewIntegrationManager(stackRepo, integrationRepo, taskManagerWrapper),
+		integrationMgr:  integrations.NewIntegrationManager(stackRepo, deploymentRepo, integrationRepo, taskManagerWrapper),
+		logRepo:         logRepo,
 	}
 
 	thanosDeploymentSrv.taskManager.Start()
@@ -77,4 +80,9 @@ func (s *ThanosStackDeploymentService) InstallMonitoring(ctx context.Context, st
 // UninstallMonitoring uninstalls the monitoring for the given stack
 func (s *ThanosStackDeploymentService) UninstallMonitoring(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.UninstallMonitoring(ctx, stackId)
+}
+
+// RegisterCandidate delegates candidate registration to the integrations layer
+func (s *ThanosStackDeploymentService) RegisterCandidate(ctx context.Context, stackId uuid.UUID, req dtos.RegisterCandidateRequest) (*entities.Response, error) {
+	return s.integrationMgr.RegisterCandidateForStack(ctx, stackId, req)
 }

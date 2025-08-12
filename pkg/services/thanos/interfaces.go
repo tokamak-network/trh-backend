@@ -7,13 +7,14 @@ import (
 )
 
 type DeploymentRepository interface {
+	CreateDeployment(deployment *entities.DeploymentEntity) error
 	GetDeploymentsByStackID(stackId string) ([]*entities.DeploymentEntity, error)
-	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentStatus) error
+	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
 	GetDeploymentByID(deploymentId string) (*entities.DeploymentEntity, error)
-	GetDeploymentStatus(deploymentId string) (entities.DeploymentStatus, error)
+	GetDeploymentStatus(deploymentId string) (entities.DeploymentRunStatus, error)
 	UpdateStatusesByStackId(
 		stackID string,
-		status entities.DeploymentStatus,
+		status entities.DeploymentRunStatus,
 	) error
 }
 
@@ -80,6 +81,12 @@ type IntegrationRepository interface {
 		id string,
 		config json.RawMessage,
 	) error
+}
+
+type LogRepository interface {
+	CreateLog(log *entities.LogEntity) error
+	GetLogsByDeploymentID(deploymentId string, limit int, afterID *string) ([]*entities.LogEntity, error)
+	GetLogsByStackID(stackId string, limit int, afterID *string) ([]*entities.LogEntity, error)
 }
 
 type TaskManager interface {

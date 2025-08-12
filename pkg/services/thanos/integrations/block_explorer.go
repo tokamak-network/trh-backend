@@ -23,6 +23,10 @@ type BlockExplorerIntegration struct {
 		GetStackByID(id string) (*entities.StackEntity, error)
 		UpdateMetadata(id string, metadata *entities.StackMetadata) error
 	}
+	deploymentRepo interface {
+		CreateDeployment(deployment *entities.DeploymentEntity) error
+		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
 		CreateIntegration(integration *entities.IntegrationEntity) error
@@ -43,6 +47,10 @@ func NewBlockExplorerIntegration(
 		GetStackByID(id string) (*entities.StackEntity, error)
 		UpdateMetadata(id string, metadata *entities.StackMetadata) error
 	},
+	deploymentRepo interface {
+		CreateDeployment(deployment *entities.DeploymentEntity) error
+		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
 		CreateIntegration(integration *entities.IntegrationEntity) error
@@ -58,6 +66,7 @@ func NewBlockExplorerIntegration(
 ) *BlockExplorerIntegration {
 	return &BlockExplorerIntegration{
 		stackRepo:       stackRepo,
+		deploymentRepo:  deploymentRepo,
 		integrationRepo: integrationRepo,
 		taskManager:     taskManager,
 	}
@@ -212,7 +221,7 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 
 	taskId := fmt.Sprintf("uninstall-block-explorer-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.uninstallTask(ctx, stack, sdkClient, stackId)
+		b.uninstallTask(ctx, stack, sdkClient, stackId, logPath)
 	})
 
 	return &entities.Response{
@@ -227,6 +236,25 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 	configBytes, err := json.Marshal(request)
 	if err != nil {
 		logger.Error("failed to marshal block explorer config", zap.Error(err))
+		return
+	}
+
+	// Create deployment record for installing block explorer
+	deployment := &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    "install-block-explorer",
+		Status:  entities.DeploymentRunStatusNotStarted,
+		LogPath: logPath,
+		Config:  configBytes,
+	}
+	if err := b.deploymentRepo.CreateDeployment(deployment); err != nil {
+		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return
+	}
+	// Mark deployment as in-progress to set started_at
+	if err := b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
+		logger.Error("failed to set deployment in-progress", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		return
 	}
 
@@ -258,6 +286,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(blockExplorerIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(updateErr), zap.String("integrationId", blockExplorerIntegration.ID.String()))
 		}
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -266,6 +295,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(blockExplorerIntegration.ID.String(), entities.DeploymentStatusFailed, "Block explorer URL is empty"); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(updateErr), zap.String("integrationId", blockExplorerIntegration.ID.String()))
 		}
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -285,19 +315,37 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 
 	if err = b.integrationRepo.UpdateMetadataAfterInstalled(blockExplorerIntegration.ID.String(), entities.IntegrationInfo(metadataBytes)); err != nil {
 		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
 	stack.Metadata.ExplorerUrl = blockExplorerUrl
 	if err = b.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
+
+	_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
 }
 
 // uninstallTask handles the actual uninstallation process
-func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, stackId string) {
-	integration, err := b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBlockExplorer.String())
+func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, stackId string, logPath string) {
+	var uninstallDeployment *entities.DeploymentEntity
+	var integration *entities.IntegrationEntity
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("panic during block-explorer uninstall", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Any("recover", r))
+			if uninstallDeployment != nil {
+				_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+			}
+			if integration != nil {
+				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
+			}
+		}
+	}()
+	var err error
+	integration, err = b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBlockExplorer.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		return
@@ -318,8 +366,28 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 		logger.Error("failed to type assert sdkClient for uninstall", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()))
 		return
 	}
+	// Create deployment record for uninstalling block explorer
+	uninstallDeployment = &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    "uninstall-block-explorer",
+		Status:  entities.DeploymentRunStatusNotStarted,
+		LogPath: logPath,
+		Config:  []byte("{}"),
+	}
+	if err := b.deploymentRepo.CreateDeployment(uninstallDeployment); err != nil {
+		logger.Error("failed to create uninstall deployment record", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return
+	}
+	if err := b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
+		logger.Error("failed to set uninstall deployment in-progress", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return
+	}
+
 	if err = thanos.UninstallBlockExplorer(ctx, thanosClient); err != nil {
 		logger.Error("failed to uninstall block-explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
 		return
 	}
 
@@ -333,4 +401,6 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 		logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 		return
 	}
+
+	_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
 }

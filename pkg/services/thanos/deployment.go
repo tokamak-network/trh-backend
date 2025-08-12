@@ -224,6 +224,34 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		return fmt.Errorf("no deployments found for stacks %s", stackId)
 	}
 
+	// Filter to only the core deployment steps we want to execute here
+	filtered := make([]*entities.DeploymentEntity, 0, 2)
+	var l1Step, awsStep *entities.DeploymentEntity
+	for _, d := range deployments {
+		if d.Step == "deploy-l1-contracts" {
+			// keep the earliest unfinished occurrence
+			if l1Step == nil || (l1Step.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
+				l1Step = d
+			}
+		}
+		if d.Step == "deploy-aws-infra" {
+			if awsStep == nil || (awsStep.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
+				awsStep = d
+			}
+		}
+	}
+	if l1Step != nil {
+		filtered = append(filtered, l1Step)
+	}
+	if awsStep != nil {
+		filtered = append(filtered, awsStep)
+	}
+
+	// Overwrite deployments with filtered list to enforce order L1 first then AWS infra
+	if len(filtered) > 0 {
+		deployments = filtered
+	}
+
 	// Start a goroutine to handle status updates
 	errChan := make(chan error, 1)
 	go func() {
@@ -233,7 +261,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				return
 			}
 			// If we've processed all deployments successfully, send nil to errChan
-			if status.Status == entities.DeploymentStatusCompleted {
+			if status.Status == entities.DeploymentRunStatusSuccess {
 				select {
 				case errChan <- nil:
 				default:
@@ -246,10 +274,10 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		logger.Info("Processing deployment",
 			zap.String("deploymentId", deployment.ID.String()),
 			zap.String("status", string(deployment.Status)),
-			zap.Int("step", deployment.Step))
+			zap.String("step", deployment.Step))
 
 		// Skip already completed deployments
-		if deployment.Status == entities.DeploymentStatusCompleted {
+		if deployment.Status == entities.DeploymentRunStatusSuccess {
 			continue
 		}
 
@@ -269,7 +297,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				zap.Error(err))
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentStatusFailed,
+				Status:       entities.DeploymentRunStatusFailed,
 			}
 			return err
 		}
@@ -277,72 +305,80 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		// Update status to in-progress before starting deployment
 		statusChan <- entities.DeploymentStatusWithID{
 			DeploymentID: deployment.ID,
-			Status:       entities.DeploymentStatusInProgress,
+			Status:       entities.DeploymentRunStatusInProgress,
 		}
 
 		switch deployment.Step {
-		case 1:
+		case "deploy-l1-contracts":
 			var deployL1ContractsConfig dtos.DeployL1ContractsRequest
 			if err := json.Unmarshal(deployment.Config, &deployL1ContractsConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
 			}
 
+			// Start log ingestion for this deployment step
+			ingestCtx, cancel := context.WithCancel(ctx)
+			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
+
 			if err := thanos.DeployL1Contracts(ctx, sdkClient, &deployL1ContractsConfig); err != nil {
 				if err == context.Canceled {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
-						zap.Int("step", deployment.Step))
-					statusChan <- entities.DeploymentStatusWithID{
-						DeploymentID: deployment.ID,
-						Status:       entities.DeploymentStatusStopped,
-					}
+						zap.String("step", deployment.Step))
+					// Keep run status as-is on cancel; no explicit Stopped state in run status
+					cancel()
 					return err
 				}
 				logger.Error("deployment failed",
 					zap.String("deploymentId", deployment.ID.String()),
-					zap.Int("step", deployment.Step),
+					zap.String("step", deployment.Step),
 					zap.Error(err))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
-					Status:       entities.DeploymentStatusFailed,
+					Status:       entities.DeploymentRunStatusFailed,
 				}
+				cancel()
 				return err
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentStatusCompleted,
+				Status:       entities.DeploymentRunStatusSuccess,
 			}
-		case 2:
+			cancel()
+		case "deploy-aws-infra":
 			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
 			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
 			}
 
+			// Start log ingestion for this deployment step
+			ingestCtx, cancel := context.WithCancel(ctx)
+			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
+
 			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
 				if err == context.Canceled {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
-						zap.Int("step", deployment.Step))
-					statusChan <- entities.DeploymentStatusWithID{
-						DeploymentID: deployment.ID,
-						Status:       entities.DeploymentStatusStopped,
-					}
+						zap.String("step", deployment.Step))
+					// Keep run status as-is on cancel; no explicit Stopped state in run status
+					cancel()
 					return err
 				}
 				logger.Error("deployment failed",
 					zap.String("deploymentId", deployment.ID.String()),
-					zap.Int("step", deployment.Step),
+					zap.String("step", deployment.Step),
 					zap.Error(err))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
-					Status:       entities.DeploymentStatusFailed,
+					Status:       entities.DeploymentRunStatusFailed,
 				}
+				cancel()
 				return err
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentStatusCompleted,
+				Status:       entities.DeploymentRunStatusSuccess,
 			}
+			cancel()
 		}
 
 	}
