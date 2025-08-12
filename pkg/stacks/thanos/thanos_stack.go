@@ -192,7 +192,7 @@ func GetMonitoringConfig(
 			SmtpAuthPassword: alertManager.Email.SmtpAuthPassword,
 		},
 	}
-	return s.GetMonitoringConfig(ctx, password, thanosAlertManagerConfig)
+	return s.GetMonitoringConfig(ctx, password, thanosAlertManagerConfig, false)
 }
 
 func InstallMonitoring(
