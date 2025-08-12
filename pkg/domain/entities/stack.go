@@ -18,6 +18,7 @@ type StackMetadata struct {
 	GrafanaUrl      string `json:"grafanaUrl,omitempty"`
 	ExplorerUrl     string `json:"explorerUrl,omitempty"`
 	RollupConfigUrl string `json:"rollupConfigUrl,omitempty"`
+	MonitoringUrl   string `json:"monitoringUrl,omitempty"`
 }
 
 func (m *StackMetadata) Marshal() ([]byte, error) {
