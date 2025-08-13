@@ -199,6 +199,16 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 		}
 	}
 
+	err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusPending, "")
+	if err != nil {
+		logger.Error("failed to update stack status to pending", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
 	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
 		s.handleStackDeployment(ctx, stackId)
@@ -320,6 +330,19 @@ func (s *ThanosStackDeploymentService) TerminateThanosStack(ctx context.Context,
 			Message: "The stacks is still deploying, updating or terminating, please wait for it to finish",
 			Data:    nil,
 		}, nil
+	}
+
+	// Update stack status to pending termination
+	err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusPending, "")
+	if err != nil {
+		logger.Error("failed to update stack status to pending termination",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to update stack status to pending termination",
+			Data:    nil,
+		}, err
 	}
 
 	taskId := fmt.Sprintf("terminate-thanos-stack-%s", stackId.String())
