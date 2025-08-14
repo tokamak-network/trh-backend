@@ -36,15 +36,18 @@ func NewIntegrationManager(
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 	},
+	logRepo interface {
+		CreateLog(log *entities.LogEntity) error
+	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 	},
 ) *IntegrationManager {
 	return &IntegrationManager{
-		blockExplorer:     NewBlockExplorerIntegration(stackRepo, deploymentRepo, integrationRepo, taskManager),
-		bridge:            NewBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, taskManager),
-		monitoring:        NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, taskManager),
-		registerCandidate: NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, taskManager),
+		blockExplorer:     NewBlockExplorerIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		bridge:            NewBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		monitoring:        NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		registerCandidate: NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 	}
 }
 

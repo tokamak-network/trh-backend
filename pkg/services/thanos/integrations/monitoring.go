@@ -1,10 +1,16 @@
 package integrations
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -36,6 +42,9 @@ type MonitoringIntegration struct {
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 	}
+	logRepo interface {
+		CreateLog(log *entities.LogEntity) error
+	}
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 	}
@@ -60,6 +69,9 @@ func NewMonitoringIntegration(
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 	},
+	logRepo interface {
+		CreateLog(log *entities.LogEntity) error
+	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 	},
@@ -68,6 +80,7 @@ func NewMonitoringIntegration(
 		stackRepo:       stackRepo,
 		deploymentRepo:  deploymentRepo,
 		integrationRepo: integrationRepo,
+		logRepo:         logRepo,
 		taskManager:     taskManager,
 	}
 }
@@ -281,6 +294,11 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
+	// Start log ingestion for this plugin installation
+	ingestCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go m.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
+
 	monitoringInfo, err := thanos.InstallMonitoring(ctx, thanosClient, monitoringConfig)
 	if err != nil {
 		logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
@@ -406,6 +424,11 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 		return
 	}
 
+	// Start log ingestion for this plugin uninstallation
+	ingestCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go m.tailAndIngestLogs(ingestCtx, stack.ID, uninstallDeployment.ID, logPath)
+
 	if err = thanos.UninstallMonitoring(ctx, thanosClient); err != nil {
 		logger.Error("failed to uninstall monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		_ = m.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
@@ -425,4 +448,62 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 	}
 
 	_ = m.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
+}
+
+// tailAndIngestLogs tails a log file and ingests each line into the database
+func (m *MonitoringIntegration) tailAndIngestLogs(
+	ctx context.Context,
+	stackID uuid.UUID,
+	deploymentID uuid.UUID,
+	logPath string,
+) {
+	// Wait for file to appear
+	for {
+		if _, err := os.Stat(logPath); err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+
+	f, err := os.Open(logPath)
+	if err != nil {
+		logger.Error("failed to open log file", zap.String("path", logPath), zap.Error(err))
+		return
+	}
+	defer f.Close()
+
+	reader := bufio.NewReader(f)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			line, err := reader.ReadString('\n')
+			if len(line) > 0 {
+				msg := strings.TrimRight(line, "\r\n")
+				if msg != "" {
+					l := &entities.LogEntity{
+						StackID:      &stackID,
+						DeploymentID: &deploymentID,
+						Message:      msg,
+					}
+					if dbErr := m.logRepo.CreateLog(l); dbErr != nil {
+						logger.Error("failed to insert log", zap.Error(dbErr))
+					}
+				}
+			}
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					time.Sleep(300 * time.Millisecond)
+					continue
+				}
+				logger.Error("error reading log file", zap.Error(err))
+				return
+			}
+		}
+	}
 }

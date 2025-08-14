@@ -1,10 +1,16 @@
 package integrations
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -33,6 +39,9 @@ type RegisterCandidateIntegration struct {
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 	}
+	logRepo interface {
+		CreateLog(log *entities.LogEntity) error
+	}
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 	}
@@ -54,6 +63,9 @@ func NewRegisterCandidateIntegration(
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 	},
+	logRepo interface {
+		CreateLog(log *entities.LogEntity) error
+	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 	},
@@ -62,6 +74,7 @@ func NewRegisterCandidateIntegration(
 		stackRepo:       stackRepo,
 		deploymentRepo:  deploymentRepo,
 		integrationRepo: integrationRepo,
+		logRepo:         logRepo,
 		taskManager:     taskManager,
 	}
 }
@@ -207,6 +220,11 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 		return
 	}
 
+	// Start log ingestion for this register candidate operation
+	ingestCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go r.tailAndIngestLogs(ingestCtx, stackId, deployment.ID, logPath)
+
 	if err = thanos.VerifyRegisterCandidates(ctx, thanosClient, &req); err != nil {
 		logger.Error("failed to register candidate", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("stackId", stackId.String()))
 		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(integrationId.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -240,4 +258,62 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 	logger.Info("Register candidate successfully", zap.String("stackId", stackId.String()))
 
 	_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
+}
+
+// tailAndIngestLogs tails a log file and ingests each line into the database
+func (r *RegisterCandidateIntegration) tailAndIngestLogs(
+	ctx context.Context,
+	stackID uuid.UUID,
+	deploymentID uuid.UUID,
+	logPath string,
+) {
+	// Wait for file to appear
+	for {
+		if _, err := os.Stat(logPath); err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+
+	f, err := os.Open(logPath)
+	if err != nil {
+		logger.Error("failed to open log file", zap.String("path", logPath), zap.Error(err))
+		return
+	}
+	defer f.Close()
+
+	reader := bufio.NewReader(f)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			line, err := reader.ReadString('\n')
+			if len(line) > 0 {
+				msg := strings.TrimRight(line, "\r\n")
+				if msg != "" {
+					l := &entities.LogEntity{
+						StackID:      &stackID,
+						DeploymentID: &deploymentID,
+						Message:      msg,
+					}
+					if dbErr := r.logRepo.CreateLog(l); dbErr != nil {
+						logger.Error("failed to insert log", zap.Error(dbErr))
+					}
+				}
+			}
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					time.Sleep(300 * time.Millisecond)
+					continue
+				}
+				logger.Error("error reading log file", zap.Error(err))
+				return
+			}
+		}
+	}
 }

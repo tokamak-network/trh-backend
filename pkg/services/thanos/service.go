@@ -43,7 +43,7 @@ func NewThanosService(
 		stackRepo:       stackRepo,
 		integrationRepo: integrationRepo,
 		taskManager:     taskManager,
-		integrationMgr:  integrations.NewIntegrationManager(stackRepo, deploymentRepo, integrationRepo, taskManagerWrapper),
+		integrationMgr:  integrations.NewIntegrationManager(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManagerWrapper),
 		logRepo:         logRepo,
 	}
 
