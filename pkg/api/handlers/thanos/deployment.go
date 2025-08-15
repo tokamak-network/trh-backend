@@ -1,6 +1,7 @@
 package thanos
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -225,4 +226,83 @@ func (h *ThanosDeploymentHandler) GetStackLogs(c *gin.Context) {
 		logger.Error("failed to get stack logs", zap.Error(err))
 	}
 	c.JSON(int(resp.Status), resp)
+}
+
+// @Summary     Download Deployment Log File
+// @Description Download the deployment log file
+// @Tags        Thanos Stack
+// @Accept      json
+// @Produce     application/octet-stream
+// @Param       id path string true "Thanos Stack ID"
+// @Param       deploymentId path string true "Deployment ID"
+// @Success     200 {file} file "Log file content"
+// @Failure     400 {object} entities.Response
+// @Failure     404 {object} entities.Response
+// @Failure     500 {object} entities.Response
+// @Router      /stacks/thanos/{id}/deployments/{deploymentId}/logs/download [get]
+func (h *ThanosDeploymentHandler) DownloadDeploymentLogFile(c *gin.Context) {
+	stackIdStr := c.Param("id")
+	deploymentIdStr := c.Param("deploymentId")
+
+	if stackIdStr == "" || deploymentIdStr == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id and deploymentId are required",
+			Data:    nil,
+		})
+		return
+	}
+
+	stackId, err := uuid.Parse(stackIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack ID format",
+			Data:    nil,
+		})
+		return
+	}
+
+	deploymentId, err := uuid.Parse(deploymentIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid deployment ID format",
+			Data:    nil,
+		})
+		return
+	}
+
+	// Get deployment and validate log file
+	deployment, err := h.ThanosDeploymentService.DownloadDeploymentLogFile(stackId, deploymentId)
+	if err != nil {
+		logger.Error("failed to get deployment log file",
+			zap.String("stackId", stackIdStr),
+			zap.String("deploymentId", deploymentIdStr),
+			zap.Error(err))
+
+		var statusCode int
+		if err.Error() == "stack not found" || err.Error() == "deployment not found" {
+			statusCode = http.StatusNotFound
+		} else {
+			statusCode = http.StatusInternalServerError
+		}
+
+		c.JSON(statusCode, &entities.Response{
+			Status:  uint64(statusCode),
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	// Generate filename based on deployment step and ID
+	filename := fmt.Sprintf("deployment_%s_%s.log", deployment.Step, deployment.ID.String()[:8])
+
+	// Use shared utility to download the file
+	utils.DownloadFile(c, utils.FileDownloadConfig{
+		FilePath:    deployment.LogPath,
+		Filename:    filename,
+		ContentType: "application/octet-stream",
+	})
 }
