@@ -1,15 +1,12 @@
 package utils
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 
-	"github.com/gin-gonic/gin"
 	"github.com/tokamak-network/trh-backend/internal/logger"
-	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"go.uber.org/zap"
 )
 
@@ -20,60 +17,43 @@ type FileDownloadConfig struct {
 	ContentType string
 }
 
-// DownloadFile streams a file to the HTTP response with proper headers
-func DownloadFile(c *gin.Context, config FileDownloadConfig) {
+// FileDownloadResult holds the result of file download preparation
+type FileDownloadResult struct {
+	File        *os.File
+	Filename    string
+	ContentType string
+	Size        int64
+}
+
+// PrepareFileDownload validates and prepares a file for download
+func PrepareFileDownload(ctx context.Context, config FileDownloadConfig) (*FileDownloadResult, error) {
 	// Validate file path
 	if config.FilePath == "" {
-		c.JSON(http.StatusBadRequest, &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "file path is required",
-			Data:    nil,
-		})
-		return
+		return nil, fmt.Errorf("file path is required")
 	}
 
 	// Check if file exists
 	if _, err := os.Stat(config.FilePath); err != nil {
 		if os.IsNotExist(err) {
-			c.JSON(http.StatusNotFound, &entities.Response{
-				Status:  http.StatusNotFound,
-				Message: "file not found",
-				Data:    nil,
-			})
-			return
+			return nil, fmt.Errorf("file not found: %s", config.FilePath)
 		}
 		logger.Error("failed to stat file", zap.String("path", config.FilePath), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "failed to access file",
-			Data:    nil,
-		})
-		return
+		return nil, fmt.Errorf("failed to access file: %w", err)
 	}
 
 	// Open the file
 	file, err := os.Open(config.FilePath)
 	if err != nil {
 		logger.Error("failed to open file", zap.String("path", config.FilePath), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "failed to open file",
-			Data:    nil,
-		})
-		return
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
 
 	// Get file info for setting headers
 	fileInfo, err := file.Stat()
 	if err != nil {
+		file.Close() // Clean up on error
 		logger.Error("failed to get file info", zap.String("path", config.FilePath), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "failed to get file info",
-			Data:    nil,
-		})
-		return
+		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
 	// Use provided filename or extract from path
@@ -88,18 +68,10 @@ func DownloadFile(c *gin.Context, config FileDownloadConfig) {
 		contentType = "application/octet-stream"
 	}
 
-	// Set headers for file download
-	c.Header("Content-Description", "File Transfer")
-	c.Header("Content-Transfer-Encoding", "binary")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	c.Header("Content-Type", contentType)
-	c.Header("Content-Length", fmt.Sprintf("%d", fileInfo.Size()))
-
-	// Stream the file content
-	_, err = io.Copy(c.Writer, file)
-	if err != nil {
-		logger.Error("failed to stream file", zap.String("path", config.FilePath), zap.Error(err))
-		// At this point headers are already sent, so we can't send a JSON error response
-		return
-	}
+	return &FileDownloadResult{
+		File:        file,
+		Filename:    filename,
+		ContentType: contentType,
+		Size:        fileInfo.Size(),
+	}, nil
 }
