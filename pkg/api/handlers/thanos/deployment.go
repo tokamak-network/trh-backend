@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -299,10 +300,35 @@ func (h *ThanosDeploymentHandler) DownloadDeploymentLogFile(c *gin.Context) {
 	// Generate filename based on deployment step and ID
 	filename := fmt.Sprintf("deployment_%s_%s.log", deployment.Step, deployment.ID.String()[:8])
 
-	// Use shared utility to download the file
-	utils.DownloadFile(c, utils.FileDownloadConfig{
+	// Prepare file for download
+	result, err := utils.PrepareFileDownload(c.Request.Context(), utils.FileDownloadConfig{
 		FilePath:    deployment.LogPath,
 		Filename:    filename,
 		ContentType: "application/octet-stream",
 	})
+	if err != nil {
+		logger.Error("failed to prepare file download", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "failed to prepare file for download",
+			Data:    nil,
+		})
+		return
+	}
+	defer result.File.Close()
+
+	// Set headers for file download
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", result.Filename))
+	c.Header("Content-Type", result.ContentType)
+	c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
+
+	// Stream the file content
+	_, err = io.Copy(c.Writer, result.File)
+	if err != nil {
+		logger.Error("failed to stream file", zap.Error(err))
+		// At this point headers are already sent, so we can't send a JSON error response
+		return
+	}
 }

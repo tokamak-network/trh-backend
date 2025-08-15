@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -141,10 +142,35 @@ func (h *ThanosDeploymentHandler) DownloadRollupConfig(c *gin.Context) {
 	// Generate filename based on stack ID
 	filename := fmt.Sprintf("rollup-config_%s.json", stackId.String()[:8])
 
-	// Use shared utility to download the file
-	utils.DownloadFile(c, utils.FileDownloadConfig{
+	// Prepare file for download
+	result, err := utils.PrepareFileDownload(c.Request.Context(), utils.FileDownloadConfig{
 		FilePath:    filePath,
 		Filename:    filename,
 		ContentType: "application/json",
 	})
+	if err != nil {
+		logger.Error("failed to prepare file download", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "failed to prepare file for download",
+			Data:    nil,
+		})
+		return
+	}
+	defer result.File.Close()
+
+	// Set headers for file download
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", result.Filename))
+	c.Header("Content-Type", result.ContentType)
+	c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
+
+	// Stream the file content
+	_, err = io.Copy(c.Writer, result.File)
+	if err != nil {
+		logger.Error("failed to stream file", zap.Error(err))
+		// At this point headers are already sent, so we can't send a JSON error response
+		return
+	}
 }
