@@ -2,6 +2,9 @@ package thanos
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
@@ -85,4 +88,78 @@ func (s *ThanosStackDeploymentService) UninstallMonitoring(ctx context.Context, 
 // RegisterCandidate delegates candidate registration to the integrations layer
 func (s *ThanosStackDeploymentService) RegisterCandidate(ctx context.Context, stackId uuid.UUID, req dtos.RegisterCandidateRequest) (*entities.Response, error) {
 	return s.integrationMgr.RegisterCandidateForStack(ctx, stackId, req)
+}
+
+// DownloadDeploymentLogFile returns the deployment and validates that the log file exists for download
+func (s *ThanosStackDeploymentService) DownloadDeploymentLogFile(stackId uuid.UUID, deploymentId uuid.UUID) (*entities.DeploymentEntity, error) {
+	// Verify stack exists
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return nil, err
+	}
+	if stack == nil {
+		return nil, errors.New("stack not found")
+	}
+
+	// Get deployment
+	deployment, err := s.deploymentRepo.GetDeploymentByID(deploymentId.String())
+	if err != nil {
+		return nil, err
+	}
+	if deployment == nil {
+		return nil, errors.New("deployment not found")
+	}
+
+	// Verify deployment belongs to the specified stack
+	if deployment.StackID == nil || *deployment.StackID != stackId {
+		return nil, errors.New("deployment does not belong to the specified stack")
+	}
+
+	// Check if log file exists
+	if deployment.LogPath == "" {
+		return nil, errors.New("no log file available for this deployment")
+	}
+
+	// Verify file exists on filesystem
+	if _, err := os.Stat(deployment.LogPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("log file not found on filesystem: ", deployment.LogPath)
+			return nil, fmt.Errorf("log file not found on filesystem: %s", deployment.LogPath)
+		}
+		return nil, err
+	}
+
+	return deployment, nil
+}
+
+// GetRollupConfigFilePath returns the rollup config file path from stack metadata and validates it exists
+func (s *ThanosStackDeploymentService) GetRollupConfigFilePath(stackId uuid.UUID) (string, error) {
+	// Get stack
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return "", err
+	}
+	if stack == nil {
+		return "", errors.New("stack not found")
+	}
+
+	// Check if metadata exists
+	if stack.Metadata == nil {
+		return "", errors.New("stack metadata not found")
+	}
+
+	// Check if rollup config URL exists
+	if stack.Metadata.RollupConfigUrl == "" {
+		return "", errors.New("rollup config file not available for this stack")
+	}
+
+	// Verify file exists on filesystem
+	if _, err := os.Stat(stack.Metadata.RollupConfigUrl); err != nil {
+		if os.IsNotExist(err) {
+			return "", errors.New("rollup config file not found on filesystem")
+		}
+		return "", err
+	}
+
+	return stack.Metadata.RollupConfigUrl, nil
 }
