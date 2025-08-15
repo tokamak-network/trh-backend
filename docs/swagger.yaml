@@ -784,6 +784,44 @@ paths:
       summary: Get Deployment Logs
       tags:
       - Thanos Stack
+  /stacks/thanos/{id}/deployments/{deploymentId}/logs/download:
+    get:
+      consumes:
+      - application/json
+      description: Download the deployment log file
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Deployment ID
+        in: path
+        name: deploymentId
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Log file content
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Download Deployment Log File
+      tags:
+      - Thanos Stack
   /stacks/thanos/{id}/deployments/{deploymentId}/status:
     get:
       consumes:
@@ -1062,6 +1100,39 @@ paths:
           schema:
             $ref: '#/definitions/entities.Response'
       summary: Resume Thanos Stack
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/rollupconfig:
+    get:
+      consumes:
+      - application/json
+      description: Download the rollup config file for a stack
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Rollup config file content
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Download Rollup Config File
       tags:
       - Thanos Stack
   /stacks/thanos/{id}/status:
