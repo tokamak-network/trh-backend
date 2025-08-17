@@ -103,8 +103,15 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 		return
 	}
 
+	var layer1Name string
+	if string(stack.Network) == "mainnet" {
+		layer1Name = "Ethereum"
+	} else {
+		layer1Name = "Ethereum Sepolia"
+	}
+
 	err = s.stackRepo.UpdateMetadata(stackId.String(), &entities.StackMetadata{
-		Layer1:          "Ethereum",
+		Layer1:          layer1Name,
 		Layer2:          "Thanos Stack",
 		L1ChainId:       chainInformation.L1ChainID,
 		L2RpcUrl:        chainInformation.L2RpcUrl,
