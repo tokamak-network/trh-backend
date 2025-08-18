@@ -37,7 +37,11 @@ func (r *DeploymentRepository) UpdateDeploymentStatus(
 	if status == entities.DeploymentRunStatusFailed || status == entities.DeploymentRunStatusSuccess {
 		updates["finished_at"] = &now
 	}
-	return r.db.Model(&schemas.Deployment{}).Where("id = ?", id).Updates(updates).Error
+	return r.db.Model(&schemas.Deployment{}).
+		Where("id = ?", id).
+		Where("status != ?", entities.DeploymentRunStatusSuccess).
+		Where("status != ?", entities.DeploymentRunStatusFailed).
+		Updates(updates).Error
 }
 
 func (r *DeploymentRepository) UpdateStatusesByStackId(

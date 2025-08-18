@@ -134,6 +134,12 @@ func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Cont
 			Data:    nil,
 		}, err
 	}
+	err = s.deploymentRepo.UpdateDeploymentStatus(stackId.String(), entities.DeploymentRunStatusStopped)
+	if err != nil {
+		logger.Error("failed to update deployment status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+	}
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",

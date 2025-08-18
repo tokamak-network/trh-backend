@@ -45,6 +45,7 @@ const (
 	DeploymentRunStatusInProgress DeploymentRunStatus = "InProgress"
 	DeploymentRunStatusFailed     DeploymentRunStatus = "Failed"
 	DeploymentRunStatusSuccess    DeploymentRunStatus = "Success"
+	DeploymentRunStatusStopped    DeploymentRunStatus = "Stopped"
 )
 
 type UserRole string
