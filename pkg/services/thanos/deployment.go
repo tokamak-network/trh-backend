@@ -3,6 +3,7 @@ package thanos
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -29,7 +30,8 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 
 	err = s.deployThanosStack(ctx, stackId)
 	if err != nil {
-		if err == context.Canceled {
+		if errors.Is(err, context.Canceled) {
+			logger.Info("deployment cancelled", zap.String("stackId", stackId.String()))
 			return
 		}
 		logger.Error("failed to deploy thanos stacks",
@@ -362,7 +364,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
 
 			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
-				if err == context.Canceled {
+				if errors.Is(err, context.Canceled) {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
 						zap.String("step", deployment.Step))
@@ -385,7 +387,6 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 				DeploymentID: deployment.ID,
 				Status:       entities.DeploymentRunStatusSuccess,
 			}
-			cancel()
 		}
 
 	}
