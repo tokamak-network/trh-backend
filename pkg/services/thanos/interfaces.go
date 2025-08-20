@@ -32,6 +32,10 @@ type StackRepository interface {
 		id string,
 		metadata *entities.StackMetadata,
 	) error
+	UpdateConfig(
+		id string,
+		config []byte,
+	) error
 }
 
 type IntegrationRepository interface {

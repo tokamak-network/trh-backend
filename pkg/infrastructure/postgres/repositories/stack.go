@@ -179,6 +179,13 @@ func (r *StackRepository) GetStackStatus(
 	return stack.Status, nil
 }
 
+func (r *StackRepository) UpdateConfig(
+	id string,
+	config []byte,
+) error {
+	return r.db.Model(&schemas.Stack{}).Where("id = ?", id).Update("config", config).Error
+}
+
 func ToStackEntity(s *entities.StackEntity) *schemas.Stack {
 	return &schemas.Stack{
 		ID:             s.ID,

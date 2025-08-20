@@ -297,6 +297,23 @@ func (s *ThanosStackDeploymentService) UpdateNetwork(ctx context.Context, stackI
 		err = thanos.UpdateNetwork(ctx, sdkClient, &request)
 		if err != nil {
 			logger.Error("failed to update network", zap.Error(err))
+			return
+		}
+
+		// Update stack config with new L1RPC and L1Beacon URLs
+		stackConfig.L1RpcUrl = request.L1RpcUrl
+		stackConfig.L1BeaconUrl = request.L1BeaconUrl
+
+		updatedConfig, err := json.Marshal(stackConfig)
+		if err != nil {
+			logger.Error("failed to marshal updated stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
+		}
+
+		err = s.stackRepo.UpdateConfig(stackId.String(), updatedConfig)
+		if err != nil {
+			logger.Error("failed to update stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
 		}
 
 		err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusDeployed, "")
