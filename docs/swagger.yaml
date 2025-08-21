@@ -33,6 +33,30 @@ definitions:
       telegram:
         $ref: '#/definitions/dtos.TelegramConfig'
     type: object
+  dtos.ApiKeyListResponse:
+    properties:
+      apiKeys:
+        items:
+          $ref: '#/definitions/dtos.ApiKeyResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  dtos.ApiKeyResponse:
+    properties:
+      apiKey:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      id:
+        type: string
+      type:
+        type: string
+      updatedAt:
+        type: string
+    type: object
   dtos.AuthResponse:
     properties:
       token:
@@ -52,6 +76,32 @@ definitions:
     - accessKeyId
     - name
     - secretAccessKey
+    type: object
+  dtos.CreateApiKeyRequest:
+    properties:
+      apiKey:
+        type: string
+      type:
+        type: string
+    required:
+    - apiKey
+    - type
+    type: object
+  dtos.CreateRPCUrlRequest:
+    properties:
+      name:
+        type: string
+      network:
+        $ref: '#/definitions/entities.NetworkType'
+      rpcUrl:
+        type: string
+      type:
+        $ref: '#/definitions/entities.RPCType'
+    required:
+    - name
+    - network
+    - rpcUrl
+    - type
     type: object
   dtos.DeployThanosRequest:
     properties:
@@ -177,6 +227,34 @@ definitions:
     - email
     - password
     type: object
+  dtos.RPCUrlListResponse:
+    properties:
+      rpcUrls:
+        items:
+          $ref: '#/definitions/dtos.RPCUrlResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  dtos.RPCUrlResponse:
+    properties:
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      network:
+        $ref: '#/definitions/entities.NetworkType'
+      rpcUrl:
+        type: string
+      type:
+        $ref: '#/definitions/entities.RPCType'
+      updatedAt:
+        type: string
+    type: object
   dtos.RegisterCandidateRequest:
     properties:
       amount:
@@ -215,12 +293,30 @@ definitions:
       secretAccessKey:
         type: string
     type: object
+  dtos.UpdateApiKeyRequest:
+    properties:
+      apiKey:
+        type: string
+      type:
+        type: string
+    type: object
   dtos.UpdateNetworkRequest:
     properties:
       l1BeaconUrl:
         type: string
       l1RpcUrl:
         type: string
+    type: object
+  dtos.UpdateRPCUrlRequest:
+    properties:
+      name:
+        type: string
+      network:
+        $ref: '#/definitions/entities.NetworkType'
+      rpcUrl:
+        type: string
+      type:
+        $ref: '#/definitions/entities.RPCType'
     type: object
   dtos.UserResponse:
     properties:
@@ -241,6 +337,22 @@ definitions:
     - DeploymentNetworkMainnet
     - DeploymentNetworkTestnet
     - DeploymentNetworkLocalDevnet
+  entities.NetworkType:
+    enum:
+    - Testnet
+    - Mainnet
+    type: string
+    x-enum-varnames:
+    - NetworkTypeTestnet
+    - NetworkTypeMainnet
+  entities.RPCType:
+    enum:
+    - BeaconChain
+    - ExecutionLayer
+    type: string
+    x-enum-varnames:
+    - RPCTypeBeaconChain
+    - RPCTypeExecutionLayer
   entities.Response:
     properties:
       data: {}
@@ -375,7 +487,188 @@ paths:
       summary: Get all users (Admin only)
       tags:
       - auth
-  /aws-credentials:
+  /configuration/api-key:
+    get:
+      consumes:
+      - application/json
+      description: Get all API key configurations (excluding soft deleted ones)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.ApiKeyListResponse'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Get all API Keys
+      tags:
+      - api-key
+    post:
+      consumes:
+      - application/json
+      description: Create new API key configuration with key and type
+      parameters:
+      - description: Create API Key request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.CreateApiKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.ApiKeyResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Create API Key
+      tags:
+      - api-key
+  /configuration/api-key/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete API key configuration by ID
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Delete API Key
+      tags:
+      - api-key
+    get:
+      consumes:
+      - application/json
+      description: Get API key configuration by its unique ID
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.ApiKeyResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Get API Key by ID
+      tags:
+      - api-key
+    patch:
+      consumes:
+      - application/json
+      description: Update existing API key configuration by ID (partial update)
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update API Key request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.UpdateApiKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.ApiKeyResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Update API Key
+      tags:
+      - api-key
+  /configuration/aws-credentials:
     get:
       consumes:
       - application/json
@@ -442,7 +735,7 @@ paths:
       summary: Create AWS credentials
       tags:
       - aws-credentials
-  /aws-credentials/{id}:
+  /configuration/aws-credentials/{id}:
     delete:
       consumes:
       - application/json
@@ -565,6 +858,195 @@ paths:
       summary: Update AWS credentials
       tags:
       - aws-credentials
+  /configuration/rpc-url:
+    get:
+      consumes:
+      - application/json
+      description: Get all RPC URL configurations (excluding soft deleted ones)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.RPCUrlListResponse'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Get all RPC URLs
+      tags:
+      - rpc-url
+    post:
+      consumes:
+      - application/json
+      description: Create new RPC URL configuration with name, URL, type, and network
+      parameters:
+      - description: Create RPC URL request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.CreateRPCUrlRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.RPCUrlResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Create RPC URL
+      tags:
+      - rpc-url
+  /configuration/rpc-url/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete RPC URL configuration by ID
+      parameters:
+      - description: RPC URL ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Delete RPC URL
+      tags:
+      - rpc-url
+    get:
+      consumes:
+      - application/json
+      description: Get RPC URL configuration by its unique ID
+      parameters:
+      - description: RPC URL ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.RPCUrlResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Get RPC URL by ID
+      tags:
+      - rpc-url
+    patch:
+      consumes:
+      - application/json
+      description: Update existing RPC URL configuration by ID (partial update)
+      parameters:
+      - description: RPC URL ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update RPC URL request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.UpdateRPCUrlRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/entities.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dtos.RPCUrlResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/entities.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entities.Response'
+      security:
+      - BearerAuth: []
+      summary: Update RPC URL
+      tags:
+      - rpc-url
   /health:
     get:
       consumes:

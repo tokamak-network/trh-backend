@@ -6,12 +6,14 @@ import (
 	"github.com/gin-gonic/gin"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/tokamak-network/trh-backend/pkg/api/handlers"
+	configurationHandlers "github.com/tokamak-network/trh-backend/pkg/api/handlers/configuration"
 	"github.com/tokamak-network/trh-backend/pkg/api/handlers/thanos"
 	"github.com/tokamak-network/trh-backend/pkg/api/middleware"
 	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/repositories"
 	"github.com/tokamak-network/trh-backend/pkg/services"
+	"github.com/tokamak-network/trh-backend/pkg/services/configuration"
 
 	swaggerFiles "github.com/swaggo/files"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -29,6 +31,8 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 	// Initialize repositories with connection pooling
 	userRepo := repositories.NewUserRepository(server.PostgresDB)
 	awsCredentialsRepo := repositories.NewAWSCredentialsRepository(server.PostgresDB)
+	rpcUrlRepo := repositories.NewRPCUrlRepository(server.PostgresDB)
+	apiKeyRepo := repositories.NewApiKeyRepository(server.PostgresDB)
 
 	// Initialize services with optimized configuration
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -37,7 +41,9 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 	}
 	jwtService := services.NewJWTService(jwtSecret)
 	authService := services.NewAuthService(userRepo, jwtService)
-	awsCredentialsService := services.NewAWSCredentialsService(awsCredentialsRepo)
+	awsCredentialsService := configuration.NewAWSCredentialsService(awsCredentialsRepo)
+	rpcUrlService := configuration.NewRPCUrlService(rpcUrlRepo)
+	apiKeyService := configuration.NewApiKeyService(apiKeyRepo)
 
 	// Create default admin account if no users exist
 	if err := authService.CreateDefaultAdmin(); err != nil {
@@ -46,7 +52,9 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
-	awsCredentialsHandler := handlers.NewAWSCredentialsHandler(awsCredentialsService)
+	awsCredentialsHandler := configurationHandlers.NewAWSCredentialsHandler(awsCredentialsService)
+	rpcUrlHandler := configurationHandlers.NewRPCUrlHandler(rpcUrlService)
+	apiKeyHandler := configurationHandlers.NewApiKeyHandler(apiKeyService)
 
 	// Initialize middleware with optimized settings
 	jwtMiddleware := middleware.NewJWTMiddleware(jwtService)
@@ -57,8 +65,8 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 	// Auth routes
 	setupAuthRoutes(router.Group("/auth"), authHandler, jwtMiddleware)
 
-	// AWS Credentials routes (protected)
-	setupAWSCredentialsRoutes(router.Group("/aws-credentials"), awsCredentialsHandler, jwtMiddleware)
+	// Configuration routes (protected)
+	setupConfigurationRoutes(router.Group("/configuration"), awsCredentialsHandler, rpcUrlHandler, apiKeyHandler, jwtMiddleware)
 
 	// Stack routes (protected)
 	stacks := router.Group("/stacks")
@@ -89,7 +97,21 @@ func setupAuthRoutes(router *gin.RouterGroup, authHandler *handlers.AuthHandler,
 	}
 }
 
-func setupAWSCredentialsRoutes(router *gin.RouterGroup, awsCredentialsHandler *handlers.AWSCredentialsHandler, jwtMiddleware *middleware.JWTMiddleware) {
+func setupConfigurationRoutes(router *gin.RouterGroup, awsCredentialsHandler *configurationHandlers.AWSCredentialsHandler, rpcUrlHandler *configurationHandlers.RPCUrlHandler, apiKeyHandler *configurationHandlers.ApiKeyHandler, jwtMiddleware *middleware.JWTMiddleware) {
+	// AWS Credentials sub-routes
+	awsCredentialsRoutes := router.Group("/aws-credentials")
+	setupAWSCredentialsSubRoutes(awsCredentialsRoutes, awsCredentialsHandler, jwtMiddleware)
+
+	// RPC URL sub-routes
+	rpcUrlRoutes := router.Group("/rpc-url")
+	setupRPCUrlSubRoutes(rpcUrlRoutes, rpcUrlHandler, jwtMiddleware)
+
+	// API Key sub-routes
+	apiKeyRoutes := router.Group("/api-key")
+	setupAPIKeySubRoutes(apiKeyRoutes, apiKeyHandler, jwtMiddleware)
+}
+
+func setupAWSCredentialsSubRoutes(router *gin.RouterGroup, awsCredentialsHandler *configurationHandlers.AWSCredentialsHandler, jwtMiddleware *middleware.JWTMiddleware) {
 	// Admin-only routes (require admin role)
 	adminRoutes := router.Group("")
 	adminRoutes.Use(jwtMiddleware.AuthMiddleware(entities.UserRoleAdmin))
@@ -105,6 +127,44 @@ func setupAWSCredentialsRoutes(router *gin.RouterGroup, awsCredentialsHandler *h
 	{
 		authenticatedRoutes.GET("", awsCredentialsHandler.GetAll)
 		authenticatedRoutes.GET("/:id", awsCredentialsHandler.GetByID)
+	}
+}
+
+func setupRPCUrlSubRoutes(router *gin.RouterGroup, rpcUrlHandler *configurationHandlers.RPCUrlHandler, jwtMiddleware *middleware.JWTMiddleware) {
+	// Admin-only routes (require admin role)
+	adminRoutes := router.Group("")
+	adminRoutes.Use(jwtMiddleware.AuthMiddleware(entities.UserRoleAdmin))
+	{
+		adminRoutes.POST("", rpcUrlHandler.Create)
+		adminRoutes.PATCH("/:id", rpcUrlHandler.Update)
+		adminRoutes.DELETE("/:id", rpcUrlHandler.Delete)
+	}
+
+	// Authenticated routes (require valid JWT token - any role)
+	authenticatedRoutes := router.Group("")
+	authenticatedRoutes.Use(jwtMiddleware.AuthMiddleware())
+	{
+		authenticatedRoutes.GET("", rpcUrlHandler.GetAll)
+		authenticatedRoutes.GET("/:id", rpcUrlHandler.GetByID)
+	}
+}
+
+func setupAPIKeySubRoutes(router *gin.RouterGroup, apiKeyHandler *configurationHandlers.ApiKeyHandler, jwtMiddleware *middleware.JWTMiddleware) {
+	// Admin-only routes (require admin role)
+	adminRoutes := router.Group("")
+	adminRoutes.Use(jwtMiddleware.AuthMiddleware(entities.UserRoleAdmin))
+	{
+		adminRoutes.POST("", apiKeyHandler.Create)
+		adminRoutes.PATCH("/:id", apiKeyHandler.Update)
+		adminRoutes.DELETE("/:id", apiKeyHandler.Delete)
+	}
+
+	// Authenticated routes (require valid JWT token - any role)
+	authenticatedRoutes := router.Group("")
+	authenticatedRoutes.Use(jwtMiddleware.AuthMiddleware())
+	{
+		authenticatedRoutes.GET("", apiKeyHandler.GetAll)
+		authenticatedRoutes.GET("/:id", apiKeyHandler.GetByID)
 	}
 }
 

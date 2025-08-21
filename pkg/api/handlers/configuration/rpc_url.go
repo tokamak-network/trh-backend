@@ -1,4 +1,4 @@
-package handlers
+package configuration
 
 import (
 	"net/http"
@@ -8,36 +8,36 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
-	"github.com/tokamak-network/trh-backend/pkg/services"
+	"github.com/tokamak-network/trh-backend/pkg/services/configuration"
 	"go.uber.org/zap"
 )
 
-type AWSCredentialsHandler struct {
-	service *services.AWSCredentialsService
+type RPCUrlHandler struct {
+	service *configuration.RPCUrlService
 }
 
-func NewAWSCredentialsHandler(service *services.AWSCredentialsService) *AWSCredentialsHandler {
-	return &AWSCredentialsHandler{
+func NewRPCUrlHandler(service *configuration.RPCUrlService) *RPCUrlHandler {
+	return &RPCUrlHandler{
 		service: service,
 	}
 }
 
-// CreateAWSCredentials godoc
+// CreateRPCUrl godoc
 //
-//	@Summary		Create AWS credentials
-//	@Description	Create new AWS credentials with name, access key ID, and secret access key
-//	@Tags			aws-credentials
+//	@Summary		Create RPC URL
+//	@Description	Create new RPC URL configuration with name, URL, type, and network
+//	@Tags			rpc-url
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		dtos.CreateAWSCredentialsRequest	true	"Create AWS credentials request"
-//	@Success		201		{object}	entities.Response{data=dtos.AWSCredentialsResponse}
+//	@Param			request	body		dtos.CreateRPCUrlRequest	true	"Create RPC URL request"
+//	@Success		201		{object}	entities.Response{data=dtos.RPCUrlResponse}
 //	@Failure		400		{object}	entities.Response
 //	@Failure		409		{object}	entities.Response
 //	@Failure		500		{object}	entities.Response
 //	@Security		BearerAuth
-//	@Router			/aws-credentials [post]
-func (h *AWSCredentialsHandler) Create(c *gin.Context) {
-	var req dtos.CreateAWSCredentialsRequest
+//	@Router			/configuration/rpc-url [post]
+func (h *RPCUrlHandler) Create(c *gin.Context) {
+	var req dtos.CreateRPCUrlRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.Error("failed to bind JSON", zap.Error(err))
 		c.JSON(http.StatusBadRequest, &entities.Response{
@@ -51,15 +51,15 @@ func (h *AWSCredentialsHandler) Create(c *gin.Context) {
 	response, err := h.service.Create(&req)
 	if err != nil {
 		switch err {
-		case dtos.ErrNameRequired, dtos.ErrAccessKeyIDRequired, dtos.ErrSecretAccessKeyRequired,
-			dtos.ErrInvalidAccessKeyID, dtos.ErrInvalidSecretAccessKey:
+		case dtos.ErrNameRequired, dtos.ErrRpcUrlRequired, dtos.ErrInvalidRpcUrlFormat,
+			dtos.ErrInvalidRpcType, dtos.ErrInvalidNetworkType:
 			logger.Error("validation error", zap.Error(err))
 			c.JSON(http.StatusBadRequest, &entities.Response{
 				Status:  uint64(http.StatusBadRequest),
 				Message: err.Error(),
 				Data:    nil,
 			})
-		case dtos.ErrNameAlreadyExists:
+		case dtos.ErrRpcUrlNameExists:
 			logger.Error("name already exists", zap.Error(err))
 			c.JSON(http.StatusConflict, &entities.Response{
 				Status:  uint64(http.StatusConflict),
@@ -79,32 +79,32 @@ func (h *AWSCredentialsHandler) Create(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, &entities.Response{
 		Status:  uint64(http.StatusCreated),
-		Message: "AWS credentials created successfully",
+		Message: "RPC URL created successfully",
 		Data:    response,
 	})
 }
 
-// GetAWSCredentialsByID godoc
+// GetRPCUrlByID godoc
 //
-//	@Summary		Get AWS credentials by ID
-//	@Description	Get AWS credentials by their unique ID
-//	@Tags			aws-credentials
+//	@Summary		Get RPC URL by ID
+//	@Description	Get RPC URL configuration by its unique ID
+//	@Tags			rpc-url
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		string	true	"AWS credentials ID"
-//	@Success		200	{object}	entities.Response{data=dtos.AWSCredentialsResponse}
+//	@Param			id	path		string	true	"RPC URL ID"
+//	@Success		200	{object}	entities.Response{data=dtos.RPCUrlResponse}
 //	@Failure		400	{object}	entities.Response
 //	@Failure		404	{object}	entities.Response
 //	@Failure		500	{object}	entities.Response
 //	@Security		BearerAuth
-//	@Router			/aws-credentials/{id} [get]
-func (h *AWSCredentialsHandler) GetByID(c *gin.Context) {
+//	@Router			/configuration/rpc-url/{id} [get]
+func (h *RPCUrlHandler) GetByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, &entities.Response{
 			Status:  uint64(http.StatusBadRequest),
-			Message: "invalid credentials ID",
+			Message: "invalid RPC URL ID",
 			Data:    nil,
 		})
 		return
@@ -113,7 +113,7 @@ func (h *AWSCredentialsHandler) GetByID(c *gin.Context) {
 	response, err := h.service.GetByID(id)
 	if err != nil {
 		switch err {
-		case dtos.ErrAWSCredentialsNotFound:
+		case dtos.ErrRpcUrlNotFound:
 			c.JSON(http.StatusNotFound, &entities.Response{
 				Status:  uint64(http.StatusNotFound),
 				Message: err.Error(),
@@ -131,23 +131,23 @@ func (h *AWSCredentialsHandler) GetByID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &entities.Response{
 		Status:  uint64(http.StatusOK),
-		Message: "AWS credentials retrieved successfully",
+		Message: "RPC URL retrieved successfully",
 		Data:    response,
 	})
 }
 
-// GetAllAWSCredentials godoc
+// GetAllRPCUrls godoc
 //
-//	@Summary		Get all AWS credentials
-//	@Description	Get all AWS credentials (excluding soft deleted ones)
-//	@Tags			aws-credentials
+//	@Summary		Get all RPC URLs
+//	@Description	Get all RPC URL configurations (excluding soft deleted ones)
+//	@Tags			rpc-url
 //	@Accept			json
 //	@Produce		json
-//	@Success		200	{object}	entities.Response{data=dtos.AWSCredentialsListResponse}
+//	@Success		200	{object}	entities.Response{data=dtos.RPCUrlListResponse}
 //	@Failure		500	{object}	entities.Response
 //	@Security		BearerAuth
-//	@Router			/aws-credentials [get]
-func (h *AWSCredentialsHandler) GetAll(c *gin.Context) {
+//	@Router			/configuration/rpc-url [get]
+func (h *RPCUrlHandler) GetAll(c *gin.Context) {
 	response, err := h.service.GetAll()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, &entities.Response{
@@ -160,40 +160,40 @@ func (h *AWSCredentialsHandler) GetAll(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &entities.Response{
 		Status:  uint64(http.StatusOK),
-		Message: "AWS credentials retrieved successfully",
+		Message: "RPC URLs retrieved successfully",
 		Data:    response,
 	})
 }
 
-// UpdateAWSCredentials godoc
+// UpdateRPCUrl godoc
 //
-//	@Summary		Update AWS credentials
-//	@Description	Update existing AWS credentials by ID (partial update)
-//	@Tags			aws-credentials
+//	@Summary		Update RPC URL
+//	@Description	Update existing RPC URL configuration by ID (partial update)
+//	@Tags			rpc-url
 //	@Accept			json
 //	@Produce		json
-//	@Param			id		path	string	true	"AWS credentials ID"
-//	@Param			request	body	dtos.UpdateAWSCredentialsRequest	true	"Update AWS credentials request"
-//	@Success		200		{object}	entities.Response{data=dtos.AWSCredentialsResponse}
+//	@Param			id		path	string	true	"RPC URL ID"
+//	@Param			request	body	dtos.UpdateRPCUrlRequest	true	"Update RPC URL request"
+//	@Success		200		{object}	entities.Response{data=dtos.RPCUrlResponse}
 //	@Failure		400		{object}	entities.Response
 //	@Failure		404		{object}	entities.Response
 //	@Failure		409		{object}	entities.Response
 //	@Failure		500		{object}	entities.Response
 //	@Security		BearerAuth
-//	@Router			/aws-credentials/{id} [patch]
-func (h *AWSCredentialsHandler) Update(c *gin.Context) {
+//	@Router			/configuration/rpc-url/{id} [patch]
+func (h *RPCUrlHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, &entities.Response{
 			Status:  uint64(http.StatusBadRequest),
-			Message: "invalid credentials ID",
+			Message: "invalid RPC URL ID",
 			Data:    nil,
 		})
 		return
 	}
 
-	var req dtos.UpdateAWSCredentialsRequest
+	var req dtos.UpdateRPCUrlRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, &entities.Response{
 			Status:  uint64(http.StatusBadRequest),
@@ -206,20 +206,20 @@ func (h *AWSCredentialsHandler) Update(c *gin.Context) {
 	response, err := h.service.Update(id, &req)
 	if err != nil {
 		switch err {
-		case dtos.ErrNameRequired, dtos.ErrAccessKeyIDRequired, dtos.ErrSecretAccessKeyRequired,
-			dtos.ErrInvalidAccessKeyID, dtos.ErrInvalidSecretAccessKey, dtos.ErrNoFieldsToUpdate:
+		case dtos.ErrNameRequired, dtos.ErrRpcUrlRequired, dtos.ErrInvalidRpcUrlFormat,
+			dtos.ErrInvalidRpcType, dtos.ErrInvalidNetworkType, dtos.ErrNoFieldsToUpdate:
 			c.JSON(http.StatusBadRequest, &entities.Response{
 				Status:  uint64(http.StatusBadRequest),
 				Message: err.Error(),
 				Data:    nil,
 			})
-		case dtos.ErrAWSCredentialsNotFound:
+		case dtos.ErrRpcUrlNotFound:
 			c.JSON(http.StatusNotFound, &entities.Response{
 				Status:  uint64(http.StatusNotFound),
 				Message: err.Error(),
 				Data:    nil,
 			})
-		case dtos.ErrNameAlreadyExists:
+		case dtos.ErrRpcUrlNameExists:
 			c.JSON(http.StatusConflict, &entities.Response{
 				Status:  uint64(http.StatusConflict),
 				Message: err.Error(),
@@ -237,32 +237,32 @@ func (h *AWSCredentialsHandler) Update(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &entities.Response{
 		Status:  uint64(http.StatusOK),
-		Message: "AWS credentials updated successfully",
+		Message: "RPC URL updated successfully",
 		Data:    response,
 	})
 }
 
-// DeleteAWSCredentials godoc
+// DeleteRPCUrl godoc
 //
-//	@Summary		Delete AWS credentials
-//	@Description	Soft delete AWS credentials by ID
-//	@Tags			aws-credentials
+//	@Summary		Delete RPC URL
+//	@Description	Soft delete RPC URL configuration by ID
+//	@Tags			rpc-url
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path	string	true	"AWS credentials ID"
+//	@Param			id	path	string	true	"RPC URL ID"
 //	@Success		200	{object}	entities.Response
 //	@Failure		400	{object}	entities.Response
 //	@Failure		404	{object}	entities.Response
 //	@Failure		500	{object}	entities.Response
 //	@Security		BearerAuth
-//	@Router			/aws-credentials/{id} [delete]
-func (h *AWSCredentialsHandler) Delete(c *gin.Context) {
+//	@Router			/configuration/rpc-url/{id} [delete]
+func (h *RPCUrlHandler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, &entities.Response{
 			Status:  uint64(http.StatusBadRequest),
-			Message: "invalid credentials ID",
+			Message: "invalid RPC URL ID",
 			Data:    nil,
 		})
 		return
@@ -271,7 +271,7 @@ func (h *AWSCredentialsHandler) Delete(c *gin.Context) {
 	err = h.service.Delete(id)
 	if err != nil {
 		switch err.Error() {
-		case "aws credentials not found":
+		case "rpc url not found":
 			c.JSON(http.StatusNotFound, &entities.Response{
 				Status:  uint64(http.StatusNotFound),
 				Message: err.Error(),
@@ -289,7 +289,7 @@ func (h *AWSCredentialsHandler) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &entities.Response{
 		Status:  uint64(http.StatusOK),
-		Message: "AWS credentials deleted successfully",
+		Message: "RPC URL deleted successfully",
 		Data:    nil,
 	})
 }
