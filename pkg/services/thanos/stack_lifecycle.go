@@ -134,12 +134,20 @@ func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Cont
 			Data:    nil,
 		}, err
 	}
-	err = s.deploymentRepo.UpdateDeploymentStatus(stackId.String(), entities.DeploymentRunStatusStopped)
+	err = s.deploymentRepo.UpdateStatusesByStackId(stackId.String(), entities.DeploymentRunStatusStopped)
 	if err != nil {
 		logger.Error("failed to update deployment status",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 	}
+
+	err = s.integrationRepo.UpdateIntegrationStatusByStackID(stackId.String(), entities.DeploymentStatusStopped)
+	if err != nil {
+		logger.Error("failed to update integration status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+	}
+
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",
@@ -213,6 +221,20 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 			Message: "Internal server error",
 			Data:    nil,
 		}, err
+	}
+
+	err = s.deploymentRepo.UpdateStatusesByStackId(stackId.String(), entities.DeploymentRunStatusInProgress)
+	if err != nil {
+		logger.Error("failed to update deployment status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+	}
+
+	err = s.integrationRepo.UpdateIntegrationStatusByStackID(stackId.String(), entities.DeploymentStatusInProgress)
+	if err != nil {
+		logger.Error("failed to update integration status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
 	}
 
 	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())

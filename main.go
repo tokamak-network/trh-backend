@@ -93,6 +93,11 @@ func main() {
 
 	logger.Info("Shutting down server...")
 
+	// Stop all in-progress deployments
+	if err := server.Stop(); err != nil {
+		logger.Error("Failed to stop deployments", zap.Error(err))
+	}
+
 	// Create a deadline for server shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

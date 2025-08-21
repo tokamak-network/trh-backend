@@ -7,6 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tokamak-network/trh-backend/pkg/api/middleware"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	postgresRepositories "github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/repositories"
+	"github.com/tokamak-network/trh-backend/pkg/services/thanos"
+	"github.com/tokamak-network/trh-backend/pkg/taskmanager"
 	"gorm.io/gorm"
 )
 
@@ -57,4 +61,31 @@ func NewServer(db *gorm.DB) *Server {
 		Router:     app,
 		PostgresDB: db,
 	}
+}
+
+func (s *Server) Stop() error {
+	deploymentRepo := postgresRepositories.NewDeploymentRepository(s.PostgresDB)
+	stackRepo := postgresRepositories.NewStackRepository(s.PostgresDB)
+	integrationRepo := postgresRepositories.NewIntegrationRepository(s.PostgresDB)
+	logRepo := postgresRepositories.NewLogRepository(s.PostgresDB)
+
+	taskManager := taskmanager.NewTaskManager(5, 20)
+
+	thanosService := thanos.NewThanosService(deploymentRepo, stackRepo, integrationRepo, taskManager, logRepo)
+
+	stacks, err := stackRepo.GetAllStacks()
+	if err != nil {
+		return err
+	}
+
+	for _, stack := range stacks {
+		if stack.Status == entities.StackStatusDeploying {
+			_, err = thanosService.StopDeployingThanosStack(context.Background(), stack.ID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

@@ -161,7 +161,7 @@ func (r *RegisterCandidateIntegration) Register(ctx context.Context, stackId uui
 
 	taskId := fmt.Sprintf("register-candidate-%s", stackId.String())
 	r.taskManager.AddTask(taskId, func(ctx context.Context) {
-		r.registerTask(ctx, stack, sdkClient, req, registerCandidateLogPath, stackId)
+		r.registerTask(ctx, sdkClient, req, registerCandidateLogPath, stackId)
 	})
 
 	return &entities.Response{
@@ -172,7 +172,7 @@ func (r *RegisterCandidateIntegration) Register(ctx context.Context, stackId uui
 }
 
 // registerTask handles the actual registration process
-func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, req dtos.RegisterCandidateRequest, logPath string, stackId uuid.UUID) {
+func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, sdkClient interface{}, req dtos.RegisterCandidateRequest, logPath string, stackId uuid.UUID) {
 	integrationConfig, err := json.Marshal(req)
 	if err != nil {
 		logger.Error("failed to marshal integration config", zap.Error(err))

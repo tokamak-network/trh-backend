@@ -46,6 +46,10 @@ type IntegrationRepository interface {
 		id string,
 		status entities.DeploymentStatus,
 	) error
+	UpdateIntegrationStatusByStackID(
+		stackID string,
+		status entities.DeploymentStatus,
+	) error
 	UpdateIntegrationStatusWithReason(
 		id string,
 		status entities.DeploymentStatus,

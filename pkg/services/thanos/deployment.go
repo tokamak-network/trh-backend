@@ -238,6 +238,11 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 	filtered := make([]*entities.DeploymentEntity, 0, 2)
 	var l1Step, awsStep *entities.DeploymentEntity
 	for _, d := range deployments {
+		// Skip already completed deployments
+		if d.Status == entities.DeploymentRunStatusSuccess {
+			continue
+		}
+
 		if d.Step == constants.DeployL1ContractsStep {
 			// keep the earliest unfinished occurrence
 			if l1Step == nil || (l1Step.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
