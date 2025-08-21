@@ -16,6 +16,7 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
@@ -247,7 +248,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 	deployment := &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Step:    "install-monitoring",
+		Step:    constants.InstallMonitoringStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  configBytes,
@@ -410,7 +411,7 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 	uninstallDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Step:    "uninstall-monitoring",
+		Step:    constants.UninstallMonitoringStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  []byte("{}"),

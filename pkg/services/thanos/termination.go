@@ -8,6 +8,7 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	"go.uber.org/zap"
@@ -51,7 +52,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	terminationDeployment := &entities.DeploymentEntity{
 		ID:      terminationDeploymentID,
 		StackID: &stack.ID,
-		Step:    "destroy-aws-infra",
+		Step:    constants.DestroyChainStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  terminationConfig,

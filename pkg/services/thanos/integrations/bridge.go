@@ -16,6 +16,7 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
@@ -241,7 +242,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 	deployment := &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Step:    "install-bridge",
+		Step:    constants.InstallBridgeStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  []byte("{}"),
@@ -380,7 +381,7 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 	uninstallDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Step:    "uninstall-bridge",
+		Step:    constants.UninstallBridgeStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  []byte("{}"),

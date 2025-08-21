@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
@@ -15,7 +16,7 @@ func getThanosStackDeployments(
 ) ([]*entities.DeploymentEntity, error) {
 	deployments := make([]*entities.DeploymentEntity, 0)
 	l1ContractDeploymentID := uuid.New()
-	l1ContractDeploymentLogPath := utils.GetLogPath(stackId, "deploy-l1-contracts")
+	l1ContractDeploymentLogPath := utils.GetLogPath(stackId, constants.DeployL1ContractsStep)
 
 	var registerCandidateParams *dtos.RegisterCandidateRequest
 	if config.RegisterCandidate {
@@ -41,7 +42,7 @@ func getThanosStackDeployments(
 	l1ContractDeployment := &entities.DeploymentEntity{
 		ID:      l1ContractDeploymentID,
 		StackID: &stackId,
-		Step:    "deploy-l1-contracts",
+		Step:    constants.DeployL1ContractsStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: l1ContractDeploymentLogPath,
 		Config:  l1ContractDeploymentConfig,
@@ -51,7 +52,7 @@ func getThanosStackDeployments(
 	thanosInfrastructureDeploymentID := uuid.New()
 	thanosInfrastructureDeploymentLogPath := utils.GetLogPath(
 		stackId,
-		"deploy-thanos-aws-infra",
+		constants.DestroyChainStep,
 	)
 	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
 		ChainName:   config.ChainName,
@@ -63,7 +64,7 @@ func getThanosStackDeployments(
 	thanosInfrastructureDeployment := &entities.DeploymentEntity{
 		ID:      thanosInfrastructureDeploymentID,
 		StackID: &stackId,
-		Step:    "deploy-aws-infra",
+		Step:    constants.DestroyChainStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: thanosInfrastructureDeploymentLogPath,
 		Config:  thanosInfrastructureDeploymentConfig,

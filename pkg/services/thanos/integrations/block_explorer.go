@@ -16,6 +16,7 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
@@ -256,7 +257,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 	deployment := &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Step:    "install-block-explorer",
+		Step:    constants.InstallBlockExplorerStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  configBytes,
@@ -389,7 +390,7 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 	uninstallDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Step:    "uninstall-block-explorer",
+		Step:    constants.UninstallBlockExplorerStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  []byte("{}"),

@@ -10,6 +10,7 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
@@ -237,13 +238,13 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 	filtered := make([]*entities.DeploymentEntity, 0, 2)
 	var l1Step, awsStep *entities.DeploymentEntity
 	for _, d := range deployments {
-		if d.Step == "deploy-l1-contracts" {
+		if d.Step == constants.DeployL1ContractsStep {
 			// keep the earliest unfinished occurrence
 			if l1Step == nil || (l1Step.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
 				l1Step = d
 			}
 		}
-		if d.Step == "deploy-aws-infra" {
+		if d.Step == constants.DestroyChainStep {
 			if awsStep == nil || (awsStep.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
 				awsStep = d
 			}
@@ -326,6 +327,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 
 			// Start log ingestion for this deployment step
 			ingestCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
 			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
 
 			if err := thanos.DeployL1Contracts(ctx, sdkClient, &deployL1ContractsConfig); err != nil {
@@ -334,7 +336,6 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 						zap.String("deploymentId", deployment.ID.String()),
 						zap.String("step", deployment.Step))
 					// Keep run status as-is on cancel; no explicit Stopped state in run status
-					cancel()
 					return err
 				}
 				logger.Error("deployment failed",
@@ -345,14 +346,12 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentRunStatusFailed,
 				}
-				cancel()
 				return err
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,
 				Status:       entities.DeploymentRunStatusSuccess,
 			}
-			cancel()
 		case "deploy-aws-infra":
 			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
 			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
@@ -361,6 +360,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 
 			// Start log ingestion for this deployment step
 			ingestCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
 			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
 
 			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
@@ -369,7 +369,6 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 						zap.String("deploymentId", deployment.ID.String()),
 						zap.String("step", deployment.Step))
 					// Keep run status as-is on cancel; no explicit Stopped state in run status
-					cancel()
 					return err
 				}
 				logger.Error("deployment failed",
@@ -380,7 +379,6 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentRunStatusFailed,
 				}
-				cancel()
 				return err
 			}
 			statusChan <- entities.DeploymentStatusWithID{

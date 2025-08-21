@@ -16,6 +16,7 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
@@ -182,7 +183,7 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 	deployment := &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stackId,
-		Step:    "register-candidate",
+		Step:    constants.RegisterCandidateStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
 		Config:  integrationConfig,
