@@ -47,7 +47,17 @@ func Init(
 	sqlDB.SetMaxOpenConns(100)          // Maximum number of open connections
 	sqlDB.SetConnMaxLifetime(time.Hour) // Maximum lifetime of a connection
 
-	err = db.AutoMigrate(&schemas.Stack{}, &schemas.Deployment{}, &schemas.Integration{}, &schemas.User{}, &schemas.AWSCredentials{}, &schemas.Log{})
+	err = db.AutoMigrate(
+		&schemas.Stack{},
+		&schemas.Deployment{},
+		&schemas.Integration{},
+		&schemas.User{},
+		&schemas.AWSCredentials{},
+		&schemas.Log{},
+		&schemas.ApiKey{},
+		&schemas.RPCUrl{},
+	)
+
 	if err != nil {
 		logger.Errorf("Failed to auto migrate DB schemas", "err", err.Error())
 		return nil, err
