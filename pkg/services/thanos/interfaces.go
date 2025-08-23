@@ -12,6 +12,7 @@ type DeploymentRepository interface {
 	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
 	GetDeploymentByID(deploymentId string) (*entities.DeploymentEntity, error)
 	GetDeploymentStatus(deploymentId string) (entities.DeploymentRunStatus, error)
+	GetDeploymentsByStackIDAndStatus(stackId string, status entities.DeploymentRunStatus) ([]*entities.DeploymentEntity, error)
 	UpdateStatusesByStackId(
 		stackID string,
 		status entities.DeploymentRunStatus,

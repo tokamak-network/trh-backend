@@ -40,7 +40,9 @@ func (r *IntegrationRepository) UpdateIntegrationStatusByStackID(
 	stackID string,
 	status entities.DeploymentStatus,
 ) error {
-	return r.db.Model(&schemas.Integration{}).Where("stack_id = ?", stackID).Update("status", status).Error
+	return r.db.Model(&schemas.Integration{}).Where("stack_id = ?", stackID).
+		Where("status != ?", entities.DeploymentStatusCompleted).
+		Update("status", status).Error
 }
 
 func (r *IntegrationRepository) UpdateIntegrationStatusWithReason(

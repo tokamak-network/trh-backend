@@ -61,7 +61,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		integrations = append(integrations, registerCandidateIntegration)
 	}
 
-	deployments, err := getThanosStackDeployments(stackId, &request)
+	deployments, err := s.getThanosStackDeployments(stackId, &request)
 	if err != nil {
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
@@ -84,7 +84,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 
 	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
-		s.handleStackDeployment(ctx, stackId)
+		s.deploy(ctx, stackId)
 	})
 
 	return &entities.Response{
@@ -192,9 +192,10 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 		}, err
 	}
 
-	deployments, err := getThanosStackDeployments(stackId, &stackConfig)
+	// Get stopped pendingDeployments
+	pendingDeployments, err := s.getThanosStackDeployments(stackId, &stackConfig)
 	if err != nil {
-		logger.Error("failed to build deployments for resume", zap.String("stackId", stackId.String()), zap.Error(err))
+		logger.Error("failed to get deployments", zap.String("stackId", stackId.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -202,8 +203,9 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 		}, err
 	}
 
-	for _, d := range deployments {
-		if err := s.deploymentRepo.CreateDeployment(d); err != nil {
+	for _, d := range pendingDeployments {
+		err = s.deploymentRepo.CreateDeployment(d)
+		if err != nil {
 			logger.Error("failed to create deployment record on resume", zap.String("stackId", stackId.String()), zap.Error(err))
 			return &entities.Response{
 				Status:  http.StatusInternalServerError,
@@ -223,23 +225,9 @@ func (s *ThanosStackDeploymentService) ResumeThanosStack(ctx context.Context, st
 		}, err
 	}
 
-	err = s.deploymentRepo.UpdateStatusesByStackId(stackId.String(), entities.DeploymentRunStatusInProgress)
-	if err != nil {
-		logger.Error("failed to update deployment status",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
-	}
-
-	err = s.integrationRepo.UpdateIntegrationStatusByStackID(stackId.String(), entities.DeploymentStatusInProgress)
-	if err != nil {
-		logger.Error("failed to update integration status",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
-	}
-
 	taskId := fmt.Sprintf("deploy-thanos-stack-%s", stackId.String())
 	s.taskManager.AddTask(taskId, func(ctx context.Context) {
-		s.handleStackDeployment(ctx, stackId)
+		s.deploy(ctx, stackId)
 	})
 
 	return &entities.Response{

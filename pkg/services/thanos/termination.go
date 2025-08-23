@@ -41,21 +41,13 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 
 	// Create a deployment record for termination
 	terminationDeploymentID := uuid.New()
-	terminationConfig, _ := json.Marshal(dtos.TerminateThanosRequest{
-		Network:            string(stack.Network),
-		AwsAccessKey:       stackConfig.AwsAccessKey,
-		AwsSecretAccessKey: stackConfig.AwsSecretAccessKey,
-		AwsRegion:          stackConfig.AwsRegion,
-		DeploymentPath:     stack.DeploymentPath,
-		LogPath:            logPath,
-	})
 	terminationDeployment := &entities.DeploymentEntity{
 		ID:      terminationDeploymentID,
 		StackID: &stack.ID,
 		Step:    constants.DestroyChainStep,
 		Status:  entities.DeploymentRunStatusNotStarted,
 		LogPath: logPath,
-		Config:  terminationConfig,
+		Config:  nil,
 	}
 	if err := s.deploymentRepo.CreateDeployment(terminationDeployment); err != nil {
 		logger.Error("failed to create termination deployment",
@@ -98,6 +90,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 
 	// Start log ingestion for termination
 	ingestCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, terminationDeploymentID, logPath)
 
 	// Update deployment status to in-progress
@@ -116,7 +109,6 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 				zap.Error(updateErr))
 		}
 		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
-		cancel()
 		return
 	}
 
@@ -126,7 +118,6 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
-		cancel()
 		return
 	}
 
@@ -141,12 +132,10 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
-		cancel()
 		return
 	}
 
 	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusSuccess)
-	cancel()
 
 	logger.Info(
 		"AWS infrastructure destroyed successfully",

@@ -2,8 +2,8 @@ package constants
 
 const (
 	DeployL1ContractsStep      = "deploy-l1-contracts"
-	DestroyChainStep           = "deploy-aws-infra"
-	DestroyAWSInfraStep        = "destroy-chain"
+	DeployInfraStep            = "deploy-aws-infra"
+	DestroyChainStep           = "destroy-chain"
 	InstallBlockExplorerStep   = "install-block-explorer"
 	UninstallBlockExplorerStep = "uninstall-block-explorer"
 	InstallBridgeStep          = "install-bridge"

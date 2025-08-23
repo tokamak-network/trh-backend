@@ -18,18 +18,8 @@ import (
 )
 
 // New helper method to handle deployment logic
-func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context, stackId uuid.UUID) {
-	logger.Info("Updating stacks status to creating", zap.String("stackId", stackId.String()))
-
-	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusDeploying, "")
-	if err != nil {
-		logger.Error("failed to update stacks status",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
-		return
-	}
-
-	err = s.deployThanosStack(ctx, stackId)
+func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.UUID) {
+	err := s.executeDeployments(ctx, stackId)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			logger.Info("deployment cancelled", zap.String("stackId", stackId.String()))
@@ -207,7 +197,16 @@ func (s *ThanosStackDeploymentService) handleStackDeployment(ctx context.Context
 	)
 }
 
-func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, stackId uuid.UUID) error {
+func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, stackId uuid.UUID) error {
+	logger.Info("Updating stacks status to creating", zap.String("stackId", stackId.String()))
+
+	err := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusDeploying, "")
+	if err != nil {
+		logger.Error("failed to update stacks status",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return err
+	}
 	statusChan := make(chan entities.DeploymentStatusWithID)
 	defer close(statusChan)
 
@@ -225,31 +224,26 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		return fmt.Errorf("failed to unmarshal stack config: %w", err)
 	}
 
-	deployments, err := s.deploymentRepo.GetDeploymentsByStackID(stackId.String())
+	pendingDeployments, err := s.deploymentRepo.GetDeploymentsByStackIDAndStatus(stackId.String(), entities.DeploymentRunStatusNotStarted)
 	if err != nil {
 		return fmt.Errorf("failed to get deployments: %w", err)
 	}
 
-	if len(deployments) == 0 {
+	if len(pendingDeployments) == 0 {
 		return fmt.Errorf("no deployments found for stacks %s", stackId)
 	}
 
 	// Filter to only the core deployment steps we want to execute here
 	filtered := make([]*entities.DeploymentEntity, 0, 2)
 	var l1Step, awsStep *entities.DeploymentEntity
-	for _, d := range deployments {
-		// Skip already completed deployments
-		if d.Status == entities.DeploymentRunStatusSuccess {
-			continue
-		}
-
+	for _, d := range pendingDeployments {
 		if d.Step == constants.DeployL1ContractsStep {
 			// keep the earliest unfinished occurrence
 			if l1Step == nil || (l1Step.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
 				l1Step = d
 			}
 		}
-		if d.Step == constants.DestroyChainStep {
+		if d.Step == constants.DeployInfraStep {
 			if awsStep == nil || (awsStep.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
 				awsStep = d
 			}
@@ -264,7 +258,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 
 	// Overwrite deployments with filtered list to enforce order L1 first then AWS infra
 	if len(filtered) > 0 {
-		deployments = filtered
+		pendingDeployments = filtered
 	}
 
 	// Start a goroutine to handle status updates
@@ -285,7 +279,7 @@ func (s *ThanosStackDeploymentService) deployThanosStack(ctx context.Context, st
 		}
 	}()
 
-	for _, deployment := range deployments {
+	for _, deployment := range pendingDeployments {
 		logger.Info("Processing deployment",
 			zap.String("deploymentId", deployment.ID.String()),
 			zap.String("status", string(deployment.Status)),

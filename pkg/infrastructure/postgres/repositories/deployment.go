@@ -48,7 +48,9 @@ func (r *DeploymentRepository) UpdateStatusesByStackId(
 	stackID string,
 	status entities.DeploymentRunStatus,
 ) error {
-	return r.db.Model(&schemas.Deployment{}).Where("stack_id = ?", stackID).Update("status", status).Error
+	return r.db.Model(&schemas.Deployment{}).Where("stack_id = ?", stackID).
+		Where("status != ?", entities.DeploymentRunStatusSuccess).
+		Update("status", status).Error
 }
 
 func (r *DeploymentRepository) DeleteDeployment(id string) error {
@@ -77,6 +79,35 @@ func (r *DeploymentRepository) GetDeploymentsByStackID(
 ) ([]*entities.DeploymentEntity, error) {
 	var deployments []schemas.Deployment
 	if err := r.db.Where("stack_id = ?", stackID).Order("step asc").Find(&deployments).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // No deployments found for this stack
+		}
+		return nil, err
+	}
+	deploymentsEntities := make([]*entities.DeploymentEntity, len(deployments))
+	for i, deployment := range deployments {
+		deploymentsEntities[i] = &entities.DeploymentEntity{
+			ID:         deployment.ID,
+			StackID:    deployment.StackID,
+			Step:       deployment.Step,
+			Status:     deployment.Status,
+			LogPath:    deployment.LogPath,
+			Config:     json.RawMessage(deployment.Config),
+			StartedAt:  deployment.StartedAt,
+			FinishedAt: deployment.FinishedAt,
+		}
+	}
+	return deploymentsEntities, nil
+}
+
+func (r *DeploymentRepository) GetDeploymentsByStackIDAndStatus(
+	stackID string,
+	status entities.DeploymentRunStatus,
+) ([]*entities.DeploymentEntity, error) {
+	var deployments []schemas.Deployment
+	if err := r.db.Where("stack_id = ?", stackID).
+		Where("status = ?", status).Order("step asc").
+		Find(&deployments).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No deployments found for this stack
 		}
