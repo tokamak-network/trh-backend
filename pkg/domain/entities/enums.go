@@ -41,7 +41,7 @@ const (
 type DeploymentRunStatus string
 
 const (
-	DeploymentRunStatusNotStarted DeploymentRunStatus = "Not Started"
+	DeploymentRunStatusPending    DeploymentRunStatus = "Pending"
 	DeploymentRunStatusInProgress DeploymentRunStatus = "InProgress"
 	DeploymentRunStatusFailed     DeploymentRunStatus = "Failed"
 	DeploymentRunStatusSuccess    DeploymentRunStatus = "Success"

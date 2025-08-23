@@ -243,7 +243,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.InstallBridgeStep,
-		Status:  entities.DeploymentRunStatusNotStarted,
+		Status:  entities.DeploymentRunStatusPending,
 		LogPath: logPath,
 		Config:  []byte("{}"),
 	}
@@ -382,7 +382,7 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.UninstallBridgeStep,
-		Status:  entities.DeploymentRunStatusNotStarted,
+		Status:  entities.DeploymentRunStatusPending,
 		LogPath: logPath,
 		Config:  []byte("{}"),
 	}

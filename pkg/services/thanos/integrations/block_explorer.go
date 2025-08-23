@@ -258,7 +258,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.InstallBlockExplorerStep,
-		Status:  entities.DeploymentRunStatusNotStarted,
+		Status:  entities.DeploymentRunStatusPending,
 		LogPath: logPath,
 		Config:  configBytes,
 	}
@@ -391,7 +391,7 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.UninstallBlockExplorerStep,
-		Status:  entities.DeploymentRunStatusNotStarted,
+		Status:  entities.DeploymentRunStatusPending,
 		LogPath: logPath,
 		Config:  []byte("{}"),
 	}

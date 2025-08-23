@@ -45,7 +45,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		ID:      terminationDeploymentID,
 		StackID: &stack.ID,
 		Step:    constants.DestroyChainStep,
-		Status:  entities.DeploymentRunStatusNotStarted,
+		Status:  entities.DeploymentRunStatusPending,
 		LogPath: logPath,
 		Config:  nil,
 	}

@@ -249,7 +249,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.InstallMonitoringStep,
-		Status:  entities.DeploymentRunStatusNotStarted,
+		Status:  entities.DeploymentRunStatusPending,
 		LogPath: logPath,
 		Config:  configBytes,
 	}
@@ -412,7 +412,7 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.UninstallMonitoringStep,
-		Status:  entities.DeploymentRunStatusNotStarted,
+		Status:  entities.DeploymentRunStatusPending,
 		LogPath: logPath,
 		Config:  []byte("{}"),
 	}

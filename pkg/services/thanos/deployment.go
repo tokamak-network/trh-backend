@@ -224,7 +224,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 		return fmt.Errorf("failed to unmarshal stack config: %w", err)
 	}
 
-	pendingDeployments, err := s.deploymentRepo.GetDeploymentsByStackIDAndStatus(stackId.String(), entities.DeploymentRunStatusNotStarted)
+	pendingDeployments, err := s.deploymentRepo.GetDeploymentsByStackIDAndStatus(stackId.String(), entities.DeploymentRunStatusPending)
 	if err != nil {
 		return fmt.Errorf("failed to get deployments: %w", err)
 	}

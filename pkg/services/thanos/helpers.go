@@ -60,7 +60,7 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 			ID:      l1ContractDeploymentID,
 			StackID: &stackId,
 			Step:    constants.DeployL1ContractsStep,
-			Status:  entities.DeploymentRunStatusNotStarted,
+			Status:  entities.DeploymentRunStatusPending,
 			LogPath: l1ContractDeploymentLogPath,
 			Config:  l1ContractDeploymentConfig,
 		}
@@ -84,7 +84,7 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 			ID:      thanosInfrastructureDeploymentID,
 			StackID: &stackId,
 			Step:    constants.DeployInfraStep,
-			Status:  entities.DeploymentRunStatusNotStarted,
+			Status:  entities.DeploymentRunStatusPending,
 			LogPath: thanosInfrastructureDeploymentLogPath,
 			Config:  thanosInfrastructureDeploymentConfig,
 		}

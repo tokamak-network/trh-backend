@@ -184,7 +184,7 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, sdkClie
 		ID:      uuid.New(),
 		StackID: &stackId,
 		Step:    constants.RegisterCandidateStep,
-		Status:  entities.DeploymentRunStatusNotStarted,
+		Status:  entities.DeploymentRunStatusPending,
 		LogPath: logPath,
 		Config:  integrationConfig,
 	}
