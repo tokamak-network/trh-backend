@@ -14,6 +14,8 @@ type DeploymentEntity struct {
 	Status     DeploymentRunStatus `json:"status"`
 	LogPath    string              `json:"log_path"`
 	Config     json.RawMessage     `json:"config"`
+	CreatedAt  time.Time           `json:"created_at"`
+	UpdatedAt  time.Time           `json:"updated_at"`
 	StartedAt  *time.Time          `json:"started_at,omitempty"`
 	FinishedAt *time.Time          `json:"finished_at,omitempty"`
 }

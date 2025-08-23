@@ -78,7 +78,7 @@ func (r *DeploymentRepository) GetDeploymentsByStackID(
 	stackID string,
 ) ([]*entities.DeploymentEntity, error) {
 	var deployments []schemas.Deployment
-	if err := r.db.Where("stack_id = ?", stackID).Order("step asc").Find(&deployments).Error; err != nil {
+	if err := r.db.Where("stack_id = ?", stackID).Order("updated_at desc").Find(&deployments).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No deployments found for this stack
 		}
@@ -93,6 +93,8 @@ func (r *DeploymentRepository) GetDeploymentsByStackID(
 			Status:     deployment.Status,
 			LogPath:    deployment.LogPath,
 			Config:     json.RawMessage(deployment.Config),
+			CreatedAt:  deployment.CreatedAt,
+			UpdatedAt:  deployment.UpdatedAt,
 			StartedAt:  deployment.StartedAt,
 			FinishedAt: deployment.FinishedAt,
 		}
@@ -106,7 +108,7 @@ func (r *DeploymentRepository) GetDeploymentsByStackIDAndStatus(
 ) ([]*entities.DeploymentEntity, error) {
 	var deployments []schemas.Deployment
 	if err := r.db.Where("stack_id = ?", stackID).
-		Where("status = ?", status).Order("step asc").
+		Where("status = ?", status).Order("updated_at desc").
 		Find(&deployments).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No deployments found for this stack
@@ -122,6 +124,8 @@ func (r *DeploymentRepository) GetDeploymentsByStackIDAndStatus(
 			Status:     deployment.Status,
 			LogPath:    deployment.LogPath,
 			Config:     json.RawMessage(deployment.Config),
+			CreatedAt:  deployment.CreatedAt,
+			UpdatedAt:  deployment.UpdatedAt,
 			StartedAt:  deployment.StartedAt,
 			FinishedAt: deployment.FinishedAt,
 		}
@@ -145,6 +149,8 @@ func ToDeploymentSchema(d *entities.DeploymentEntity) *schemas.Deployment {
 		Status:     d.Status,
 		LogPath:    d.LogPath,
 		Config:     datatypes.JSON(d.Config),
+		CreatedAt:  d.CreatedAt,
+		UpdatedAt:  d.UpdatedAt,
 		StartedAt:  d.StartedAt,
 		FinishedAt: d.FinishedAt,
 	}
