@@ -15,7 +15,7 @@ type Deployment struct {
 	Stack      Stack                        `gorm:"foreignKey:StackID"`
 	Step       string                       `gorm:"column:step;not null"`
 	Status     entities.DeploymentRunStatus `gorm:"column:status;not null"`
-	Config     datatypes.JSON               `gorm:"type:jsonb;not null;column:config"`
+	Config     datatypes.JSON               `gorm:"type:jsonb;default:null;column:config"`
 	LogPath    string                       `gorm:"column:log_path"`
 	StartedAt  *time.Time                   `gorm:"column:started_at;default:null"`
 	FinishedAt *time.Time                   `gorm:"column:finished_at;default:null"`

@@ -10,6 +10,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
@@ -80,7 +81,12 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
-	err = s.integrationRepo.UpdateIntegrationsStatusByStackID(stackId.String(), entities.DeploymentStatusTerminating, []entities.DeploymentStatus{entities.DeploymentStatusTerminated})
+	err = s.integrationRepo.UpdateIntegrationsStatusByStackID(
+		stackId.String(),
+		entities.DeploymentStatusTerminating,
+		[]entities.DeploymentStatus{entities.DeploymentStatusTerminated},
+		[]string{enum.IntegrationTypeRegisterCandidate.String()},
+	)
 	if err != nil {
 		logger.Error("failed to update integrations status to terminating",
 			zap.String("stackId", stackId.String()),
@@ -126,6 +132,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		stackId.String(),
 		entities.DeploymentStatusTerminated,
 		[]entities.DeploymentStatus{},
+		[]string{enum.IntegrationTypeRegisterCandidate.String()},
 	)
 	if err != nil {
 		logger.Error("failed to update integrations status to terminated",

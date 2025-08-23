@@ -87,10 +87,14 @@ func (r *IntegrationRepository) UpdateIntegrationsStatusByStackID(
 	stackID string,
 	status entities.DeploymentStatus,
 	exceptStatuses []entities.DeploymentStatus,
+	exceptTypes []string,
 ) error {
 	query := r.db.Model(&schemas.Integration{}).Where("stack_id = ?", stackID)
 	if len(exceptStatuses) > 0 {
 		query = query.Where("status NOT IN (?)", exceptStatuses)
+	}
+	if len(exceptTypes) > 0 {
+		query = query.Where("type NOT IN (?)", exceptTypes)
 	}
 	return query.Update("status", status).Error
 }
