@@ -27,15 +27,10 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 	if err != nil {
 		return nil, err
 	}
-
 	deployedContracts := false
-	deployedInfra := false
 	for _, d := range deployContracts {
 		if d.Step == constants.DeployL1ContractsStep && d.Status == entities.DeploymentRunStatusSuccess {
 			deployedContracts = true
-		}
-		if d.Step == constants.DeployInfraStep && d.Status == entities.DeploymentRunStatusSuccess {
-			deployedInfra = true
 		}
 	}
 	if !deployedContracts {
@@ -67,29 +62,27 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 		deployments = append(deployments, l1ContractDeployment)
 	}
 
-	if !deployedInfra {
-		thanosInfrastructureDeploymentID := uuid.New()
-		thanosInfrastructureDeploymentLogPath := utils.GetLogPath(
-			stackId,
-			constants.DeployInfraStep,
-		)
-		thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
-			ChainName:   config.ChainName,
-			L1BeaconUrl: config.L1BeaconUrl,
-		})
-		if err != nil {
-			return nil, err
-		}
-		thanosInfrastructureDeployment := &entities.DeploymentEntity{
-			ID:      thanosInfrastructureDeploymentID,
-			StackID: &stackId,
-			Step:    constants.DeployInfraStep,
-			Status:  entities.DeploymentRunStatusPending,
-			LogPath: thanosInfrastructureDeploymentLogPath,
-			Config:  thanosInfrastructureDeploymentConfig,
-		}
-		deployments = append(deployments, thanosInfrastructureDeployment)
+	thanosInfrastructureDeploymentID := uuid.New()
+	thanosInfrastructureDeploymentLogPath := utils.GetLogPath(
+		stackId,
+		constants.DeployInfraStep,
+	)
+	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
+		ChainName:   config.ChainName,
+		L1BeaconUrl: config.L1BeaconUrl,
+	})
+	if err != nil {
+		return nil, err
 	}
+	thanosInfrastructureDeployment := &entities.DeploymentEntity{
+		ID:      thanosInfrastructureDeploymentID,
+		StackID: &stackId,
+		Step:    constants.DeployInfraStep,
+		Status:  entities.DeploymentRunStatusPending,
+		LogPath: thanosInfrastructureDeploymentLogPath,
+		Config:  thanosInfrastructureDeploymentConfig,
+	}
+	deployments = append(deployments, thanosInfrastructureDeployment)
 
 	return deployments, nil
 }

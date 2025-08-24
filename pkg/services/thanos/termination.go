@@ -99,9 +99,6 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	defer cancel()
 	go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, terminationDeploymentID, logPath)
 
-	// Update deployment status to in-progress
-	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusInProgress)
-
 	err = thanos.DestroyAWSInfrastructure(ctx, sdkClient)
 	if err != nil {
 		logger.Error("failed to destroy AWS infrastructure",
@@ -141,8 +138,6 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
-
-	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusSuccess)
 
 	logger.Info(
 		"AWS infrastructure destroyed successfully",
