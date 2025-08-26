@@ -11,10 +11,11 @@ import (
 
 // IntegrationManager provides a unified interface for managing all integrations
 type IntegrationManager struct {
-	blockExplorer     *BlockExplorerIntegration
-	bridge            *BridgeIntegration
-	monitoring        *MonitoringIntegration
-	registerCandidate *RegisterCandidateIntegration
+	blockExplorer       *BlockExplorerIntegration
+	bridge              *BridgeIntegration
+	monitoring          *MonitoringIntegration
+	registerCandidate   *RegisterCandidateIntegration
+	registerMetadataDAO *RegisterMetadataDAOIntegration
 }
 
 // NewIntegrationManager creates a new integration manager with all integration handlers
@@ -44,10 +45,11 @@ func NewIntegrationManager(
 	},
 ) *IntegrationManager {
 	return &IntegrationManager{
-		blockExplorer:     NewBlockExplorerIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
-		bridge:            NewBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
-		monitoring:        NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
-		registerCandidate: NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		blockExplorer:       NewBlockExplorerIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		bridge:              NewBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		monitoring:          NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		registerCandidate:   NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		registerMetadataDAO: NewRegisterMetadataDAOIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 	}
 }
 
@@ -104,4 +106,8 @@ func (im *IntegrationManager) UninstallMonitoring(ctx context.Context, stackId u
 // RegisterCandidateForStack registers a candidate for the given stack
 func (im *IntegrationManager) RegisterCandidateForStack(ctx context.Context, stackId uuid.UUID, req dtos.RegisterCandidateRequest) (*entities.Response, error) {
 	return im.registerCandidate.Register(ctx, stackId, req)
+}
+
+func (im *IntegrationManager) RegisterMetadataDAOForStack(ctx context.Context, stackId uuid.UUID, req dtos.RegisterMetadataDAORequest) (*entities.Response, error) {
+	return im.registerMetadataDAO.Register(ctx, stackId, req)
 }

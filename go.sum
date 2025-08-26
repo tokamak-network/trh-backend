@@ -327,10 +327,10 @@ github.com/tklauser/go-sysconf v0.3.14 h1:g5vzr9iPFFz24v2KZXs/pvpvh8/V9Fw6vQK5ZZ
 github.com/tklauser/go-sysconf v0.3.14/go.mod h1:1ym4lWMLUOhuBOPGtRcJm7tEGX4SCYNEEEtghGG/8uY=
 github.com/tklauser/numcpus v0.9.0 h1:lmyCHtANi8aRUgkckBgoDk1nHCux3n2cgkJLXdQGPDo=
 github.com/tklauser/numcpus v0.9.0/go.mod h1:SN6Nq1O3VychhC1npsWostA+oW+VOQTxZrS604NSRyI=
-github.com/tokamak-network/trh-sdk v1.0.1-0.20250819044440-b31db8c009ce h1:Oqik8J/idOWnc0NVspQHrEMhfsZ+i3Z38VaIpxHVa6g=
-github.com/tokamak-network/trh-sdk v1.0.1-0.20250819044440-b31db8c009ce/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
 github.com/tokamak-network/trh-sdk v1.0.1-0.20250825150932-f4480b3813f1 h1:XEODib0i++ZIt8O49idDzgCtvh3xPzOwfgup1ujh+r0=
 github.com/tokamak-network/trh-sdk v1.0.1-0.20250825150932-f4480b3813f1/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250826013000-552cb5d6a03c h1:iiLD2WrR+hvwLMs53kS7wvLQhn4hWz3JDLDUjwFLDnI=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20250826013000-552cb5d6a03c/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/tyler-smith/go-bip32 v1.0.0 h1:sDR9juArbUgX+bO/iblgZnMPeWY1KZMUC2AFUJdv5KE=

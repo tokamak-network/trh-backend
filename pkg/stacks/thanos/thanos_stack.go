@@ -243,3 +243,11 @@ func GetRegisterCandidatesInfo(ctx context.Context, s *thanosStack.ThanosStack, 
 		UseTon:   true, // TODO: we only support TON for now
 	})
 }
+
+func RegisterMetadataDAO(ctx context.Context, s *thanosStack.ThanosStack, registerMetadataDAO *dtos.RegisterMetadataDAORequest) (*thanosTypes.RegisterMetadataDaoResult, error) {
+	return s.RegisterMetadata(ctx, &thanosTypes.GitHubCredentials{
+		Username: registerMetadataDAO.Username,
+		Token:    registerMetadataDAO.Token,
+		Email:    registerMetadataDAO.Email,
+	})
+}

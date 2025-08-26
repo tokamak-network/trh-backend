@@ -12,7 +12,7 @@ require (
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
-	github.com/tokamak-network/trh-sdk v1.0.1-0.20250825150932-f4480b3813f1
+	github.com/tokamak-network/trh-sdk v1.0.1-0.20250826013000-552cb5d6a03c
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.33.0
 	gorm.io/datatypes v1.2.5

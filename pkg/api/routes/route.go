@@ -189,6 +189,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.POST("/:id/integrations/block-explorer", handler.InstallBlockExplorer)
 		adminRoutes.POST("/:id/integrations/monitoring", handler.InstallMonitoring)
 		adminRoutes.POST("/:id/integrations/register-candidate", handler.RegisterCandidates)
+		adminRoutes.POST("/:id/integrations/register-metadata-dao", handler.RegisterMetadataDAO)
 		adminRoutes.DELETE("/:id/integrations/bridge", handler.UninstallBridge)
 		adminRoutes.DELETE("/:id/integrations/block-explorer", handler.UninstallBlockExplorer)
 		adminRoutes.DELETE("/:id/integrations/monitoring", handler.UninstallMonitoring)

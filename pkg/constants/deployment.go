@@ -11,4 +11,5 @@ const (
 	InstallMonitoringStep      = "install-monitoring"
 	UninstallMonitoringStep    = "uninstall-monitoring"
 	RegisterCandidateStep      = "register-candidate"
+	RegisterMetadataDAOStep    = "register-metadata-dao"
 )

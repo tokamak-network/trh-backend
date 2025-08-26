@@ -3,6 +3,7 @@ package dtos
 import (
 	"context"
 	"errors"
+	"net/mail"
 	"regexp"
 
 	"github.com/tokamak-network/trh-backend/internal/consts"
@@ -248,4 +249,28 @@ type AlertManagerConfig struct {
 type InstallMonitoringRequest struct {
 	GrafanaPassword string `json:"grafanaPassword" binding:"required"`
 	AlertManager    AlertManagerConfig
+}
+
+type RegisterMetadataDAORequest struct {
+	Username string `json:"username" binding:"required"`
+	Token    string `json:"token" binding:"required"`
+	Email    string `json:"email" binding:"required"`
+}
+
+func (r *RegisterMetadataDAORequest) Validate(ctx context.Context) error {
+	if r.Username == "" {
+		return errors.New("username is required")
+	}
+	if r.Token == "" {
+		return errors.New("token is required")
+	}
+	if r.Email == "" {
+		return errors.New("email is required")
+	}
+
+	if _, err := mail.ParseAddress(r.Email); err != nil {
+		return errors.New("invalid email")
+	}
+
+	return nil
 }
