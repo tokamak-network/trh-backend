@@ -119,6 +119,7 @@ func setupAWSCredentialsSubRoutes(router *gin.RouterGroup, awsCredentialsHandler
 		adminRoutes.POST("", awsCredentialsHandler.Create)
 		adminRoutes.PATCH("/:id", awsCredentialsHandler.Update)
 		adminRoutes.DELETE("/:id", awsCredentialsHandler.Delete)
+		adminRoutes.POST("/regions", awsCredentialsHandler.GetAvailableRegions)
 	}
 
 	// Authenticated routes (require valid JWT token - any role)

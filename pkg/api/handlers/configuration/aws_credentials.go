@@ -293,3 +293,30 @@ func (h *AWSCredentialsHandler) Delete(c *gin.Context) {
 		Data:    nil,
 	})
 }
+
+func (h *AWSCredentialsHandler) GetAvailableRegions(c *gin.Context) {
+	var req dtos.GetAvailableRegionsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  uint64(http.StatusBadRequest),
+			Message: "invalid request",
+			Data:    nil,
+		})
+		return
+	}
+	response, err := h.service.GetAvailableRegions(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, &entities.Response{
+			Status:  uint64(http.StatusInternalServerError),
+			Message: "internal server error",
+			Data:    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, &entities.Response{
+		Status:  uint64(http.StatusOK),
+		Message: "AWS regions retrieved successfully",
+		Data:    response,
+	})
+}

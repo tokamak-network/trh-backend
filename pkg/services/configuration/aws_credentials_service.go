@@ -7,6 +7,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/repositories"
+	"github.com/tokamak-network/trh-sdk/pkg/cloud-provider/aws"
 )
 
 type AWSCredentialsService struct {
@@ -145,4 +146,19 @@ func (s *AWSCredentialsService) entityToResponse(entity *entities.AWSCredentials
 	}
 
 	return response
+}
+
+func (s *AWSCredentialsService) GetAvailableRegions(req *dtos.GetAvailableRegionsRequest) (*dtos.GetAvailableRegionsResponse, error) {
+	regions, err := aws.GetAvailableRegions(req.AccessKeyID, req.SecretAccessKey, "us-east-1") // aws default bootstrap region
+	if err != nil {
+		return &dtos.GetAvailableRegionsResponse{
+			Regions: []string{},
+			Total:   0,
+		}, nil
+	}
+
+	return &dtos.GetAvailableRegionsResponse{
+		Regions: regions,
+		Total:   len(regions),
+	}, nil
 }

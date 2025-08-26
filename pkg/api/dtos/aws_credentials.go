@@ -110,6 +110,16 @@ type AWSCredentialsUpdateResponse struct {
 	Credential AWSCredentialsResponse `json:"credential"`
 }
 
+type GetAvailableRegionsRequest struct {
+	AccessKeyID     string `json:"accessKeyId" binding:"required"`
+	SecretAccessKey string `json:"secretAccessKey" binding:"required"`
+}
+
+type GetAvailableRegionsResponse struct {
+	Regions []string `json:"regions"`
+	Total   int      `json:"total"`
+}
+
 // Custom errors
 var (
 	ErrNameRequired            = &ValidationError{Message: "name is required"}
