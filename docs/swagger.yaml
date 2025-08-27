@@ -214,6 +214,8 @@ definitions:
         $ref: '#/definitions/dtos.AlertManagerConfig'
       grafanaPassword:
         type: string
+      loggingEnabled:
+        type: boolean
     required:
     - grafanaPassword
     type: object
@@ -1561,6 +1563,27 @@ paths:
           schema:
             $ref: '#/definitions/entities.Response'
       summary: Register Candidates
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/register-metadata-dao:
+    post:
+      consumes:
+      - application/json
+      description: Register Metadata DAO
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Register Metadata DAO
       tags:
       - Thanos Stack
   /stacks/thanos/{id}/resume:

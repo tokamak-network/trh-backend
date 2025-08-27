@@ -1891,6 +1891,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/stacks/thanos/{id}/register-metadata-dao": {
+            "post": {
+                "description": "Register Metadata DAO",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Register Metadata DAO",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/stacks/thanos/{id}/resume": {
             "post": {
                 "description": "Resume Thanos Stack",
@@ -2354,6 +2386,9 @@ const docTemplate = `{
                 },
                 "grafanaPassword": {
                     "type": "string"
+                },
+                "loggingEnabled": {
+                    "type": "boolean"
                 }
             }
         },
