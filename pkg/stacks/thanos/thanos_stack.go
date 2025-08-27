@@ -168,9 +168,11 @@ func UninstallBlockExplorer(
 func GetMonitoringConfig(
 	ctx context.Context,
 	s *thanosStack.ThanosStack,
-	password string,
-	alertManager dtos.AlertManagerConfig,
+	req *dtos.InstallMonitoringRequest,
 ) (*thanosTypes.MonitoringConfig, error) {
+	alertManager := req.AlertManager
+	password := req.GrafanaPassword
+	loggingEnabled := req.LoggingEnabled
 	telegramReceivers := make([]thanosTypes.TelegramReceiver, len(alertManager.Telegram.CriticalReceivers))
 	for i, receiver := range alertManager.Telegram.CriticalReceivers {
 		telegramReceivers[i] = thanosTypes.TelegramReceiver{
@@ -192,8 +194,7 @@ func GetMonitoringConfig(
 			SmtpAuthPassword: alertManager.Email.SmtpAuthPassword,
 		},
 	}
-	// TODO: Add logging enabled flag in the future
-	return s.GetMonitoringConfig(ctx, password, thanosAlertManagerConfig, false)
+	return s.GetMonitoringConfig(ctx, password, thanosAlertManagerConfig, loggingEnabled)
 }
 
 func InstallMonitoring(

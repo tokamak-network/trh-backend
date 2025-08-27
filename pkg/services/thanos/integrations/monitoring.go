@@ -285,7 +285,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	monitoringConfig, err := thanos.GetMonitoringConfig(ctx, thanosClient, req.GrafanaPassword, req.AlertManager)
+	monitoringConfig, err := thanos.GetMonitoringConfig(ctx, thanosClient, &req)
 	if err != nil {
 		logger.Error("failed to get monitoring config", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {

@@ -220,6 +220,15 @@ func (h *ThanosDeploymentHandler) InstallMonitoring(c *gin.Context) {
 		return
 	}
 
+	if err := request.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
 	response, err := h.ThanosDeploymentService.InstallMonitoring(c.Request.Context(), uuid.MustParse(id), request)
 	if err != nil {
 		logger.Error("failed to install monitoring", zap.Error(err), zap.String("id", id))

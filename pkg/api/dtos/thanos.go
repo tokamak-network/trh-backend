@@ -249,6 +249,42 @@ type AlertManagerConfig struct {
 type InstallMonitoringRequest struct {
 	GrafanaPassword string `json:"grafanaPassword" binding:"required"`
 	AlertManager    AlertManagerConfig
+	LoggingEnabled  bool `json:"loggingEnabled"`
+}
+
+func (r *InstallMonitoringRequest) Validate() error {
+	telegramReceivers := make([]trhSdkTypes.TelegramReceiver, len(r.AlertManager.Telegram.CriticalReceivers))
+	for i, receiver := range r.AlertManager.Telegram.CriticalReceivers {
+		telegramReceivers[i] = trhSdkTypes.TelegramReceiver{
+			ChatId: receiver.ChatId,
+		}
+	}
+	installMonitoringInputs := thanosStack.InstallMonitoringInput{
+		AdminPassword: r.GrafanaPassword,
+		AlertManager: trhSdkTypes.AlertManagerConfig{
+			Telegram: trhSdkTypes.TelegramConfig{
+				Enabled:           r.AlertManager.Telegram.Enabled,
+				ApiToken:          r.AlertManager.Telegram.ApiToken,
+				CriticalReceivers: telegramReceivers,
+			},
+			Email: trhSdkTypes.EmailConfig{
+				Enabled:           r.AlertManager.Email.Enabled,
+				SmtpSmarthost:     r.AlertManager.Email.SmtpSmarthost,
+				SmtpFrom:          r.AlertManager.Email.SmtpFrom,
+				SmtpAuthUsername:  r.AlertManager.Email.SmtpAuthUsername,
+				SmtpAuthPassword:  r.AlertManager.Email.SmtpAuthPassword,
+				DefaultReceivers:  r.AlertManager.Email.DefaultReceivers,
+				CriticalReceivers: r.AlertManager.Email.CriticalReceivers,
+			},
+		},
+		LoggingEnabled: r.LoggingEnabled,
+	}
+
+	if err := installMonitoringInputs.Validate(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type RegisterMetadataDAORequest struct {
