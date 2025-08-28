@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"go.uber.org/zap"
 )
 
@@ -254,7 +255,7 @@ func (s *ThanosStackDeploymentService) GetIntegrations(
 			Data:    nil,
 		}, nil
 	}
-	integrations, err := s.integrationRepo.GetActiveIntegrationsByStackID(stackId.String())
+	integrations, err := s.integrationRepo.GetActiveIntegrationsByStackID(stackId.String(), []string{enum.IntegrationTypeRegisterMetadataDAO.String()})
 	if err != nil {
 		logger.Error("failed to get integrations", zap.String("stackId", stackId.String()), zap.Error(err))
 		return &entities.Response{

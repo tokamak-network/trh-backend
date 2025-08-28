@@ -76,6 +76,7 @@ type IntegrationRepository interface {
 	) ([]*entities.IntegrationEntity, error)
 	GetActiveIntegrationsByStackID(
 		stackID string,
+		exceptTypes []string,
 	) ([]*entities.IntegrationEntity, error)
 	UpdateIntegrationsStatusByStackID(
 		stackID string,

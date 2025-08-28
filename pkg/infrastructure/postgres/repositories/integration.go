@@ -180,9 +180,14 @@ func (r *IntegrationRepository) GetIntegrationsByStackID(
 
 func (r *IntegrationRepository) GetActiveIntegrationsByStackID(
 	stackId string,
+	exceptTypes []string,
 ) ([]*entities.IntegrationEntity, error) {
 	var integrations []schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at asc").Find(&integrations).Error; err != nil {
+	query := r.db.Where("stack_id = ?", stackId).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at asc")
+	if len(exceptTypes) > 0 {
+		query = query.Where("type NOT IN (?)", exceptTypes)
+	}
+	if err := query.Find(&integrations).Error; err != nil {
 		return nil, err
 	}
 	integrationEntities := make([]*entities.IntegrationEntity, len(integrations))
