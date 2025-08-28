@@ -309,3 +309,29 @@ func (r *RegisterMetadataDAOIntegration) tailAndIngestLogs(
 		}
 	}
 }
+
+func (r *RegisterMetadataDAOIntegration) Get(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	integrations, err := r.integrationRepo.GetActiveIntegrations(stackId.String(), enum.IntegrationTypeRegisterMetadataDAO.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if len(integrations) == 0 {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Register metadata dao not found",
+			Data:    nil,
+		}, nil
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Register metadata dao found",
+		Data:    integrations[0].Config,
+	}, nil
+}

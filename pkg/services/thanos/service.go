@@ -95,6 +95,11 @@ func (s *ThanosStackDeploymentService) RegisterMetadataDAO(ctx context.Context, 
 	return s.integrationMgr.RegisterMetadataDAOForStack(ctx, stackId, req)
 }
 
+// GetRegisterMetadataDAO delegates metadata dao registration to the integrations layer
+func (s *ThanosStackDeploymentService) GetRegisterMetadataDAO(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.GetRegisterMetadataDAOForStack(ctx, stackId)
+}
+
 // DownloadDeploymentLogFile returns the deployment and validates that the log file exists for download
 func (s *ThanosStackDeploymentService) DownloadDeploymentLogFile(stackId uuid.UUID, deploymentId uuid.UUID) (*entities.DeploymentEntity, error) {
 	// Verify stack exists
