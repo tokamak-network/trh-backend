@@ -246,9 +246,34 @@ func GetRegisterCandidatesInfo(ctx context.Context, s *thanosStack.ThanosStack, 
 }
 
 func RegisterMetadataDAO(ctx context.Context, s *thanosStack.ThanosStack, registerMetadataDAO *dtos.RegisterMetadataDAORequest) (*thanosTypes.RegisterMetadataDaoResult, error) {
+	chainInfo := thanosTypes.ChainInfo{
+		Description: registerMetadataDAO.Metadata.Chain.Description,
+		Logo:        registerMetadataDAO.Metadata.Chain.Logo,
+		Website:     registerMetadataDAO.Metadata.Chain.Website,
+	}
+	bridgeInfo := thanosTypes.BridgeInfo{
+		Name: registerMetadataDAO.Metadata.Bridge.Name,
+	}
+	explorerInfo := thanosTypes.ExplorerInfo{
+		Name: registerMetadataDAO.Metadata.Explorer.Name,
+	}
+	supportResources := thanosTypes.SupportResources{
+		StatusPageUrl:     registerMetadataDAO.Metadata.Support.StatusPageUrl,
+		SupportContactUrl: registerMetadataDAO.Metadata.Support.SupportContactUrl,
+		DocumentationUrl:  registerMetadataDAO.Metadata.Support.DocumentationUrl,
+		CommunityUrl:      registerMetadataDAO.Metadata.Support.CommunityUrl,
+		HelpCenterUrl:     registerMetadataDAO.Metadata.Support.HelpCenterUrl,
+		AnnouncementUrl:   registerMetadataDAO.Metadata.Support.AnnouncementUrl,
+	}
+	metadataInfo := thanosTypes.MetadataInfo{
+		Chain:    chainInfo,
+		Bridge:   bridgeInfo,
+		Explorer: explorerInfo,
+		Support:  supportResources,
+	}
 	return s.RegisterMetadata(ctx, &thanosTypes.GitHubCredentials{
 		Username: registerMetadataDAO.Username,
 		Token:    registerMetadataDAO.Token,
 		Email:    registerMetadataDAO.Email,
-	})
+	}, &metadataInfo)
 }

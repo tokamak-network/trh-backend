@@ -38,12 +38,17 @@ func (h *ThanosDeploymentHandler) RegisterMetadataDAO(c *gin.Context) {
 		return
 	}
 
-	if err := request.Validate(c.Request.Context()); err != nil {
+	r, err := request.Validate(c.Request.Context())
+	if err != nil {
 		c.JSON(http.StatusBadRequest, &entities.Response{
 			Status:  http.StatusBadRequest,
 			Message: err.Error(),
 		})
 		return
+	}
+
+	if r != nil {
+		request = *r
 	}
 
 	response, err := h.ThanosDeploymentService.RegisterMetadataDAO(c, uuid.MustParse(id), request)

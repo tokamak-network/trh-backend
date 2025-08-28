@@ -287,26 +287,125 @@ func (r *InstallMonitoringRequest) Validate() error {
 	return nil
 }
 
-type RegisterMetadataDAORequest struct {
-	Username string `json:"username" binding:"required"`
-	Token    string `json:"token" binding:"required"`
-	Email    string `json:"email" binding:"required"`
+type ChainInfo struct {
+	Description string `json:"description"`
+	Logo        string `json:"logo"`
+	Website     string `json:"website"`
 }
 
-func (r *RegisterMetadataDAORequest) Validate(ctx context.Context) error {
+type BridgeInfo struct {
+	Name string `json:"name"`
+}
+
+type ExplorerInfo struct {
+	Name string `json:"name"`
+}
+
+type SupportResources struct {
+	StatusPageUrl     string `json:"statusPageUrl"`
+	SupportContactUrl string `json:"supportContactUrl"`
+	DocumentationUrl  string `json:"documentationUrl"`
+	CommunityUrl      string `json:"communityUrl"`
+	HelpCenterUrl     string `json:"helpCenterUrl"`
+	AnnouncementUrl   string `json:"announcementUrl"`
+}
+
+type MetadataInfo struct {
+	Chain    ChainInfo        `json:"chain"`
+	Bridge   BridgeInfo       `json:"bridge"`
+	Explorer ExplorerInfo     `json:"explorer"`
+	Support  SupportResources `json:"supportResources"`
+}
+
+type RegisterMetadataDAORequest struct {
+	Username string        `json:"username" binding:"required"`
+	Token    string        `json:"token" binding:"required"`
+	Email    string        `json:"email" binding:"required"`
+	Metadata *MetadataInfo `json:"metadata" binding:"required"`
+}
+
+func (r *RegisterMetadataDAORequest) Validate(ctx context.Context) (*RegisterMetadataDAORequest, error) {
 	if r.Username == "" {
-		return errors.New("username is required")
+		return nil, errors.New("username is required")
 	}
 	if r.Token == "" {
-		return errors.New("token is required")
+		return nil, errors.New("token is required")
 	}
 	if r.Email == "" {
-		return errors.New("email is required")
+		return nil, errors.New("email is required")
 	}
 
 	if _, err := mail.ParseAddress(r.Email); err != nil {
-		return errors.New("invalid email")
+		return nil, errors.New("invalid email")
 	}
 
-	return nil
+	if r.Metadata == nil {
+		r.Metadata = &MetadataInfo{
+			Chain: ChainInfo{
+				Description: "Example rollup deployed with TRH SDK",
+				Logo:        "https://example.com/logo.png",
+				Website:     "https://example-l2.com",
+			},
+			Bridge: BridgeInfo{
+				Name: "Example Bridge",
+			},
+			Explorer: ExplorerInfo{
+				Name: "Example Explorer",
+			},
+			Support: SupportResources{
+				StatusPageUrl:     "https://status.example-l2.com",
+				SupportContactUrl: "https://discord.gg/example-support",
+				DocumentationUrl:  "https://docs.example-l2.com",
+				CommunityUrl:      "https://t.me/example_community",
+				HelpCenterUrl:     "https://help.example-l2.com",
+				AnnouncementUrl:   "https://twitter.com/example_l2",
+			},
+		}
+	}
+
+	if r.Metadata.Chain.Description == "" {
+		r.Metadata.Chain.Description = "Example rollup deployed with TRH SDK"
+	}
+
+	if r.Metadata.Chain.Logo == "" {
+		r.Metadata.Chain.Logo = "https://example.com/logo.png"
+	}
+
+	if r.Metadata.Chain.Website == "" {
+		r.Metadata.Chain.Website = "https://example-l2.com"
+	}
+
+	if r.Metadata.Bridge.Name == "" {
+		r.Metadata.Bridge.Name = "Example Bridge"
+	}
+
+	if r.Metadata.Explorer.Name == "" {
+		r.Metadata.Explorer.Name = "Example Explorer"
+	}
+
+	if r.Metadata.Support.StatusPageUrl == "" {
+		r.Metadata.Support.StatusPageUrl = "https://status.example-l2.com"
+	}
+
+	if r.Metadata.Support.SupportContactUrl == "" {
+		r.Metadata.Support.SupportContactUrl = "https://discord.gg/example-support"
+	}
+
+	if r.Metadata.Support.DocumentationUrl == "" {
+		r.Metadata.Support.DocumentationUrl = "https://docs.example-l2.com"
+	}
+
+	if r.Metadata.Support.CommunityUrl == "" {
+		r.Metadata.Support.CommunityUrl = "https://t.me/example_community"
+	}
+
+	if r.Metadata.Support.HelpCenterUrl == "" {
+		r.Metadata.Support.HelpCenterUrl = "https://help.example-l2.com"
+	}
+
+	if r.Metadata.Support.AnnouncementUrl == "" {
+		r.Metadata.Support.AnnouncementUrl = "https://twitter.com/example_l2"
+	}
+
+	return r, nil
 }
