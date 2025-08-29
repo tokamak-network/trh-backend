@@ -111,3 +111,7 @@ func (im *IntegrationManager) RegisterCandidateForStack(ctx context.Context, sta
 func (im *IntegrationManager) RegisterMetadataDAOForStack(ctx context.Context, stackId uuid.UUID, req dtos.RegisterMetadataDAORequest) (*entities.Response, error) {
 	return im.registerMetadataDAO.Register(ctx, stackId, req)
 }
+
+func (im *IntegrationManager) GetRegisterMetadataDAOForStack(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.registerMetadataDAO.Get(ctx, stackId)
+}

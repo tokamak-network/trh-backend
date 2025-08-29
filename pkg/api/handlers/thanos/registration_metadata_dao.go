@@ -57,3 +57,21 @@ func (h *ThanosDeploymentHandler) RegisterMetadataDAO(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+func (h *ThanosDeploymentHandler) GetRegisterMetadataDAO(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.GetRegisterMetadataDAO(c, uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to get register metadata dao", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
