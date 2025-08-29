@@ -20,7 +20,6 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
-	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
 
@@ -39,6 +38,7 @@ type RegisterMetadataDAOIntegration struct {
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -63,6 +63,7 @@ func NewRegisterMetadataDAOIntegration(
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -140,18 +141,18 @@ func (r *RegisterMetadataDAOIntegration) Register(ctx context.Context, stackId u
 	}
 
 	registerMetadataDaoLogPath := utils.GetLogPath(stackId, "register-metadata-dao")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		registerMetadataDaoLogPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.Error(err))
+
+	registerMetadataDaoIntegration := &entities.IntegrationEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Type:    enum.IntegrationTypeRegisterMetadataDAO.String(),
+		Status:  string(entities.DeploymentStatusPending),
+		Config:  []byte("{}"),
+		LogPath: registerMetadataDaoLogPath,
+	}
+
+	if err := r.integrationRepo.CreateIntegration(registerMetadataDaoIntegration); err != nil {
+		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -161,7 +162,7 @@ func (r *RegisterMetadataDAOIntegration) Register(ctx context.Context, stackId u
 
 	taskId := fmt.Sprintf("register-metadata-dao-%s", stackId.String())
 	r.taskManager.AddTask(taskId, func(ctx context.Context) {
-		r.registerTask(ctx, sdkClient, req, registerMetadataDaoLogPath, stackId)
+		r.registerTask(ctx, stack, req, registerMetadataDaoLogPath, stackId)
 	})
 
 	return &entities.Response{
@@ -172,10 +173,20 @@ func (r *RegisterMetadataDAOIntegration) Register(ctx context.Context, stackId u
 }
 
 // registerTask handles the actual registration process
-func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, sdkClient interface{}, req dtos.RegisterMetadataDAORequest, logPath string, stackId uuid.UUID) {
+func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack *entities.StackEntity, req dtos.RegisterMetadataDAORequest, logPath string, stackId uuid.UUID) {
 	integrationConfig, err := json.Marshal(req)
 	if err != nil {
 		logger.Error("failed to marshal integration config", zap.Error(err))
+		return
+	}
+
+	registerMetadataDaoIntegration, err := r.integrationRepo.GetInstalledIntegration(stackId.String(), enum.IntegrationTypeRegisterMetadataDAO.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
+		return
+	}
+	if err := r.integrationRepo.UpdateIntegrationStatus(registerMetadataDaoIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
 		return
 	}
 
@@ -208,12 +219,24 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, sdkCl
 		return
 	}
 
-	thanosClient, ok := sdkClient.(*thanosStack.ThanosStack)
-	if !ok {
-		logger.Error("failed to type assert sdkClient", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()))
-		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(integrationId.String(), entities.DeploymentStatusFailed, "Invalid SDK client type"); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(updateErr), zap.String("integrationId", integrationId.String()))
-		}
+	stackConfig := dtos.DeployThanosRequest{}
+	err = json.Unmarshal(stack.Config, &stackConfig)
+	if err != nil {
+		logger.Error("failed to unmarshal stack config", zap.Error(err))
+		return
+	}
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
 	}
 
@@ -222,7 +245,7 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, sdkCl
 	defer cancel()
 	go r.tailAndIngestLogs(ingestCtx, stackId, deployment.ID, logPath)
 
-	registerMedataDaoResult, err := thanos.RegisterMetadataDAO(ctx, thanosClient, &req)
+	registerMedataDaoResult, err := thanos.RegisterMetadataDAO(ctx, sdkClient, &req)
 	if err != nil {
 		logger.Error("failed to register metadata dao", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err), zap.String("stackId", stackId.String()))
 		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(integrationId.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {

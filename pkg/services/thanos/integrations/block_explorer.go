@@ -20,7 +20,6 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
-	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
 
@@ -142,29 +141,19 @@ func (b *BlockExplorerIntegration) Install(ctx context.Context, stackId string, 
 		}, nil
 	}
 
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
+	logPath := utils.GetLogPath(stack.ID, "block-explorer")
+
+	blockExplorerIntegration := &entities.IntegrationEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Type:    enum.IntegrationTypeBlockExplorer.String(),
+		Status:  string(entities.DeploymentStatusPending),
+		Config:  []byte("{}"),
+		LogPath: logPath,
 	}
 
-	logPath := utils.GetLogPath(stack.ID, "block-explorer")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.Error(err))
+	if err := b.integrationRepo.CreateIntegration(blockExplorerIntegration); err != nil {
+		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -174,7 +163,7 @@ func (b *BlockExplorerIntegration) Install(ctx context.Context, stackId string, 
 
 	taskId := fmt.Sprintf("install-block-explorer-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.installTask(ctx, stack, sdkClient, request, logPath)
+		b.installTask(ctx, stack, request, logPath)
 	})
 
 	return &entities.Response{
@@ -214,18 +203,18 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 	}
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-block-explorer")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.Error(err))
+
+	blockExplorerIntegration, _ := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBlockExplorer.String())
+	if blockExplorerIntegration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Block explorer integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if err := b.integrationRepo.UpdateIntegrationStatus(blockExplorerIntegration.ID.String(), entities.DeploymentStatusPending); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -235,7 +224,7 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 
 	taskId := fmt.Sprintf("uninstall-block-explorer-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.uninstallTask(ctx, stack, sdkClient, stackId, logPath)
+		b.uninstallTask(ctx, stack, stackId, logPath)
 	})
 
 	return &entities.Response{
@@ -246,7 +235,24 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 }
 
 // installTask handles the actual installation process
-func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, request dtos.InstallBlockExplorerRequest, logPath string) {
+func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entities.StackEntity, request dtos.InstallBlockExplorerRequest, logPath string) {
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		return
+	}
+
+	blockExplorerIntegration, err := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBlockExplorer.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return
+	}
+
+	if err := b.integrationRepo.UpdateIntegrationStatus(blockExplorerIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return
+	}
+
 	configBytes, err := json.Marshal(request)
 	if err != nil {
 		logger.Error("failed to marshal block explorer config", zap.Error(err))
@@ -272,35 +278,26 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 		return
 	}
 
-	blockExplorerIntegration := &entities.IntegrationEntity{
-		ID:      uuid.New(),
-		StackID: &stack.ID,
-		Type:    enum.IntegrationTypeBlockExplorer.String(),
-		Status:  string(entities.DeploymentStatusInProgress),
-		Config:  configBytes,
-		LogPath: logPath,
-	}
-
-	if err = b.integrationRepo.CreateIntegration(blockExplorerIntegration); err != nil {
-		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
-		return
-	}
-
-	thanosClient, ok := sdkClient.(*thanosStack.ThanosStack)
-	if !ok {
-		logger.Error("failed to type assert sdkClient", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()))
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(blockExplorerIntegration.ID.String(), entities.DeploymentStatusFailed, "Invalid SDK client type"); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(updateErr), zap.String("integrationId", blockExplorerIntegration.ID.String()))
-		}
-		return
-	}
-
 	// Start log ingestion for this plugin installation
 	ingestCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go b.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
-	blockExplorerUrl, err := thanos.InstallBlockExplorer(ctx, thanosClient, &request)
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		return
+	}
+	blockExplorerUrl, err := thanos.InstallBlockExplorer(ctx, sdkClient, &request)
 	if err != nil {
 		logger.Error("failed to install block explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(blockExplorerIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -350,7 +347,13 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 }
 
 // uninstallTask handles the actual uninstallation process
-func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, stackId string, logPath string) {
+func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, stackId string, logPath string) {
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		return
+	}
+
 	var uninstallDeployment *entities.DeploymentEntity
 	var integration *entities.IntegrationEntity
 	defer func() {
@@ -364,8 +367,8 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 			}
 		}
 	}()
-	var err error
-	integration, err = b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBlockExplorer.String())
+
+	integration, err := b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBlockExplorer.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		return
@@ -381,11 +384,6 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 		return
 	}
 
-	thanosClient, ok := sdkClient.(*thanosStack.ThanosStack)
-	if !ok {
-		logger.Error("failed to type assert sdkClient for uninstall", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()))
-		return
-	}
 	// Create deployment record for uninstalling block explorer
 	uninstallDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
@@ -409,7 +407,22 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 	defer cancel()
 	go b.tailAndIngestLogs(ingestCtx, stack.ID, uninstallDeployment.ID, logPath)
 
-	if err = thanos.UninstallBlockExplorer(ctx, thanosClient); err != nil {
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		return
+	}
+
+	if err = thanos.UninstallBlockExplorer(ctx, sdkClient); err != nil {
 		logger.Error("failed to uninstall block-explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())

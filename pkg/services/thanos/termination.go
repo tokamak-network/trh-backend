@@ -85,7 +85,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		stackId.String(),
 		entities.DeploymentStatusTerminating,
 		[]entities.DeploymentStatus{entities.DeploymentStatusTerminated},
-		[]string{enum.IntegrationTypeRegisterCandidate.String()},
+		[]string{enum.IntegrationTypeRegisterCandidate.String(), enum.IntegrationTypeRegisterMetadataDAO.String()},
 	)
 	if err != nil {
 		logger.Error("failed to update integrations status to terminating",

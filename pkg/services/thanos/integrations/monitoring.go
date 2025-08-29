@@ -20,7 +20,6 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
-	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
 
@@ -133,29 +132,19 @@ func (m *MonitoringIntegration) Install(ctx context.Context, stackId uuid.UUID, 
 		}, nil
 	}
 
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
+	logPath := utils.GetLogPath(stack.ID, "monitoring")
+
+	monitoringIntegration := &entities.IntegrationEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Type:    enum.IntegrationTypeMonitoring.String(),
+		Status:  string(entities.DeploymentStatusPending),
+		Config:  []byte("{}"),
+		LogPath: logPath,
 	}
 
-	logPath := utils.GetLogPath(stack.ID, "monitoring")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.Error(err))
+	if err := m.integrationRepo.CreateIntegration(monitoringIntegration); err != nil {
+		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -165,7 +154,7 @@ func (m *MonitoringIntegration) Install(ctx context.Context, stackId uuid.UUID, 
 
 	taskId := fmt.Sprintf("install-monitoring-%s", stackId)
 	m.taskManager.AddTask(taskId, func(ctx context.Context) {
-		m.installTask(ctx, stack, sdkClient, req, logPath, stackId.String())
+		m.installTask(ctx, stack, req, logPath, stackId.String())
 	})
 
 	return &entities.Response{
@@ -194,29 +183,19 @@ func (m *MonitoringIntegration) Uninstall(ctx context.Context, stackId uuid.UUID
 		}, nil
 	}
 
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+	logPath := utils.GetLogPath(stack.ID, "uninstall-monitoring")
+
+	monitoringIntegration, _ := m.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeMonitoring.String())
+	if monitoringIntegration == nil {
 		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
+			Status:  http.StatusNotFound,
+			Message: "Monitoring integration not found",
 			Data:    nil,
-		}, err
+		}, nil
 	}
 
-	logPath := utils.GetLogPath(stack.ID, "uninstall-monitoring")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.Error(err))
+	if err := m.integrationRepo.UpdateIntegrationStatus(monitoringIntegration.ID.String(), entities.DeploymentStatusPending); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -226,7 +205,7 @@ func (m *MonitoringIntegration) Uninstall(ctx context.Context, stackId uuid.UUID
 
 	taskId := fmt.Sprintf("uninstall-monitoring-%s", stackId)
 	m.taskManager.AddTask(taskId, func(ctx context.Context) {
-		m.uninstallTask(ctx, stack, sdkClient, stackId.String(), logPath)
+		m.uninstallTask(ctx, stack, stackId.String(), logPath)
 	})
 
 	return &entities.Response{
@@ -237,10 +216,21 @@ func (m *MonitoringIntegration) Uninstall(ctx context.Context, stackId uuid.UUID
 }
 
 // installTask handles the actual installation process
-func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, req dtos.InstallMonitoringRequest, logPath string, stackId string) {
+func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities.StackEntity, req dtos.InstallMonitoringRequest, logPath string, stackId string) {
 	configBytes, err := json.Marshal(req)
 	if err != nil {
 		logger.Error("failed to marshal monitoring config", zap.Error(err))
+		return
+	}
+
+	monitoringIntegration, err := m.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeMonitoring.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
+		return
+	}
+
+	if err := m.integrationRepo.UpdateIntegrationStatus(monitoringIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		return
 	}
 
@@ -262,30 +252,28 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	monitoringIntegration := &entities.IntegrationEntity{
-		ID:      uuid.New(),
-		StackID: &stack.ID,
-		Type:    enum.IntegrationTypeMonitoring.String(),
-		Status:  string(entities.DeploymentStatusInProgress),
-		Config:  configBytes,
-		LogPath: logPath,
-	}
-
-	if err = m.integrationRepo.CreateIntegration(monitoringIntegration); err != nil {
-		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
 		return
 	}
 
-	thanosClient, ok := sdkClient.(*thanosStack.ThanosStack)
-	if !ok {
-		logger.Error("failed to type assert sdkClient", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
-		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, "Invalid SDK client type"); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(updateErr), zap.String("integrationId", monitoringIntegration.ID.String()))
-		}
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
 	}
 
-	monitoringConfig, err := thanos.GetMonitoringConfig(ctx, thanosClient, &req)
+	monitoringConfig, err := thanos.GetMonitoringConfig(ctx, sdkClient, &req)
 	if err != nil {
 		logger.Error("failed to get monitoring config", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -300,7 +288,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 	defer cancel()
 	go m.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
-	monitoringInfo, err := thanos.InstallMonitoring(ctx, thanosClient, monitoringConfig)
+	monitoringInfo, err := thanos.InstallMonitoring(ctx, sdkClient, monitoringConfig)
 	if err != nil {
 		logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -370,7 +358,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 }
 
 // uninstallTask handles the actual uninstallation process
-func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, stackId string, logPath string) {
+func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, stackId string, logPath string) {
 	var uninstallDeployment *entities.DeploymentEntity
 	var integration *entities.IntegrationEntity
 	defer func() {
@@ -401,12 +389,6 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 		return
 	}
 
-	thanosClient, ok := sdkClient.(*thanosStack.ThanosStack)
-	if !ok {
-		logger.Error("failed to type assert sdkClient for uninstall", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
-		return
-	}
-
 	// Create deployment record for uninstalling monitoring
 	uninstallDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
@@ -430,7 +412,28 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 	defer cancel()
 	go m.tailAndIngestLogs(ingestCtx, stack.ID, uninstallDeployment.ID, logPath)
 
-	if err = thanos.UninstallMonitoring(ctx, thanosClient); err != nil {
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		return
+	}
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		return
+	}
+
+	if err = thanos.UninstallMonitoring(ctx, sdkClient); err != nil {
 		logger.Error("failed to uninstall monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		_ = m.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 		_ = m.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
