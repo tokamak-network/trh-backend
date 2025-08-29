@@ -220,9 +220,9 @@ type UpdateNetworkRequest struct {
 
 // TelegramConfig holds Telegram notification configuration
 type TelegramConfig struct {
-	Enabled           bool
-	ApiToken          string
-	CriticalReceivers []TelegramReceiver
+	Enabled           bool               `json:"enabled"`
+	ApiToken          string             `json:"apiToken"`
+	CriticalReceivers []TelegramReceiver `json:"criticalReceivers"`
 }
 
 // TelegramReceiver represents a Telegram chat recipient
@@ -232,24 +232,24 @@ type TelegramReceiver struct {
 
 // EmailConfig holds email notification configuration
 type EmailConfig struct {
-	Enabled           bool
-	SmtpSmarthost     string
-	SmtpFrom          string
-	SmtpAuthUsername  string
-	SmtpAuthPassword  string
-	DefaultReceivers  []string
-	CriticalReceivers []string
+	Enabled           bool     `json:"enabled"`
+	SmtpSmarthost     string   `json:"smtpSmarthost"`
+	SmtpFrom          string   `json:"smtpFrom"`
+	SmtpAuthUsername  string   `json:"smtpAuthUsername"`
+	SmtpAuthPassword  string   `json:"smtpAuthPassword"`
+	DefaultReceivers  []string `json:"defaultReceivers"`
+	CriticalReceivers []string `json:"criticalReceivers"`
 }
 
 type AlertManagerConfig struct {
-	Telegram TelegramConfig
-	Email    EmailConfig
+	Telegram TelegramConfig `json:"telegram"`
+	Email    EmailConfig    `json:"email"`
 }
 
 type InstallMonitoringRequest struct {
-	GrafanaPassword string `json:"grafanaPassword" binding:"required"`
-	AlertManager    AlertManagerConfig
-	LoggingEnabled  bool `json:"loggingEnabled"`
+	GrafanaPassword string             `json:"grafanaPassword" binding:"required"`
+	AlertManager    AlertManagerConfig `json:"alertManager" binding:"required"`
+	LoggingEnabled  bool               `json:"loggingEnabled"`
 }
 
 func (r *InstallMonitoringRequest) Validate() error {
