@@ -332,6 +332,6 @@ func (r *RegisterMetadataDAOIntegration) Get(ctx context.Context, stackId uuid.U
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Register metadata dao found",
-		Data:    integrations[0].Config,
+		Data:    map[string]interface{}{"config": integrations[0].Config, "info": integrations[0].Info},
 	}, nil
 }
