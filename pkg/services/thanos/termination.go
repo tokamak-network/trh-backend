@@ -73,6 +73,14 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
+	err = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusInProgress)
+	if err != nil {
+		logger.Error("failed to set deployment in-progress",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		return
+	}
+
 	err = s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusTerminating, "")
 	if err != nil {
 		logger.Error("failed to update stacks status after destroy error",
@@ -138,6 +146,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
+	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusSuccess)
 
 	logger.Info(
 		"AWS infrastructure destroyed successfully",
