@@ -238,16 +238,12 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.InstallBridgeStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  []byte("{}"),
 	}
 	if err := b.deploymentRepo.CreateDeployment(deployment); err != nil {
 		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		return
-	}
-	if err := b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
-		logger.Error("failed to set deployment in-progress", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
 
@@ -368,16 +364,12 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.UninstallBridgeStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  []byte("{}"),
 	}
 	if err := b.deploymentRepo.CreateDeployment(uninstallDeployment); err != nil {
 		logger.Error("failed to create uninstall deployment record", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		return
-	}
-	if err := b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
-		logger.Error("failed to set uninstall deployment in-progress", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
 

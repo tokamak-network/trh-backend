@@ -46,7 +46,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		ID:      terminationDeploymentID,
 		StackID: &stack.ID,
 		Step:    constants.DestroyChainStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  nil,
 	}
@@ -69,14 +69,6 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client",
-			zap.Error(err))
-		return
-	}
-
-	err = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusInProgress)
-	if err != nil {
-		logger.Error("failed to set deployment in-progress",
-			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 		return
 	}
@@ -137,7 +129,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		stackId.String(),
 		entities.DeploymentStatusTerminated,
 		[]entities.DeploymentStatus{},
-		[]string{enum.IntegrationTypeRegisterCandidate.String()},
+		[]string{enum.IntegrationTypeRegisterCandidate.String(), enum.IntegrationTypeRegisterMetadataDAO.String()},
 	)
 	if err != nil {
 		logger.Error("failed to update integrations status to terminated",

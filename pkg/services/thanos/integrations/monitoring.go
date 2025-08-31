@@ -239,16 +239,12 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.InstallMonitoringStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  configBytes,
 	}
 	if err := m.deploymentRepo.CreateDeployment(deployment); err != nil {
 		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
-		return
-	}
-	if err := m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
-		logger.Error("failed to set deployment in-progress", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		return
 	}
 
@@ -394,16 +390,12 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.UninstallMonitoringStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  []byte("{}"),
 	}
 	if err := m.deploymentRepo.CreateDeployment(uninstallDeployment); err != nil {
 		logger.Error("failed to create uninstall deployment record", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
-		return
-	}
-	if err := m.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
-		logger.Error("failed to set uninstall deployment in-progress", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		return
 	}
 

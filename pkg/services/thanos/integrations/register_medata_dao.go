@@ -205,16 +205,12 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack
 		ID:      uuid.New(),
 		StackID: &stackId,
 		Step:    constants.RegisterMetadataDAOStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  integrationConfig,
 	}
 	if err := r.deploymentRepo.CreateDeployment(deployment); err != nil {
 		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
-		return
-	}
-	if err := r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
-		logger.Error("failed to set deployment in-progress", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
 		return
 	}
 
