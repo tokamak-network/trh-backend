@@ -20,6 +20,15 @@ func NewDeploymentRepository(db *gorm.DB) *DeploymentRepository {
 }
 
 func (r *DeploymentRepository) CreateDeployment(deployment *entities.DeploymentEntity) error {
+	now := time.Now().UTC()
+	if deployment.Status == entities.DeploymentRunStatusInProgress {
+		deployment.StartedAt = &now
+	}
+	if deployment.Status == entities.DeploymentRunStatusSuccess ||
+		deployment.Status == entities.DeploymentRunStatusFailed ||
+		deployment.Status == entities.DeploymentRunStatusStopped {
+		deployment.FinishedAt = &now
+	}
 	return r.db.Create(ToDeploymentSchema(deployment)).Error
 }
 

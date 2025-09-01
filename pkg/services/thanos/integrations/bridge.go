@@ -20,7 +20,6 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
-	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
 
@@ -133,29 +132,19 @@ func (b *BridgeIntegration) Install(ctx context.Context, stackId string) (*entit
 		}, nil
 	}
 
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
+	logPath := utils.GetLogPath(stack.ID, "bridge")
+
+	bridgeIntegration := &entities.IntegrationEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Type:    enum.IntegrationTypeBridge.String(),
+		Status:  string(entities.DeploymentStatusPending),
+		Config:  []byte("{}"),
+		LogPath: logPath,
 	}
 
-	logPath := utils.GetLogPath(stack.ID, "bridge")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.Error(err))
+	if err := b.integrationRepo.CreateIntegration(bridgeIntegration); err != nil {
+		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -165,7 +154,7 @@ func (b *BridgeIntegration) Install(ctx context.Context, stackId string) (*entit
 
 	taskId := fmt.Sprintf("install-bridge-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.installTask(ctx, stack, sdkClient, logPath)
+		b.installTask(ctx, stack, logPath)
 	})
 
 	return &entities.Response{
@@ -194,9 +183,18 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 		}, nil
 	}
 
-	stackConfig := dtos.DeployThanosRequest{}
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId), zap.Error(err))
+	logPath := utils.GetLogPath(stack.ID, "uninstall-bridge")
+
+	bridgeIntegration, _ := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBridge.String())
+	if bridgeIntegration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Bridge integration not found",
+			Data:    nil,
+		}, nil
+	}
+	if err := b.integrationRepo.UpdateIntegrationStatus(bridgeIntegration.ID.String(), entities.DeploymentStatusPending); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -204,7 +202,56 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 		}, err
 	}
 
-	logPath := utils.GetLogPath(stack.ID, "uninstall-bridge")
+	taskId := fmt.Sprintf("uninstall-bridge-%s", stackId)
+	b.taskManager.AddTask(taskId, func(ctx context.Context) {
+		b.uninstallTask(ctx, stack, stackId, logPath)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
+}
+
+// installTask handles the actual installation process
+func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.StackEntity, logPath string) {
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		return
+	}
+
+	bridgeIntegration, err := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBridge.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		return
+	}
+
+	if err := b.integrationRepo.UpdateIntegrationStatus(bridgeIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		return
+	}
+
+	// Create deployment record for installing bridge
+	deployment := &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    constants.InstallBridgeStep,
+		Status:  entities.DeploymentRunStatusInProgress,
+		LogPath: logPath,
+		Config:  []byte("{}"),
+	}
+	if err := b.deploymentRepo.CreateDeployment(deployment); err != nil {
+		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		return
+	}
+
+	// Start log ingestion for this plugin installation
+	ingestCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go b.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
+
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
@@ -217,74 +264,9 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 	)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	taskId := fmt.Sprintf("uninstall-bridge-%s", stackId)
-	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.uninstallTask(ctx, stack, sdkClient, stackId, logPath)
-	})
-
-	return &entities.Response{
-		Status:  http.StatusOK,
-		Message: "Successfully",
-		Data:    nil,
-	}, nil
-}
-
-// installTask handles the actual installation process
-func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, logPath string) {
-	// Create deployment record for installing bridge
-	deployment := &entities.DeploymentEntity{
-		ID:      uuid.New(),
-		StackID: &stack.ID,
-		Step:    constants.InstallBridgeStep,
-		Status:  entities.DeploymentRunStatusPending,
-		LogPath: logPath,
-		Config:  []byte("{}"),
-	}
-	if err := b.deploymentRepo.CreateDeployment(deployment); err != nil {
-		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
-	if err := b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
-		logger.Error("failed to set deployment in-progress", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		return
-	}
-
-	bridgeIntegration := &entities.IntegrationEntity{
-		ID:      uuid.New(),
-		StackID: &stack.ID,
-		Type:    enum.IntegrationTypeBridge.String(),
-		Status:  string(entities.DeploymentStatusInProgress),
-		Config:  []byte("{}"),
-		LogPath: logPath,
-	}
-
-	if err := b.integrationRepo.CreateIntegration(bridgeIntegration); err != nil {
-		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		return
-	}
-
-	thanosClient, ok := sdkClient.(*thanosStack.ThanosStack)
-	if !ok {
-		logger.Error("failed to type assert sdkClient", zap.String("plugin", enum.IntegrationTypeBridge.String()))
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, "Invalid SDK client type"); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", bridgeIntegration.ID.String()))
-		}
-		return
-	}
-
-	// Start log ingestion for this plugin installation
-	ingestCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go b.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
-
-	bridgeUrl, err := thanos.InstallBridge(ctx, thanosClient)
+	bridgeUrl, err := thanos.InstallBridge(ctx, sdkClient)
 	if err != nil {
 		logger.Error("failed to install bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -340,7 +322,13 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 }
 
 // uninstallTask handles the actual uninstallation process
-func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, sdkClient interface{}, stackId string, logPath string) {
+func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, stackId string, logPath string) {
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		return
+	}
+
 	var uninstallDeployment *entities.DeploymentEntity
 	var integration *entities.IntegrationEntity
 	defer func() {
@@ -354,8 +342,8 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 			}
 		}
 	}()
-	var err error
-	integration, err = b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBridge.String())
+
+	integration, err := b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBridge.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
@@ -371,27 +359,17 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 		return
 	}
 
-	thanosClient, ok := sdkClient.(*thanosStack.ThanosStack)
-	if !ok {
-		logger.Error("failed to type assert sdkClient for uninstall", zap.String("plugin", enum.IntegrationTypeBridge.String()))
-		return
-	}
-
 	// Create deployment record for uninstalling bridge
 	uninstallDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    constants.UninstallBridgeStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  []byte("{}"),
 	}
 	if err := b.deploymentRepo.CreateDeployment(uninstallDeployment); err != nil {
 		logger.Error("failed to create uninstall deployment record", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		return
-	}
-	if err := b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
-		logger.Error("failed to set uninstall deployment in-progress", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
 
@@ -400,7 +378,21 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 	defer cancel()
 	go b.tailAndIngestLogs(ingestCtx, stack.ID, uninstallDeployment.ID, logPath)
 
-	if err = thanos.UninstallBridge(ctx, thanosClient); err != nil {
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		return
+	}
+	if err = thanos.UninstallBridge(ctx, sdkClient); err != nil {
 		logger.Error("failed to uninstall bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())

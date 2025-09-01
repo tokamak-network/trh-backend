@@ -20,7 +20,6 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
-	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
 
@@ -38,6 +37,7 @@ type RegisterCandidateIntegration struct {
 		CreateIntegration(integration *entities.IntegrationEntity) error
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
+		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 	}
 	logRepo interface {
@@ -62,6 +62,7 @@ func NewRegisterCandidateIntegration(
 		CreateIntegration(integration *entities.IntegrationEntity) error
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
+		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 	},
 	logRepo interface {
@@ -128,30 +129,19 @@ func (r *RegisterCandidateIntegration) Register(ctx context.Context, stackId uui
 		}, nil
 	}
 
-	stackConfig := dtos.DeployThanosRequest{}
-	err = json.Unmarshal(stack.Config, &stackConfig)
-	if err != nil {
-		logger.Error("failed to unmarshal stack config", zap.Error(err))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
+	registerCandidateLogPath := utils.GetLogPath(stackId, "register-candidate")
+
+	registerCandidateIntegration := &entities.IntegrationEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Type:    enum.IntegrationTypeRegisterCandidate.String(),
+		Status:  string(entities.DeploymentStatusPending),
+		Config:  []byte("{}"),
+		LogPath: registerCandidateLogPath,
 	}
 
-	registerCandidateLogPath := utils.GetLogPath(stackId, "register-candidate")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		registerCandidateLogPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.Error(err))
+	if err := r.integrationRepo.CreateIntegration(registerCandidateIntegration); err != nil {
+		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: "Internal server error",
@@ -161,7 +151,7 @@ func (r *RegisterCandidateIntegration) Register(ctx context.Context, stackId uui
 
 	taskId := fmt.Sprintf("register-candidate-%s", stackId.String())
 	r.taskManager.AddTask(taskId, func(ctx context.Context) {
-		r.registerTask(ctx, sdkClient, req, registerCandidateLogPath, stackId)
+		r.registerTask(ctx, stack, req, registerCandidateLogPath, stackId)
 	})
 
 	return &entities.Response{
@@ -172,10 +162,20 @@ func (r *RegisterCandidateIntegration) Register(ctx context.Context, stackId uui
 }
 
 // registerTask handles the actual registration process
-func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, sdkClient interface{}, req dtos.RegisterCandidateRequest, logPath string, stackId uuid.UUID) {
+func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *entities.StackEntity, req dtos.RegisterCandidateRequest, logPath string, stackId uuid.UUID) {
 	integrationConfig, err := json.Marshal(req)
 	if err != nil {
 		logger.Error("failed to marshal integration config", zap.Error(err))
+		return
+	}
+
+	registerCandidateIntegration, err := r.integrationRepo.GetInstalledIntegration(stackId.String(), enum.IntegrationTypeRegisterCandidate.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+		return
+	}
+	if err := r.integrationRepo.UpdateIntegrationStatus(registerCandidateIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
 		return
 	}
 
@@ -184,7 +184,7 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, sdkClie
 		ID:      uuid.New(),
 		StackID: &stackId,
 		Step:    constants.RegisterCandidateStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  integrationConfig,
 	}
@@ -192,32 +192,26 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, sdkClie
 		logger.Error("failed to create deployment record", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
 		return
 	}
-	if err := r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
-		logger.Error("failed to set deployment in-progress", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+
+	stackConfig := dtos.DeployThanosRequest{}
+	err = json.Unmarshal(stack.Config, &stackConfig)
+	if err != nil {
+		logger.Error("failed to unmarshal stack config", zap.Error(err))
 		return
 	}
+	thanosClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
 
-	integrationId := uuid.New()
-	integration := &entities.IntegrationEntity{
-		ID:      integrationId,
-		StackID: &stackId,
-		Type:    enum.IntegrationTypeRegisterCandidate.String(),
-		Status:  string(entities.DeploymentStatusPending),
-		Config:  integrationConfig,
-		LogPath: logPath,
-	}
-
-	if err = r.integrationRepo.CreateIntegration(integration); err != nil {
-		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
-		return
-	}
-
-	thanosClient, ok := sdkClient.(*thanosStack.ThanosStack)
-	if !ok {
-		logger.Error("failed to type assert sdkClient", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()))
-		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(integrationId.String(), entities.DeploymentStatusFailed, "Invalid SDK client type"); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(updateErr), zap.String("integrationId", integrationId.String()))
-		}
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
 	}
 
@@ -228,15 +222,15 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, sdkClie
 
 	if err = thanos.VerifyRegisterCandidates(ctx, thanosClient, &req); err != nil {
 		logger.Error("failed to register candidate", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("stackId", stackId.String()))
-		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(integrationId.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(updateErr), zap.String("integrationId", integrationId.String()))
+		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(registerCandidateIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(updateErr), zap.String("integrationId", registerCandidateIntegration.ID.String()))
 		}
 		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
-	if err = r.integrationRepo.UpdateIntegrationStatus(integrationId.String(), entities.DeploymentStatusCompleted); err != nil {
-		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("integrationId", integrationId.String()))
+	if err = r.integrationRepo.UpdateIntegrationStatus(registerCandidateIntegration.ID.String(), entities.DeploymentStatusCompleted); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("integrationId", registerCandidateIntegration.ID.String()))
 	}
 
 	registerCandidateInfo, err := thanos.GetRegisterCandidatesInfo(ctx, thanosClient, &req)
@@ -251,7 +245,7 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, sdkClie
 		return
 	}
 
-	if err = r.integrationRepo.UpdateMetadataAfterInstalled(integrationId.String(), bytes); err != nil {
+	if err = r.integrationRepo.UpdateMetadataAfterInstalled(registerCandidateIntegration.ID.String(), bytes); err != nil {
 		logger.Error("failed to update register candidate integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
 		return
 	}

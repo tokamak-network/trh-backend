@@ -46,7 +46,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		ID:      terminationDeploymentID,
 		StackID: &stack.ID,
 		Step:    constants.DestroyChainStep,
-		Status:  entities.DeploymentRunStatusPending,
+		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  nil,
 	}
@@ -85,7 +85,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		stackId.String(),
 		entities.DeploymentStatusTerminating,
 		[]entities.DeploymentStatus{entities.DeploymentStatusTerminated},
-		[]string{enum.IntegrationTypeRegisterCandidate.String()},
+		[]string{enum.IntegrationTypeRegisterCandidate.String(), enum.IntegrationTypeRegisterMetadataDAO.String()},
 	)
 	if err != nil {
 		logger.Error("failed to update integrations status to terminating",
@@ -129,7 +129,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		stackId.String(),
 		entities.DeploymentStatusTerminated,
 		[]entities.DeploymentStatus{},
-		[]string{enum.IntegrationTypeRegisterCandidate.String()},
+		[]string{enum.IntegrationTypeRegisterCandidate.String(), enum.IntegrationTypeRegisterMetadataDAO.String()},
 	)
 	if err != nil {
 		logger.Error("failed to update integrations status to terminated",
@@ -138,6 +138,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
+	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusSuccess)
 
 	logger.Info(
 		"AWS infrastructure destroyed successfully",
