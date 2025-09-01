@@ -113,6 +113,45 @@ func (s *ThanosStackDeploymentService) StopDeployingThanosStack(ctx context.Cont
 	}
 
 	if stack.Status != entities.StackStatusDeploying {
+		if stack.Status == entities.StackStatusDeployed {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "Stack is already deployed, if you want to stop it, please use the terminate it",
+				Data:    nil,
+			}, nil
+		}
+		if stack.Status == entities.StackStatusTerminating {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "Stack is terminating, please wait for it to finish",
+				Data:    nil,
+			}, nil
+		}
+
+		if stack.Status == entities.StackStatusTerminated {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "Stack is terminated, you cannot stop it",
+				Data:    nil,
+			}, nil
+		}
+
+		if stack.Status == entities.StackStatusFailedToDeploy {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "Stack failed to deploy, you cannot stop it",
+				Data:    nil,
+			}, nil
+		}
+
+		if stack.Status == entities.StackStatusFailedToTerminate {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "Stack failed to terminate, you cannot stop it",
+				Data:    nil,
+			}, nil
+		}
+
 		return &entities.Response{
 			Status:  http.StatusBadRequest,
 			Message: "Stack is not deploying, yet. Please wait for it to finish",
