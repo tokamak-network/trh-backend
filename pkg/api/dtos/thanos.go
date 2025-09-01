@@ -232,13 +232,11 @@ type TelegramReceiver struct {
 
 // EmailConfig holds email notification configuration
 type EmailConfig struct {
-	Enabled           bool     `json:"enabled"`
-	SmtpSmarthost     string   `json:"smtpSmarthost"`
-	SmtpFrom          string   `json:"smtpFrom"`
-	SmtpAuthUsername  string   `json:"smtpAuthUsername"`
-	SmtpAuthPassword  string   `json:"smtpAuthPassword"`
-	DefaultReceivers  []string `json:"defaultReceivers"`
-	CriticalReceivers []string `json:"criticalReceivers"`
+	Enabled          bool     `json:"enabled"`
+	SmtpSmarthost    string   `json:"smtpSmarthost"`
+	SmtpFrom         string   `json:"smtpFrom"`
+	SmtpAuthPassword string   `json:"smtpAuthPassword"`
+	AlertReceivers   []string `json:"alertReceivers"`
 }
 
 type AlertManagerConfig struct {
@@ -268,13 +266,11 @@ func (r *InstallMonitoringRequest) Validate() error {
 				CriticalReceivers: telegramReceivers,
 			},
 			Email: trhSdkTypes.EmailConfig{
-				Enabled:           r.AlertManager.Email.Enabled,
-				SmtpSmarthost:     r.AlertManager.Email.SmtpSmarthost,
-				SmtpFrom:          r.AlertManager.Email.SmtpFrom,
-				SmtpAuthUsername:  r.AlertManager.Email.SmtpAuthUsername,
-				SmtpAuthPassword:  r.AlertManager.Email.SmtpAuthPassword,
-				DefaultReceivers:  r.AlertManager.Email.DefaultReceivers,
-				CriticalReceivers: r.AlertManager.Email.CriticalReceivers,
+				Enabled:          r.AlertManager.Email.Enabled,
+				SmtpSmarthost:    r.AlertManager.Email.SmtpSmarthost,
+				SmtpFrom:         r.AlertManager.Email.SmtpFrom,
+				SmtpAuthPassword: r.AlertManager.Email.SmtpAuthPassword,
+				AlertReceivers:   r.AlertManager.Email.AlertReceivers,
 			},
 		},
 		LoggingEnabled: r.LoggingEnabled,

@@ -190,8 +190,8 @@ func GetMonitoringConfig(
 			Enabled:          alertManager.Email.Enabled,
 			SmtpSmarthost:    alertManager.Email.SmtpSmarthost,
 			SmtpFrom:         alertManager.Email.SmtpFrom,
-			SmtpAuthUsername: alertManager.Email.SmtpAuthUsername,
 			SmtpAuthPassword: alertManager.Email.SmtpAuthPassword,
+			AlertReceivers:   alertManager.Email.AlertReceivers,
 		},
 	}
 	return s.GetMonitoringConfig(ctx, password, thanosAlertManagerConfig, loggingEnabled)
