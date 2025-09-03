@@ -41,10 +41,10 @@ func (s *AuthService) CreateDefaultAdmin() error {
 
 	// Use fallback values if environment variables are not set
 	if defaultAdminEmail == "" {
-		defaultAdminEmail = "admin@tokamak.network"
+		defaultAdminEmail = "admin@gmail.com"
 	}
 	if defaultAdminPassword == "" {
-		defaultAdminPassword = "admin123"
+		defaultAdminPassword = "admin"
 	}
 
 	// Create default admin user
