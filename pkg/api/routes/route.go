@@ -195,6 +195,15 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.DELETE("/:id/integrations/bridge", handler.UninstallBridge)
 		adminRoutes.DELETE("/:id/integrations/block-explorer", handler.UninstallBlockExplorer)
 		adminRoutes.DELETE("/:id/integrations/monitoring", handler.UninstallMonitoring)
+
+		// Backup management
+		adminRoutes.GET("/:id/integrations/backup/status", handler.BackupStatus)
+		adminRoutes.GET("/:id/integrations/backup/checkpoints", handler.BackupCheckpoints)
+		adminRoutes.POST("/:id/integrations/backup/snapshot", handler.BackupSnapshot)
+		adminRoutes.POST("/:id/integrations/backup/restore", handler.BackupRestore)
+		adminRoutes.POST("/:id/integrations/backup/configure", handler.BackupConfigure)
+		adminRoutes.POST("/:id/integrations/backup/attach", handler.BackupAttach)
+		adminRoutes.DELETE("/:id/integrations/backup/cleanup", handler.BackupCleanup)
 	}
 
 	// Authenticated routes (require valid JWT token - any role)

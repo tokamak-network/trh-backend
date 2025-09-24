@@ -277,3 +277,60 @@ func RegisterMetadataDAO(ctx context.Context, s *thanosStack.ThanosStack, regist
 		Email:    registerMetadataDAO.Email,
 	}, &metadataInfo)
 }
+
+func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack) error {
+	err := s.BackupSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetListBackup(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupRequest) ([]thanosTypes.RecoveryPoint, error) {
+	recoveryPoints, err := s.BackupList(ctx, req.Limit)
+	if err != nil {
+		return nil, err
+	}
+	return recoveryPoints, nil
+}
+
+func GetBackupStatus(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTypes.BackupStatusInfo, error) {
+	backupRestoreInfo, err := s.BackupStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return backupRestoreInfo, nil
+}
+
+func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack) error {
+	err := s.BackupRestore(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// TODO: need to check
+func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest) error {
+	err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func BackupConfigure(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupConfigureRequest) error {
+	err := s.BackupConfigure(ctx, req.Daily, req.Keep, req.Reset)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func CleanupUnusedBackupResources(ctx context.Context, s *thanosStack.ThanosStack) error {
+	err := s.CleanupUnusedBackupResources(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}

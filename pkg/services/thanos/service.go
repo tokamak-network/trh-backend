@@ -173,3 +173,31 @@ func (s *ThanosStackDeploymentService) GetRollupConfigFilePath(stackId uuid.UUID
 
 	return stack.Metadata.RollupConfigUrl, nil
 }
+
+func (s *ThanosStackDeploymentService) BackupStatus(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.BackupStatus(ctx, stackId)
+}
+
+func (s *ThanosStackDeploymentService) BackupCheckpoints(ctx context.Context, stackId uuid.UUID, request dtos.BackupRequest) (*entities.Response, error) {
+	return s.integrationMgr.BackupCheckpoints(ctx, stackId, request)
+}
+
+func (s *ThanosStackDeploymentService) BackupSnapshot(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.BackupSnapshot(ctx, stackId)
+}
+
+func (s *ThanosStackDeploymentService) BackupRestore(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.BackupRestore(ctx, stackId)
+}
+
+func (s *ThanosStackDeploymentService) BackupConfigure(ctx context.Context, stackId uuid.UUID, request dtos.BackupConfigureRequest) (*entities.Response, error) {
+	return s.integrationMgr.BackupConfigure(ctx, stackId, request)
+}
+
+func (s *ThanosStackDeploymentService) BackupAttach(ctx context.Context, stackId uuid.UUID, request dtos.BackupAttachRequest) (*entities.Response, error) {
+	return s.integrationMgr.BackupAttach(ctx, stackId, request)
+}
+
+func (s *ThanosStackDeploymentService) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.BackupCleanup(ctx, stackId)
+}

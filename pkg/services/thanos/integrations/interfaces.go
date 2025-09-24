@@ -16,6 +16,7 @@ type IntegrationManager struct {
 	monitoring          *MonitoringIntegration
 	registerCandidate   *RegisterCandidateIntegration
 	registerMetadataDAO *RegisterMetadataDAOIntegration
+	backupManager       *BackupManager
 }
 
 // NewIntegrationManager creates a new integration manager with all integration handlers
@@ -114,4 +115,32 @@ func (im *IntegrationManager) RegisterMetadataDAOForStack(ctx context.Context, s
 
 func (im *IntegrationManager) GetRegisterMetadataDAOForStack(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return im.registerMetadataDAO.Get(ctx, stackId)
+}
+
+func (im *IntegrationManager) BackupStatus(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.backupManager.GetBackupStatus(ctx, stackId)
+}
+
+func (im *IntegrationManager) BackupCheckpoints(ctx context.Context, stackId uuid.UUID, request dtos.BackupRequest) (*entities.Response, error) {
+	return im.backupManager.GetCheckpoints(ctx, stackId, request)
+}
+
+func (im *IntegrationManager) BackupSnapshot(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.backupManager.BackupSnapshot(ctx, stackId)
+}
+
+func (im *IntegrationManager) BackupRestore(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.backupManager.BackupRestore(ctx, stackId)
+}
+
+func (im *IntegrationManager) BackupConfigure(ctx context.Context, stackId uuid.UUID, request dtos.BackupConfigureRequest) (*entities.Response, error) {
+	return im.backupManager.BackupConfigure(ctx, stackId, request)
+}
+
+func (im *IntegrationManager) BackupAttach(ctx context.Context, stackId uuid.UUID, request dtos.BackupAttachRequest) (*entities.Response, error) {
+	return im.backupManager.BackupAttach(ctx, stackId, request)
+}
+
+func (im *IntegrationManager) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.backupManager.BackupCleanup(ctx, stackId)
 }
