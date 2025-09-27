@@ -1,7 +1,7 @@
 package dtos
 
 type BackupRequest struct {
-	Limit string `json:"limit"`
+	Limit string `json:"limit" form:"limit"`
 }
 
 type BackupAttachRequest struct {

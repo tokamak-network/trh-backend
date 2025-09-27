@@ -131,7 +131,7 @@ func (b *BackupManager) GetCheckpoints(ctx context.Context, stackId uuid.UUID, r
 		}, err
 	}
 	backupCheckpoints, err := thanos.GetListBackup(ctx, thanosSDK, &dtos.BackupRequest{
-		Limit: "20",
+		Limit: request.Limit,
 	})
 	if err != nil {
 		logger.Error("failed to get backup checkpoints", zap.String("stackId", stackId.String()), zap.Error(err))
