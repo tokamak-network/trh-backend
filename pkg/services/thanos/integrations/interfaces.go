@@ -166,3 +166,15 @@ func (im *IntegrationManager) RefreshBackupData(ctx context.Context, stackId uui
 		Data:    nil,
 	}, nil
 }
+
+func (im *IntegrationManager) SetBackupStatusInactive(ctx context.Context, stackId uuid.UUID) error {
+	return im.backupManager.SetBackupStatusInactive(ctx, stackId)
+}
+
+func (im *IntegrationManager) BackupStatusFromDB(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.backupManager.GetBackupStatusFromDB(ctx, stackId)
+}
+
+func (im *IntegrationManager) BackupCheckpointsFromDB(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.backupManager.GetCheckpointsFromDB(ctx, stackId)
+}

@@ -499,3 +499,55 @@ func (h *ThanosDeploymentHandler) RefreshBackupData(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+// @Summary		Backup Status From DB
+// @Description	Get backup status from database
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/backup/status/db [get]
+func (h *ThanosDeploymentHandler) BackupStatusFromDB(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupStatusFromDB(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to get backup status from database", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Backup Checkpoints From DB
+// @Description	Get backup checkpoints from database
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/backup/checkpoints/db [get]
+func (h *ThanosDeploymentHandler) BackupCheckpointsFromDB(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupCheckpointsFromDB(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to get backup checkpoints from database", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}

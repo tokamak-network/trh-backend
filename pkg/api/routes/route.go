@@ -199,6 +199,8 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		// Backup management
 		adminRoutes.GET("/:id/integrations/backup/status", handler.BackupStatus)
 		adminRoutes.GET("/:id/integrations/backup/checkpoints", handler.BackupCheckpoints)
+		adminRoutes.GET("/:id/integrations/backup/status/db", handler.BackupStatusFromDB)
+		adminRoutes.GET("/:id/integrations/backup/checkpoints/db", handler.BackupCheckpointsFromDB)
 		adminRoutes.POST("/:id/integrations/backup/snapshot", handler.BackupSnapshot)
 		adminRoutes.POST("/:id/integrations/backup/restore", handler.BackupRestore)
 		adminRoutes.POST("/:id/integrations/backup/configure", handler.BackupConfigure)

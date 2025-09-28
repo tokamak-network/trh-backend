@@ -208,3 +208,15 @@ func (s *ThanosStackDeploymentService) BackupCleanup(ctx context.Context, stackI
 func (s *ThanosStackDeploymentService) RefreshBackupData(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.RefreshBackupData(ctx, stackId)
 }
+
+func (s *ThanosStackDeploymentService) SetBackupStatusInactive(ctx context.Context, stackId uuid.UUID) error {
+	return s.integrationMgr.SetBackupStatusInactive(ctx, stackId)
+}
+
+func (s *ThanosStackDeploymentService) BackupStatusFromDB(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.BackupStatusFromDB(ctx, stackId)
+}
+
+func (s *ThanosStackDeploymentService) BackupCheckpointsFromDB(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.BackupCheckpointsFromDB(ctx, stackId)
+}

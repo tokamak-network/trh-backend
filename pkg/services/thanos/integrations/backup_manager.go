@@ -160,7 +160,7 @@ func (b *BackupManager) RefreshBackupData(ctx context.Context, stackId uuid.UUID
 		} else {
 			// Convert SDK backup status to entity format
 			statusInfo := &entities.BackupStatusInfo{
-				Status:  "unknown",
+				Status:  "active",
 				Details: make(map[string]interface{}),
 			}
 
@@ -188,7 +188,7 @@ func (b *BackupManager) RefreshBackupData(ctx context.Context, stackId uuid.UUID
 		if err != nil {
 			logger.Error("failed to get backup checkpoints", zap.String("stackId", stackId.String()), zap.Error(err))
 		} else {
-			// Convert SDK recovery points to entity format
+			// Convert SDK recovery points to simplified entity format
 			recoveryPoints := make([]entities.RecoveryPoint, 0, len(backupCheckpoints))
 			for _, checkpoint := range backupCheckpoints {
 				// Convert SDK checkpoint to our recovery point structure
@@ -204,33 +204,44 @@ func (b *BackupManager) RefreshBackupData(ctx context.Context, stackId uuid.UUID
 					continue
 				}
 
-				recoveryPoint := entities.RecoveryPoint{
-					Metadata: checkpointMap,
-				}
+				// Extract only the metadata fields we need
+				var recoveryPoint entities.RecoveryPoint
 
-				// Extract common fields if they exist
-				if id, ok := checkpointMap["id"].(string); ok {
-					recoveryPoint.ID = id
-				}
-				if name, ok := checkpointMap["name"].(string); ok {
-					recoveryPoint.Name = name
-				}
-				if status, ok := checkpointMap["status"].(string); ok {
-					recoveryPoint.Status = status
-				}
-				if description, ok := checkpointMap["description"].(string); ok {
-					recoveryPoint.Description = description
-				}
-				if size, ok := checkpointMap["size"].(float64); ok {
-					recoveryPoint.Size = int64(size)
-				}
-				if createdAtStr, ok := checkpointMap["created_at"].(string); ok {
-					if createdAt, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
-						recoveryPoint.CreatedAt = createdAt
+				// Look for metadata object first
+				if metadata, ok := checkpointMap["metadata"].(map[string]interface{}); ok {
+					// Extract fields from metadata
+					if vault, ok := metadata["Vault"].(string); ok {
+						recoveryPoint.Vault = vault
+					}
+					if expiry, ok := metadata["Expiry"].(string); ok {
+						recoveryPoint.Expiry = expiry
+					}
+					if status, ok := metadata["Status"].(string); ok {
+						recoveryPoint.Status = status
+					}
+					if created, ok := metadata["Created"].(string); ok {
+						recoveryPoint.Created = created
+					}
+				} else {
+					// If no metadata object, look for fields directly in the checkpoint
+					if vault, ok := checkpointMap["Vault"].(string); ok {
+						recoveryPoint.Vault = vault
+					}
+					if expiry, ok := checkpointMap["Expiry"].(string); ok {
+						recoveryPoint.Expiry = expiry
+					}
+					if status, ok := checkpointMap["Status"].(string); ok {
+						recoveryPoint.Status = status
+					}
+					if created, ok := checkpointMap["Created"].(string); ok {
+						recoveryPoint.Created = created
 					}
 				}
 
-				recoveryPoints = append(recoveryPoints, recoveryPoint)
+				// Only add if we have at least some data
+				if recoveryPoint.Vault != "" || recoveryPoint.Status != "" || recoveryPoint.Created != "" {
+					recoveryPoints = append(recoveryPoints, recoveryPoint)
+				}
 			}
 
 			backupEntity.SnapshotList = recoveryPoints
@@ -245,6 +256,44 @@ func (b *BackupManager) RefreshBackupData(ctx context.Context, stackId uuid.UUID
 		logger.Info("backup data refresh completed successfully", zap.String("stackId", stackId.String()))
 	})
 
+	return nil
+}
+
+func (b *BackupManager) SetBackupStatusInactive(ctx context.Context, stackId uuid.UUID) error {
+	logger.Info("setting backup status to inactive", zap.String("stackId", stackId.String()))
+
+	// Get existing backup if it exists
+	existingBackup, err := b.backupRepo.GetBackupByStackID(stackId)
+	if err != nil {
+		logger.Error("failed to get existing backup", zap.String("stackId", stackId.String()), zap.Error(err))
+		return err
+	}
+
+	if existingBackup == nil {
+		// No backup exists, nothing to update
+		logger.Info("no backup found for stack, skipping inactive status update", zap.String("stackId", stackId.String()))
+		return nil
+	}
+
+	// Update backup status to inactive
+	if existingBackup.Status == nil {
+		existingBackup.Status = &entities.BackupStatusInfo{
+			Status:  "inactive",
+			Details: make(map[string]interface{}),
+		}
+	} else {
+		existingBackup.Status.Status = "inactive"
+	}
+
+	existingBackup.UpdatedAt = time.Now()
+
+	// Update the database
+	if err := b.backupRepo.UpsertBackup(existingBackup); err != nil {
+		logger.Error("failed to update backup status to inactive", zap.String("stackId", stackId.String()), zap.Error(err))
+		return err
+	}
+
+	logger.Info("backup status set to inactive successfully", zap.String("stackId", stackId.String()))
 	return nil
 }
 
@@ -325,6 +374,12 @@ func (b *BackupManager) BackupSnapshot(ctx context.Context, stackId uuid.UUID) (
 			logger.Error("failed to backup snapshot", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
+
+		// Refresh backup data after successful snapshot creation
+		if err := b.RefreshBackupData(ctx, stackId); err != nil {
+			logger.Error("failed to refresh backup data after snapshot creation", zap.String("stackId", stackId.String()), zap.Error(err))
+			// Don't fail the snapshot operation if refresh fails
+		}
 	})
 
 	return &entities.Response{
@@ -402,6 +457,12 @@ func (b *BackupManager) BackupConfigure(ctx context.Context, stackId uuid.UUID, 
 		if err != nil {
 			logger.Error("failed to backup configure", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
+		}
+
+		// Refresh backup data after successful configuration
+		if err := b.RefreshBackupData(ctx, stackId); err != nil {
+			logger.Error("failed to refresh backup data after backup configuration", zap.String("stackId", stackId.String()), zap.Error(err))
+			// Don't fail the configuration operation if refresh fails
 		}
 	})
 
@@ -487,6 +548,60 @@ func (b *BackupManager) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*
 		Status:  http.StatusOK,
 		Message: "Successfully",
 		Data:    nil,
+	}, nil
+}
+
+func (b *BackupManager) GetBackupStatusFromDB(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	// Get backup data from database
+	backup, err := b.backupRepo.GetBackupByStackID(stackId)
+	if err != nil {
+		logger.Error("failed to get backup from database", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if backup == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "No backup data found for this stack",
+			Data:    nil,
+		}, nil
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully retrieved backup status from database",
+		Data:    backup.Status,
+	}, nil
+}
+
+func (b *BackupManager) GetCheckpointsFromDB(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	// Get backup data from database
+	backup, err := b.backupRepo.GetBackupByStackID(stackId)
+	if err != nil {
+		logger.Error("failed to get backup from database", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if backup == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "No backup data found for this stack",
+			Data:    nil,
+		}, nil
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully retrieved checkpoints from database",
+		Data:    backup.SnapshotList,
 	}, nil
 }
 

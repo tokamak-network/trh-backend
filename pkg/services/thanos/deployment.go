@@ -200,6 +200,12 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 	logger.Info("Thanos stack deployed successfully",
 		zap.String("stackId", stackId.String()),
 	)
+
+	// Refresh backup data after successful deployment
+	if _, err := s.integrationMgr.RefreshBackupData(context.Background(), stackId); err != nil {
+		logger.Error("failed to refresh backup data after deployment", zap.String("stackId", stackId.String()), zap.Error(err))
+		// Don't fail the deployment if backup refresh fails
+	}
 }
 
 func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, stackId uuid.UUID) error {

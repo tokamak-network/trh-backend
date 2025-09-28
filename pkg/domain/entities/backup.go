@@ -17,14 +17,12 @@ type BackupStatusInfo struct {
 }
 
 // RecoveryPoint represents a backup recovery point from the SDK
+// Stores the metadata fields directly for simpler structure
 type RecoveryPoint struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	CreatedAt   time.Time              `json:"created_at"`
-	Size        int64                  `json:"size,omitempty"`
-	Status      string                 `json:"status"`
-	Description string                 `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Vault   string `json:"Vault"`
+	Expiry  string `json:"Expiry"`
+	Status  string `json:"Status"`
+	Created string `json:"Created"`
 }
 
 // BackupEntity represents a backup record in the domain layer

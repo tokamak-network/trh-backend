@@ -144,4 +144,10 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		"AWS infrastructure destroyed successfully",
 		zap.String("stackId", stackId.String()),
 	)
+
+	// Set backup status to inactive after successful termination
+	if err := s.integrationMgr.SetBackupStatusInactive(ctx, stackId); err != nil {
+		logger.Error("failed to set backup status to inactive after termination", zap.String("stackId", stackId.String()), zap.Error(err))
+		// Don't fail the termination if backup status update fails
+	}
 }
