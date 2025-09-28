@@ -41,6 +41,10 @@ func NewIntegrationManager(
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	},
+	backupRepo interface {
+		UpsertBackup(backup *entities.BackupEntity) error
+		GetBackupByStackID(stackID uuid.UUID) (*entities.BackupEntity, error)
+	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 	},
@@ -51,7 +55,7 @@ func NewIntegrationManager(
 		monitoring:          NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerCandidate:   NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerMetadataDAO: NewRegisterMetadataDAOIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
-		backupManager:       NewBackupManager(stackRepo, deploymentRepo, integrationRepo, taskManager),
+		backupManager:       NewBackupManager(stackRepo, deploymentRepo, integrationRepo, backupRepo, taskManager),
 	}
 }
 
@@ -144,4 +148,21 @@ func (im *IntegrationManager) BackupAttach(ctx context.Context, stackId uuid.UUI
 
 func (im *IntegrationManager) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return im.backupManager.BackupCleanup(ctx, stackId)
+}
+
+func (im *IntegrationManager) RefreshBackupData(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	err := im.backupManager.RefreshBackupData(ctx, stackId)
+	if err != nil {
+		return &entities.Response{
+			Status:  500,
+			Message: "Failed to refresh backup data",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  200,
+		Message: "Backup data refresh initiated successfully",
+		Data:    nil,
+	}, nil
 }

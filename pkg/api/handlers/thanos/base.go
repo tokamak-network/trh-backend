@@ -16,10 +16,11 @@ func NewThanosHandler(server *servers.Server) *ThanosDeploymentHandler {
 	stackRepo := postgresRepositories.NewStackRepository(server.PostgresDB)
 	integrationRepo := postgresRepositories.NewIntegrationRepository(server.PostgresDB)
 	logRepo := postgresRepositories.NewLogRepository(server.PostgresDB)
+	backupRepo := postgresRepositories.NewBackupRepository(server.PostgresDB)
 
 	taskManager := taskmanager.NewTaskManager(5, 20)
 
 	return &ThanosDeploymentHandler{
-		ThanosDeploymentService: thanos.NewThanosService(deploymentRepo, stackRepo, integrationRepo, taskManager, logRepo),
+		ThanosDeploymentService: thanos.NewThanosService(deploymentRepo, stackRepo, integrationRepo, taskManager, logRepo, backupRepo),
 	}
 }

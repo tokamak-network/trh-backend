@@ -203,6 +203,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.POST("/:id/integrations/backup/restore", handler.BackupRestore)
 		adminRoutes.POST("/:id/integrations/backup/configure", handler.BackupConfigure)
 		adminRoutes.POST("/:id/integrations/backup/attach", handler.BackupAttach)
+		adminRoutes.POST("/:id/integrations/backup/refresh", handler.RefreshBackupData)
 		adminRoutes.DELETE("/:id/integrations/backup/cleanup", handler.BackupCleanup)
 	}
 

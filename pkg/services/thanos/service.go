@@ -20,6 +20,7 @@ type ThanosStackDeploymentService struct {
 	taskManager     TaskManager
 	integrationMgr  *integrations.IntegrationManager
 	logRepo         LogRepository
+	backupRepo      BackupRepository
 }
 
 // taskManagerWrapper wraps TaskManager to match the interface expected by IntegrationManager
@@ -37,6 +38,7 @@ func NewThanosService(
 	integrationRepo IntegrationRepository,
 	taskManager TaskManager,
 	logRepo LogRepository,
+	backupRepo BackupRepository,
 ) *ThanosStackDeploymentService {
 	taskManagerWrapper := &taskManagerWrapper{taskManager: taskManager}
 
@@ -46,7 +48,8 @@ func NewThanosService(
 		stackRepo:       stackRepo,
 		integrationRepo: integrationRepo,
 		taskManager:     taskManager,
-		integrationMgr:  integrations.NewIntegrationManager(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManagerWrapper),
+		integrationMgr:  integrations.NewIntegrationManager(stackRepo, deploymentRepo, integrationRepo, logRepo, backupRepo, taskManagerWrapper),
+		backupRepo:      backupRepo,
 		logRepo:         logRepo,
 	}
 
@@ -200,4 +203,8 @@ func (s *ThanosStackDeploymentService) BackupAttach(ctx context.Context, stackId
 
 func (s *ThanosStackDeploymentService) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.BackupCleanup(ctx, stackId)
+}
+
+func (s *ThanosStackDeploymentService) RefreshBackupData(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.RefreshBackupData(ctx, stackId)
 }

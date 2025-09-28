@@ -68,10 +68,11 @@ func (s *Server) Stop() error {
 	stackRepo := postgresRepositories.NewStackRepository(s.PostgresDB)
 	integrationRepo := postgresRepositories.NewIntegrationRepository(s.PostgresDB)
 	logRepo := postgresRepositories.NewLogRepository(s.PostgresDB)
+	backupRepo := postgresRepositories.NewBackupRepository(s.PostgresDB)
 
 	taskManager := taskmanager.NewTaskManager(5, 20)
 
-	thanosService := thanos.NewThanosService(deploymentRepo, stackRepo, integrationRepo, taskManager, logRepo)
+	thanosService := thanos.NewThanosService(deploymentRepo, stackRepo, integrationRepo, taskManager, logRepo, backupRepo)
 
 	stacks, err := stackRepo.GetAllStacks()
 	if err != nil {

@@ -473,3 +473,29 @@ func (h *ThanosDeploymentHandler) BackupCleanup(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+// @Summary		Refresh Backup Data
+// @Description	Refresh backup status and snapshot list data in the background
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/backup/refresh [post]
+func (h *ThanosDeploymentHandler) RefreshBackupData(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.RefreshBackupData(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to refresh backup data", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}

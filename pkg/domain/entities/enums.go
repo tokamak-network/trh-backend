@@ -54,3 +54,14 @@ const (
 	UserRoleAdmin UserRole = "Admin"
 	UserRoleUser  UserRole = "User"
 )
+
+type BackupStatus string
+
+const (
+	BackupStatusPending    BackupStatus = "Pending"
+	BackupStatusInProgress BackupStatus = "InProgress"
+	BackupStatusCompleted  BackupStatus = "Completed"
+	BackupStatusFailed     BackupStatus = "Failed"
+	BackupStatusRestoring  BackupStatus = "Restoring"
+	BackupStatusUnknown    BackupStatus = "Unknown"
+)

@@ -3,6 +3,7 @@ package thanos
 import (
 	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
@@ -98,6 +99,11 @@ type LogRepository interface {
 	CreateLog(log *entities.LogEntity) error
 	GetLogsByDeploymentID(deploymentId string, limit int, afterID *string) ([]*entities.LogEntity, error)
 	GetLogsByStackID(stackId string, limit int, afterID *string) ([]*entities.LogEntity, error)
+}
+
+type BackupRepository interface {
+	UpsertBackup(backup *entities.BackupEntity) error
+	GetBackupByStackID(stackID uuid.UUID) (*entities.BackupEntity, error)
 }
 
 type TaskManager interface {
