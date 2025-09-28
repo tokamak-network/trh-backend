@@ -56,6 +56,7 @@ func Init(
 		&schemas.Log{},
 		&schemas.ApiKey{},
 		&schemas.RPCUrl{},
+		&schemas.Backup{},
 	)
 
 	if err != nil {
@@ -128,6 +129,14 @@ func createIndexes(db *gorm.DB) error {
 		return err
 	}
 	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at)").Error; err != nil {
+		return err
+	}
+
+	// Backup indexes
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_backups_stack_id ON backups(stack_id)").Error; err != nil {
+		return err
+	}
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_backups_created_at ON backups(created_at)").Error; err != nil {
 		return err
 	}
 
