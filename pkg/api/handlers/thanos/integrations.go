@@ -473,3 +473,55 @@ func (h *ThanosDeploymentHandler) BackupCleanup(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+// @Summary		Disable Email Alert
+// @Description	Disable Email Alert Configuration
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/monitoring/disable-email [delete]
+func (h *ThanosDeploymentHandler) DisableEmailAlert(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.DisableEmailAlert(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to disable email alert", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Disable Telegram Alert
+// @Description	Disable Telegram Alert Configuration
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/monitoring/disable-telegram [delete]
+func (h *ThanosDeploymentHandler) DisableTelegramAlert(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.DisableTelegramAlert(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to disable telegram alert", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}

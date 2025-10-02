@@ -334,3 +334,15 @@ func CleanupUnusedBackupResources(ctx context.Context, s *thanosStack.ThanosStac
 	}
 	return nil
 }
+
+// RemoveEmailConfig removes email configuration from AlertManager
+func RemoveEmailConfig(ctx context.Context, s *thanosStack.ThanosStack) error {
+	alertCustomization := &thanosStack.AlertCustomization{Stack: s}
+	return alertCustomization.RemoveEmailConfig(ctx)
+}
+
+// RemoveTelegramConfig removes telegram configuration from AlertManager
+func RemoveTelegramConfig(ctx context.Context, s *thanosStack.ThanosStack) error {
+	alertCustomization := &thanosStack.AlertCustomization{Stack: s}
+	return alertCustomization.RemoveTelegramConfig(ctx)
+}

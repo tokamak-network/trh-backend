@@ -325,11 +325,14 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
+	// Convert AlertManager config to consistent camelCase format for storage
+	alertManagerForStorage := m.convertAlertManagerToCamelCase(req.AlertManager)
+	
 	monitoringMetadata := map[string]interface{}{
 		"url":           monitoringInfo.GrafanaURL,
 		"username":      monitoringInfo.Username,
 		"password":      monitoringInfo.Password,
-		"alert_manager": monitoringConfig.AlertManager,
+		"alert_manager": alertManagerForStorage,
 	}
 	bytes, err := json.Marshal(monitoringMetadata)
 	if err != nil {
@@ -444,6 +447,359 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 	}
 
 	_ = m.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
+}
+
+// DisableEmailAlert disables email alert configuration for the given stack
+func (m *MonitoringIntegration) DisableEmailAlert(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	stack, err := m.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if stack.Status != entities.StackStatusDeployed {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not deployed yet. Please wait for it to finish",
+			Data:    nil,
+		}, nil
+	}
+
+	// Check if monitoring is installed
+	monitoringIntegration, err := m.integrationRepo.GetInstalledIntegration(stackId.String(), enum.IntegrationTypeMonitoring.String())
+	if err != nil {
+		logger.Error("failed to get monitoring integration", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if monitoringIntegration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Monitoring integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// Update the database synchronously first so frontend gets immediate feedback
+	if err := m.updateMonitoringConfigInDB(ctx, stackId.String(), "email", false); err != nil {
+		logger.Error("failed to update email configuration in database", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to update email configuration",
+			Data:    nil,
+		}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "disable-email-alert")
+
+	// Start background task to update AlertManager configuration via SDK
+	taskId := fmt.Sprintf("disable-email-alert-%s", stackId)
+	m.taskManager.AddTask(taskId, func(ctx context.Context) {
+		m.disableEmailAlertTask(ctx, stack, logPath)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Email alert disabled successfully",
+		Data:    nil,
+	}, nil
+}
+
+// DisableTelegramAlert disables telegram alert configuration for the given stack
+func (m *MonitoringIntegration) DisableTelegramAlert(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	stack, err := m.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if stack.Status != entities.StackStatusDeployed {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not deployed yet. Please wait for it to finish",
+			Data:    nil,
+		}, nil
+	}
+
+	// Check if monitoring is installed
+	monitoringIntegration, err := m.integrationRepo.GetInstalledIntegration(stackId.String(), enum.IntegrationTypeMonitoring.String())
+	if err != nil {
+		logger.Error("failed to get monitoring integration", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if monitoringIntegration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Monitoring integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// Update the database synchronously first so frontend gets immediate feedback
+	if err := m.updateMonitoringConfigInDB(ctx, stackId.String(), "telegram", false); err != nil {
+		logger.Error("failed to update telegram configuration in database", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to update telegram configuration",
+			Data:    nil,
+		}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "disable-telegram-alert")
+
+	// Start background task to update AlertManager configuration via SDK
+	taskId := fmt.Sprintf("disable-telegram-alert-%s", stackId)
+	m.taskManager.AddTask(taskId, func(ctx context.Context) {
+		m.disableTelegramAlertTask(ctx, stack, logPath)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Telegram alert disabled successfully",
+		Data:    nil,
+	}, nil
+}
+
+// disableEmailAlertTask handles the actual email alert disabling process
+func (m *MonitoringIntegration) disableEmailAlertTask(ctx context.Context, stack *entities.StackEntity, logPath string) {
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		return
+	}
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		return
+	}
+
+	if err = thanos.RemoveEmailConfig(ctx, sdkClient); err != nil {
+		logger.Error("failed to remove email configuration", zap.Error(err))
+		return
+	}
+
+	// Update the database again to ensure consistency after SDK operation
+	// (Note: DB was already updated synchronously before this background task)
+	if err := m.updateMonitoringConfigInDB(ctx, stack.ID.String(), "email", false); err != nil {
+		logger.Error("failed to update email configuration in database after SDK operation", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		// Don't return here as the SDK operation was successful
+	}
+
+	logger.Info("Email alert configuration removed successfully", zap.String("stackId", stack.ID.String()))
+}
+
+// disableTelegramAlertTask handles the actual telegram alert disabling process
+func (m *MonitoringIntegration) disableTelegramAlertTask(ctx context.Context, stack *entities.StackEntity, logPath string) {
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		return
+	}
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		return
+	}
+
+	if err = thanos.RemoveTelegramConfig(ctx, sdkClient); err != nil {
+		logger.Error("failed to remove telegram configuration", zap.Error(err))
+		return
+	}
+
+	// Update the database again to ensure consistency after SDK operation
+	// (Note: DB was already updated synchronously before this background task)
+	if err := m.updateMonitoringConfigInDB(ctx, stack.ID.String(), "telegram", false); err != nil {
+		logger.Error("failed to update telegram configuration in database after SDK operation", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		// Don't return here as the SDK operation was successful
+	}
+
+	logger.Info("Telegram alert configuration removed successfully", zap.String("stackId", stack.ID.String()))
+}
+
+// updateMonitoringConfigInDB updates the monitoring integration configuration in the database
+func (m *MonitoringIntegration) updateMonitoringConfigInDB(ctx context.Context, stackId, alertType string, enabled bool) error {
+	// Get the monitoring integration
+	monitoringIntegration, err := m.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeMonitoring.String())
+	if err != nil {
+		return fmt.Errorf("failed to get monitoring integration: %w", err)
+	}
+
+	if monitoringIntegration == nil {
+		return fmt.Errorf("monitoring integration not found")
+	}
+
+	// Parse the existing configuration
+	var currentConfig dtos.InstallMonitoringRequest
+	if len(monitoringIntegration.Config) > 0 {
+		if err := json.Unmarshal(monitoringIntegration.Config, &currentConfig); err != nil {
+			logger.Warn("failed to parse existing monitoring config, creating new one", zap.Error(err))
+			// Initialize with default values if parsing fails
+			currentConfig = dtos.InstallMonitoringRequest{
+				AlertManager: dtos.AlertManagerConfig{
+					Email:    dtos.EmailConfig{Enabled: false},
+					Telegram: dtos.TelegramConfig{Enabled: false},
+				},
+			}
+		}
+	} else {
+		// Initialize with default values if no config exists
+		currentConfig = dtos.InstallMonitoringRequest{
+			AlertManager: dtos.AlertManagerConfig{
+				Email:    dtos.EmailConfig{Enabled: false},
+				Telegram: dtos.TelegramConfig{Enabled: false},
+			},
+		}
+	}
+
+	// Update the specific alert type configuration
+	switch alertType {
+	case "email":
+		currentConfig.AlertManager.Email.Enabled = enabled
+		if !enabled {
+			// Clear email configuration when disabled
+			currentConfig.AlertManager.Email.SmtpSmarthost = ""
+			currentConfig.AlertManager.Email.SmtpFrom = ""
+			currentConfig.AlertManager.Email.SmtpAuthPassword = ""
+			currentConfig.AlertManager.Email.AlertReceivers = []string{}
+		}
+	case "telegram":
+		currentConfig.AlertManager.Telegram.Enabled = enabled
+		if !enabled {
+			// Clear telegram configuration when disabled
+			currentConfig.AlertManager.Telegram.ApiToken = ""
+			currentConfig.AlertManager.Telegram.CriticalReceivers = []dtos.TelegramReceiver{}
+		}
+	default:
+		return fmt.Errorf("unsupported alert type: %s", alertType)
+	}
+
+	// Marshal the updated configuration
+	updatedConfigBytes, err := json.Marshal(currentConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated config: %w", err)
+	}
+
+	// Update the integration configuration in the database
+	if err := m.integrationRepo.UpdateConfig(monitoringIntegration.ID.String(), json.RawMessage(updatedConfigBytes)); err != nil {
+		return fmt.Errorf("failed to update integration config: %w", err)
+	}
+
+	// Also update the integration metadata (info field) to reflect the current alert configuration
+	if err := m.updateIntegrationMetadata(ctx, monitoringIntegration, currentConfig); err != nil {
+		logger.Error("failed to update integration metadata", zap.Error(err))
+		// Don't return error here as the main config update was successful
+	}
+
+	logger.Info("Successfully updated monitoring configuration in database",
+		zap.String("stackId", stackId),
+		zap.String("alertType", alertType),
+		zap.Bool("enabled", enabled))
+
+	return nil
+}
+
+// updateIntegrationMetadata updates the integration metadata (info field) with current alert configuration
+func (m *MonitoringIntegration) updateIntegrationMetadata(ctx context.Context, integration *entities.IntegrationEntity, config dtos.InstallMonitoringRequest) error {
+	// Parse existing metadata to preserve other fields like URL, username, password
+	var existingMetadata map[string]interface{}
+	if len(integration.Info) > 0 {
+		if err := json.Unmarshal(integration.Info, &existingMetadata); err != nil {
+			logger.Warn("failed to parse existing integration metadata, creating new one", zap.Error(err))
+			existingMetadata = make(map[string]interface{})
+		}
+	} else {
+		existingMetadata = make(map[string]interface{})
+	}
+
+	// Update the alert_manager configuration in metadata with consistent camelCase format
+	existingMetadata["alert_manager"] = m.convertAlertManagerToCamelCase(config.AlertManager)
+
+	// Marshal the updated metadata
+	updatedMetadataBytes, err := json.Marshal(existingMetadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated metadata: %w", err)
+	}
+
+	// Update the integration metadata in the database
+	if err := m.integrationRepo.UpdateMetadataAfterInstalled(integration.ID.String(), entities.IntegrationInfo(updatedMetadataBytes)); err != nil {
+		return fmt.Errorf("failed to update integration metadata: %w", err)
+	}
+
+	logger.Debug("Successfully updated integration metadata",
+		zap.String("integrationId", integration.ID.String()),
+		zap.Bool("emailEnabled", config.AlertManager.Email.Enabled),
+		zap.Bool("telegramEnabled", config.AlertManager.Telegram.Enabled))
+
+	return nil
+}
+
+// convertAlertManagerToCamelCase converts AlertManager config to consistent camelCase format for storage
+func (m *MonitoringIntegration) convertAlertManagerToCamelCase(alertManager dtos.AlertManagerConfig) map[string]interface{} {
+	return map[string]interface{}{
+		"email": map[string]interface{}{
+			"enabled":          alertManager.Email.Enabled,
+			"smtpSmarthost":    alertManager.Email.SmtpSmarthost,
+			"smtpFrom":         alertManager.Email.SmtpFrom,
+			"smtpAuthPassword": alertManager.Email.SmtpAuthPassword,
+			"alertReceivers":   alertManager.Email.AlertReceivers,
+		},
+		"telegram": map[string]interface{}{
+			"enabled":           alertManager.Telegram.Enabled,
+			"apiToken":          alertManager.Telegram.ApiToken,
+			"criticalReceivers": alertManager.Telegram.CriticalReceivers,
+		},
+	}
 }
 
 // tailAndIngestLogs tails a log file and ingests each line into the database

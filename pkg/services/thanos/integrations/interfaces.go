@@ -144,3 +144,13 @@ func (im *IntegrationManager) BackupAttach(ctx context.Context, stackId uuid.UUI
 func (im *IntegrationManager) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return im.backupManager.BackupCleanup(ctx, stackId)
 }
+
+// DisableEmailAlert disables email alert configuration for the given stack
+func (im *IntegrationManager) DisableEmailAlert(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.monitoring.DisableEmailAlert(ctx, stackId)
+}
+
+// DisableTelegramAlert disables telegram alert configuration for the given stack
+func (im *IntegrationManager) DisableTelegramAlert(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.monitoring.DisableTelegramAlert(ctx, stackId)
+}
