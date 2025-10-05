@@ -405,3 +405,59 @@ func (r *RegisterMetadataDAORequest) Validate(ctx context.Context) (*RegisterMet
 
 	return r, nil
 }
+
+// UpdateEmailConfigRequest holds the request for updating email alert configuration
+type UpdateEmailConfigRequest struct {
+	SmtpSmarthost    string   `json:"smtpSmarthost" binding:"required"`
+	SmtpFrom         string   `json:"smtpFrom" binding:"required"`
+	SmtpAuthPassword string   `json:"smtpAuthPassword" binding:"required"`
+	AlertReceivers   []string `json:"alertReceivers" binding:"required"`
+}
+
+func (r *UpdateEmailConfigRequest) Validate() error {
+	if r.SmtpSmarthost == "" {
+		return errors.New("smtpSmarthost is required")
+	}
+	if r.SmtpFrom == "" {
+		return errors.New("smtpFrom is required")
+	}
+	if r.SmtpAuthPassword == "" {
+		return errors.New("smtpAuthPassword is required")
+	}
+	if len(r.AlertReceivers) == 0 {
+		return errors.New("alertReceivers is required")
+	}
+
+	// Validate email addresses
+	for _, email := range r.AlertReceivers {
+		if _, err := mail.ParseAddress(email); err != nil {
+			return errors.New("invalid email address: " + email)
+		}
+	}
+
+	return nil
+}
+
+// UpdateTelegramConfigRequest holds the request for updating telegram alert configuration
+type UpdateTelegramConfigRequest struct {
+	ApiToken          string             `json:"apiToken" binding:"required"`
+	CriticalReceivers []TelegramReceiver `json:"criticalReceivers" binding:"required"`
+}
+
+func (r *UpdateTelegramConfigRequest) Validate() error {
+	if r.ApiToken == "" {
+		return errors.New("apiToken is required")
+	}
+	if len(r.CriticalReceivers) == 0 {
+		return errors.New("criticalReceivers is required")
+	}
+
+	// Validate telegram receivers
+	for _, receiver := range r.CriticalReceivers {
+		if receiver.ChatId == "" {
+			return errors.New("chatId is required for all telegram receivers")
+		}
+	}
+
+	return nil
+}
