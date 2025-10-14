@@ -188,13 +188,19 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		// Integration management
 		adminRoutes.POST("/:id/integrations/bridge", handler.InstallBridge)
 		adminRoutes.POST("/:id/integrations/block-explorer", handler.InstallBlockExplorer)
-		adminRoutes.POST("/:id/integrations/monitoring", handler.InstallMonitoring)
 		adminRoutes.POST("/:id/integrations/register-candidate", handler.RegisterCandidates)
 		adminRoutes.POST("/:id/integrations/register-metadata-dao", handler.RegisterMetadataDAO)
 		adminRoutes.GET("/:id/integrations/register-metadata-dao", handler.GetRegisterMetadataDAO)
 		adminRoutes.DELETE("/:id/integrations/bridge", handler.UninstallBridge)
 		adminRoutes.DELETE("/:id/integrations/block-explorer", handler.UninstallBlockExplorer)
+
+		// Monitoring management
+		adminRoutes.POST("/:id/integrations/monitoring", handler.InstallMonitoring)
 		adminRoutes.DELETE("/:id/integrations/monitoring", handler.UninstallMonitoring)
+		adminRoutes.DELETE("/:id/integrations/monitoring/disable-email", handler.DisableEmailAlert)
+		adminRoutes.DELETE("/:id/integrations/monitoring/disable-telegram", handler.DisableTelegramAlert)
+		adminRoutes.PUT("/:id/integrations/monitoring/email", handler.UpdateEmailAlert)
+		adminRoutes.PUT("/:id/integrations/monitoring/telegram", handler.UpdateTelegramAlert)
 
 		// Backup management
 		adminRoutes.GET("/:id/integrations/backup/status", handler.BackupStatus)

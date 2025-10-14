@@ -473,3 +473,129 @@ func (h *ThanosDeploymentHandler) BackupCleanup(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+// @Summary		Disable Email Alert
+// @Description	Disable Email Alert Configuration
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/monitoring/disable-email [delete]
+func (h *ThanosDeploymentHandler) DisableEmailAlert(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.DisableEmailAlert(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to disable email alert", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Disable Telegram Alert
+// @Description	Disable Telegram Alert Configuration
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/monitoring/disable-telegram [delete]
+func (h *ThanosDeploymentHandler) DisableTelegramAlert(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.DisableTelegramAlert(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to disable telegram alert", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Update Email Alert Configuration
+// @Description	Update Email Alert Configuration
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id		path		string							true	"Thanos Stack ID"
+// @Param			request	body		dtos.UpdateEmailConfigRequest	true	"Update Email Config Request"
+// @Success		200		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/monitoring/update-email [put]
+func (h *ThanosDeploymentHandler) UpdateEmailAlert(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	var request dtos.UpdateEmailConfigRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UpdateEmailAlert(c.Request.Context(), uuid.MustParse(id), request)
+	if err != nil {
+		logger.Error("failed to update email alert", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Update Telegram Alert Configuration
+// @Description	Update Telegram Alert Configuration
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id		path		string								true	"Thanos Stack ID"
+// @Param			request	body		dtos.UpdateTelegramConfigRequest	true	"Update Telegram Config Request"
+// @Success		200		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/monitoring/update-telegram [put]
+func (h *ThanosDeploymentHandler) UpdateTelegramAlert(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	var request dtos.UpdateTelegramConfigRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UpdateTelegramAlert(c.Request.Context(), uuid.MustParse(id), request)
+	if err != nil {
+		logger.Error("failed to update telegram alert", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}

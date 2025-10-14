@@ -201,3 +201,23 @@ func (s *ThanosStackDeploymentService) BackupAttach(ctx context.Context, stackId
 func (s *ThanosStackDeploymentService) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.BackupCleanup(ctx, stackId)
 }
+
+// DisableEmailAlert disables email alert configuration for the given stack
+func (s *ThanosStackDeploymentService) DisableEmailAlert(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.DisableEmailAlert(ctx, stackId)
+}
+
+// DisableTelegramAlert disables telegram alert configuration for the given stack
+func (s *ThanosStackDeploymentService) DisableTelegramAlert(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.DisableTelegramAlert(ctx, stackId)
+}
+
+// UpdateEmailAlert updates email alert configuration for the given stack
+func (s *ThanosStackDeploymentService) UpdateEmailAlert(ctx context.Context, stackId uuid.UUID, request dtos.UpdateEmailConfigRequest) (*entities.Response, error) {
+	return s.integrationMgr.UpdateEmailAlert(ctx, stackId, request)
+}
+
+// UpdateTelegramAlert updates telegram alert configuration for the given stack
+func (s *ThanosStackDeploymentService) UpdateTelegramAlert(ctx context.Context, stackId uuid.UUID, request dtos.UpdateTelegramConfigRequest) (*entities.Response, error) {
+	return s.integrationMgr.UpdateTelegramAlert(ctx, stackId, request)
+}

@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"context"
+	"strings"
 
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -333,4 +334,52 @@ func CleanupUnusedBackupResources(ctx context.Context, s *thanosStack.ThanosStac
 		return err
 	}
 	return nil
+}
+
+// RemoveEmailConfig removes email configuration from AlertManager
+func RemoveEmailConfig(ctx context.Context, s *thanosStack.ThanosStack) error {
+	alertCustomization := &thanosStack.AlertCustomization{Stack: s}
+	return alertCustomization.RemoveEmailConfig(ctx)
+}
+
+// RemoveTelegramConfig removes telegram configuration from AlertManager
+func RemoveTelegramConfig(ctx context.Context, s *thanosStack.ThanosStack) error {
+	alertCustomization := &thanosStack.AlertCustomization{Stack: s}
+	return alertCustomization.RemoveTelegramConfig(ctx)
+}
+
+// UpdateEmailConfig updates email configuration in AlertManager
+func UpdateEmailConfig(ctx context.Context, s *thanosStack.ThanosStack, emailConfig *dtos.UpdateEmailConfigRequest) error {
+	alertCustomization := &thanosStack.AlertCustomization{Stack: s}
+
+	// Convert receivers slice to comma-separated string if needed
+	var receiversStr string
+	if len(emailConfig.AlertReceivers) > 0 {
+		receiversStr = strings.Join(emailConfig.AlertReceivers, ",")
+	}
+
+	return alertCustomization.UpdateEmailConfig(ctx,
+		emailConfig.SmtpSmarthost,
+		emailConfig.SmtpFrom,
+		emailConfig.SmtpAuthPassword,
+		receiversStr,
+		emailConfig.AlertReceivers,
+	)
+}
+
+// UpdateTelegramConfig updates telegram configuration in AlertManager
+func UpdateTelegramConfig(ctx context.Context, s *thanosStack.ThanosStack, telegramConfig *dtos.UpdateTelegramConfigRequest) error {
+	alertCustomization := &thanosStack.AlertCustomization{Stack: s}
+
+	// Convert receivers to comma-separated string
+	var receiversStr string
+	if len(telegramConfig.CriticalReceivers) > 0 {
+		chatIds := make([]string, len(telegramConfig.CriticalReceivers))
+		for i, receiver := range telegramConfig.CriticalReceivers {
+			chatIds[i] = receiver.ChatId
+		}
+		receiversStr = strings.Join(chatIds, ",")
+	}
+
+	return alertCustomization.UpdateTelegramConfig(ctx, telegramConfig.ApiToken, receiversStr)
 }
