@@ -188,7 +188,7 @@ func (b *BackupManager) BackupSnapshot(ctx context.Context, stackId uuid.UUID) (
 	}, nil
 }
 
-func (b *BackupManager) BackupRestore(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+func (b *BackupManager) BackupRestore(ctx context.Context, stackId uuid.UUID, request dtos.BackupRestoreRequest) (*entities.Response, error) {
 	stack, err := b.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		return &entities.Response{
@@ -213,7 +213,7 @@ func (b *BackupManager) BackupRestore(ctx context.Context, stackId uuid.UUID) (*
 			logger.Error("failed to get thanos client", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
-		err = thanos.BackupRestore(ctx, thanosSDK)
+		err = thanos.BackupRestore(ctx, thanosSDK, request)
 		if err != nil {
 			logger.Error("failed to backup restore", zap.String("stackId", stackId.String()), zap.Error(err))
 			return

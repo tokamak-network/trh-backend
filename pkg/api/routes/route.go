@@ -210,6 +210,10 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.POST("/:id/integrations/backup/configure", handler.BackupConfigure)
 		adminRoutes.POST("/:id/integrations/backup/attach", handler.BackupAttach)
 		adminRoutes.DELETE("/:id/integrations/backup/cleanup", handler.BackupCleanup)
+
+		// Cross trade management
+		adminRoutes.POST("/:id/integrations/cross-trade", handler.InstallCrossChainBridge)
+		adminRoutes.DELETE("/:id/integrations/cross-trade", handler.UninstallCrossChainBridge)
 	}
 
 	// Authenticated routes (require valid JWT token - any role)

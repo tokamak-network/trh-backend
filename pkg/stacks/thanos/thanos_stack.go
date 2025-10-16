@@ -10,6 +10,7 @@ import (
 	trhSDKLogging "github.com/tokamak-network/trh-sdk/pkg/logging"
 	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	thanosTypes "github.com/tokamak-network/trh-sdk/pkg/types"
+	"go.uber.org/zap"
 )
 
 func NewThanosSDKClient(
@@ -280,7 +281,7 @@ func RegisterMetadataDAO(ctx context.Context, s *thanosStack.ThanosStack, regist
 }
 
 func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack) error {
-	err := s.BackupSnapshot(ctx)
+	_, err := s.BackupSnapshot(ctx)
 	if err != nil {
 		return err
 	}
@@ -288,11 +289,11 @@ func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack) error {
 }
 
 func GetListBackup(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupRequest) ([]thanosTypes.RecoveryPoint, error) {
-	recoveryPoints, err := s.BackupList(ctx, req.Limit)
+	backupListInfo, err := s.BackupList(ctx, req.Limit)
 	if err != nil {
 		return nil, err
 	}
-	return recoveryPoints, nil
+	return backupListInfo.RecoveryPoints, nil
 }
 
 func GetBackupStatus(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTypes.BackupStatusInfo, error) {
@@ -303,8 +304,8 @@ func GetBackupStatus(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTy
 	return backupRestoreInfo, nil
 }
 
-func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack) error {
-	err := s.BackupRestore(ctx)
+func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos.BackupRestoreRequest) error {
+	_, err := s.BackupRestore(ctx, request.RecoveryPointID)
 	if err != nil {
 		return err
 	}
@@ -313,7 +314,7 @@ func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack) error {
 
 // TODO: need to check
 func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest) error {
-	err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss)
+	_, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss)
 	if err != nil {
 		return err
 	}
@@ -321,7 +322,7 @@ func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.Bac
 }
 
 func BackupConfigure(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupConfigureRequest) error {
-	err := s.BackupConfigure(ctx, req.Daily, req.Keep, req.Reset)
+	_, err := s.BackupConfigure(ctx, req.Daily, req.Keep, req.Reset)
 	if err != nil {
 		return err
 	}
@@ -382,4 +383,52 @@ func UpdateTelegramConfig(ctx context.Context, s *thanosStack.ThanosStack, teleg
 	}
 
 	return alertCustomization.UpdateTelegramConfig(ctx, telegramConfig.ApiToken, receiversStr)
+}
+
+func InstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallCrossChainBridgeRequest) (*thanosStack.DeployCrossTradeOutput, error) {
+	l2ChainConfigs := make([]*thanosStack.L2CrossTradeChainInput, len(req.L2ChainConfig))
+	for i, chainConfig := range req.L2ChainConfig {
+		l2ChainConfigs[i] = &thanosStack.L2CrossTradeChainInput{
+			RPC:                  chainConfig.RPC,
+			ChainID:              chainConfig.ChainID,
+			PrivateKey:           chainConfig.PrivateKey,
+			IsDeployedNew:        chainConfig.IsDeployedNew,
+			DeploymentScriptPath: chainConfig.DeploymentScriptPath,
+			ContractName:         chainConfig.ContractName,
+			BlockExplorerConfig: &thanosStack.BlockExplorerConfig{
+				APIKey: chainConfig.BlockExplorerConfig.APIKey,
+				URL:    chainConfig.BlockExplorerConfig.URL,
+				Type:   chainConfig.BlockExplorerConfig.Type,
+			},
+			CrossDomainMessenger:   chainConfig.CrossDomainMessenger,
+			CrossTradeProxyAddress: chainConfig.CrossTradeProxyAddress,
+			CrossTradeAddress:      chainConfig.CrossTradeAddress,
+		}
+	}
+	l1ChainConfig := &thanosStack.L1CrossTradeChainInput{
+		RPC:                  req.L1ChainConfig.RPC,
+		ChainID:              req.L1ChainConfig.ChainID,
+		PrivateKey:           req.L1ChainConfig.PrivateKey,
+		IsDeployedNew:        req.L1ChainConfig.IsDeployedNew,
+		DeploymentScriptPath: req.L1ChainConfig.DeploymentScriptPath,
+		ContractName:         req.L1ChainConfig.ContractName,
+	}
+
+	logger.Info("l1 chain config", zap.Any("l1 chain config", l1ChainConfig))
+	logger.Info("l2 chain configs", zap.Any("l2 chain configs", l2ChainConfigs))
+	return &thanosStack.DeployCrossTradeOutput{
+		DeployCrossTradeApplicationOutput: &thanosStack.DeployCrossTradeApplicationOutput{
+			URL: "https://cross-trade.com",
+		},
+		DeployCrossTradeContractsOutput: &thanosStack.DeployCrossTradeContractsOutput{},
+	}, nil
+	// return s.DeployCrossTrade(ctx, &thanosStack.DeployCrossTradeContractsInputs{
+	// 	Mode:          req.Mode,
+	// 	L1ChainConfig: l1ChainConfig,
+	// 	L2ChainConfig: l2ChainConfigs,
+	// })
+}
+
+func UninstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack) error {
+	return s.UninstallCrossTrade(ctx)
 }

@@ -17,6 +17,7 @@ type IntegrationManager struct {
 	registerCandidate   *RegisterCandidateIntegration
 	registerMetadataDAO *RegisterMetadataDAOIntegration
 	backupManager       *BackupManager
+	crossTrade          *CrossTradeBridgeIntegration
 }
 
 // NewIntegrationManager creates a new integration manager with all integration handlers
@@ -51,6 +52,7 @@ func NewIntegrationManager(
 		monitoring:          NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerCandidate:   NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerMetadataDAO: NewRegisterMetadataDAOIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		crossTrade:          NewCrossTradeBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 	}
 }
 
@@ -129,8 +131,8 @@ func (im *IntegrationManager) BackupSnapshot(ctx context.Context, stackId uuid.U
 	return im.backupManager.BackupSnapshot(ctx, stackId)
 }
 
-func (im *IntegrationManager) BackupRestore(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	return im.backupManager.BackupRestore(ctx, stackId)
+func (im *IntegrationManager) BackupRestore(ctx context.Context, stackId uuid.UUID, request dtos.BackupRestoreRequest) (*entities.Response, error) {
+	return im.backupManager.BackupRestore(ctx, stackId, request)
 }
 
 func (im *IntegrationManager) BackupConfigure(ctx context.Context, stackId uuid.UUID, request dtos.BackupConfigureRequest) (*entities.Response, error) {
@@ -163,4 +165,12 @@ func (im *IntegrationManager) UpdateEmailAlert(ctx context.Context, stackId uuid
 // UpdateTelegramAlert updates telegram alert configuration for the given stack
 func (im *IntegrationManager) UpdateTelegramAlert(ctx context.Context, stackId uuid.UUID, request dtos.UpdateTelegramConfigRequest) (*entities.Response, error) {
 	return im.monitoring.UpdateTelegramAlert(ctx, stackId, request)
+}
+
+func (im *IntegrationManager) InstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, request dtos.InstallCrossChainBridgeRequest) (*entities.Response, error) {
+	return im.crossTrade.Install(ctx, stackId, request)
+}
+
+func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return im.crossTrade.Uninstall(ctx, stackId.String())
 }

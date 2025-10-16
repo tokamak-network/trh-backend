@@ -186,8 +186,8 @@ func (s *ThanosStackDeploymentService) BackupSnapshot(ctx context.Context, stack
 	return s.integrationMgr.BackupSnapshot(ctx, stackId)
 }
 
-func (s *ThanosStackDeploymentService) BackupRestore(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	return s.integrationMgr.BackupRestore(ctx, stackId)
+func (s *ThanosStackDeploymentService) BackupRestore(ctx context.Context, stackId uuid.UUID, request dtos.BackupRestoreRequest) (*entities.Response, error) {
+	return s.integrationMgr.BackupRestore(ctx, stackId, request)
 }
 
 func (s *ThanosStackDeploymentService) BackupConfigure(ctx context.Context, stackId uuid.UUID, request dtos.BackupConfigureRequest) (*entities.Response, error) {
@@ -220,4 +220,12 @@ func (s *ThanosStackDeploymentService) UpdateEmailAlert(ctx context.Context, sta
 // UpdateTelegramAlert updates telegram alert configuration for the given stack
 func (s *ThanosStackDeploymentService) UpdateTelegramAlert(ctx context.Context, stackId uuid.UUID, request dtos.UpdateTelegramConfigRequest) (*entities.Response, error) {
 	return s.integrationMgr.UpdateTelegramAlert(ctx, stackId, request)
+}
+
+func (s *ThanosStackDeploymentService) InstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, request dtos.InstallCrossChainBridgeRequest) (*entities.Response, error) {
+	return s.integrationMgr.InstallCrossChainBridge(ctx, stackId, request)
+}
+
+func (s *ThanosStackDeploymentService) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.UninstallCrossChainBridge(ctx, stackId)
 }
