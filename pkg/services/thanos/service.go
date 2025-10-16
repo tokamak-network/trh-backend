@@ -221,3 +221,11 @@ func (s *ThanosStackDeploymentService) UpdateEmailAlert(ctx context.Context, sta
 func (s *ThanosStackDeploymentService) UpdateTelegramAlert(ctx context.Context, stackId uuid.UUID, request dtos.UpdateTelegramConfigRequest) (*entities.Response, error) {
 	return s.integrationMgr.UpdateTelegramAlert(ctx, stackId, request)
 }
+
+func (s *ThanosStackDeploymentService) InstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, request dtos.InstallCrossChainBridgeRequest) (*entities.Response, error) {
+	return s.integrationMgr.InstallCrossChainBridge(ctx, stackId, request)
+}
+
+func (s *ThanosStackDeploymentService) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.UninstallCrossChainBridge(ctx, stackId)
+}

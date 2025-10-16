@@ -599,3 +599,66 @@ func (h *ThanosDeploymentHandler) UpdateTelegramAlert(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+// @Summary		Install Cross Chain Bridge
+// @Description	Install Cross Chain Bridge
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id		path		string								true	"Thanos Stack ID"
+// @Param			request	body		dtos.InstallCrossChainBridgeRequest	true	"Install Cross Chain Bridge Request"
+// @Success		200		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/cross-trade [post]
+func (h *ThanosDeploymentHandler) InstallCrossChainBridge(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	var request dtos.InstallCrossChainBridgeRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.InstallCrossChainBridge(c.Request.Context(), uuid.MustParse(id), request)
+	if err != nil {
+		logger.Error("failed to install cross chain bridge", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Uninstall Cross Chain Bridge
+// @Description	Uninstall Cross Chain Bridge
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/cross-trade [delete]
+func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UninstallCrossChainBridge(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to uninstall cross chain bridge", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}

@@ -17,6 +17,7 @@ type StackMetadata struct {
 	L2ChainId       int    `json:"l2ChainId"`
 	GrafanaUrl      string `json:"grafanaUrl,omitempty"`
 	ExplorerUrl     string `json:"explorerUrl,omitempty"`
+	CrossTradeUrl   string `json:"crossTradeUrl,omitempty"`
 	RollupConfigUrl string `json:"rollupConfigUrl,omitempty"`
 	MonitoringUrl   string `json:"monitoringUrl,omitempty"`
 }
