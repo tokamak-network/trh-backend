@@ -15,3 +15,7 @@ type BackupConfigureRequest struct {
 	Keep  *string `json:"keep"`
 	Reset *bool   `json:"reset"`
 }
+
+type BackupRestoreRequest struct {
+	RecoveryPointID string `json:"recoveryPointID"`
+}

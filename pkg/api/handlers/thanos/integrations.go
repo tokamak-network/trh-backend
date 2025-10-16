@@ -369,7 +369,17 @@ func (h *ThanosDeploymentHandler) BackupRestore(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.BackupRestore(c.Request.Context(), uuid.MustParse(id))
+	var request dtos.BackupRestoreRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupRestore(c.Request.Context(), uuid.MustParse(id), request)
 	if err != nil {
 		logger.Error("failed to backup restore", zap.Error(err), zap.String("id", id))
 	}

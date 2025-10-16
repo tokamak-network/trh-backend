@@ -304,8 +304,8 @@ func GetBackupStatus(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTy
 	return backupRestoreInfo, nil
 }
 
-func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack) error {
-	_, err := s.BackupRestore(ctx, "")
+func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos.BackupRestoreRequest) error {
+	_, err := s.BackupRestore(ctx, request.RecoveryPointID)
 	if err != nil {
 		return err
 	}

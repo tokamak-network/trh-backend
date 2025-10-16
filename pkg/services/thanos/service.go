@@ -186,8 +186,8 @@ func (s *ThanosStackDeploymentService) BackupSnapshot(ctx context.Context, stack
 	return s.integrationMgr.BackupSnapshot(ctx, stackId)
 }
 
-func (s *ThanosStackDeploymentService) BackupRestore(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	return s.integrationMgr.BackupRestore(ctx, stackId)
+func (s *ThanosStackDeploymentService) BackupRestore(ctx context.Context, stackId uuid.UUID, request dtos.BackupRestoreRequest) (*entities.Response, error) {
+	return s.integrationMgr.BackupRestore(ctx, stackId, request)
 }
 
 func (s *ThanosStackDeploymentService) BackupConfigure(ctx context.Context, stackId uuid.UUID, request dtos.BackupConfigureRequest) (*entities.Response, error) {

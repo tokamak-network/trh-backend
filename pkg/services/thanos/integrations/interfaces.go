@@ -131,8 +131,8 @@ func (im *IntegrationManager) BackupSnapshot(ctx context.Context, stackId uuid.U
 	return im.backupManager.BackupSnapshot(ctx, stackId)
 }
 
-func (im *IntegrationManager) BackupRestore(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	return im.backupManager.BackupRestore(ctx, stackId)
+func (im *IntegrationManager) BackupRestore(ctx context.Context, stackId uuid.UUID, request dtos.BackupRestoreRequest) (*entities.Response, error) {
+	return im.backupManager.BackupRestore(ctx, stackId, request)
 }
 
 func (im *IntegrationManager) BackupConfigure(ctx context.Context, stackId uuid.UUID, request dtos.BackupConfigureRequest) (*entities.Response, error) {
