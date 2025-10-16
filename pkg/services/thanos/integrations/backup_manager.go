@@ -174,11 +174,12 @@ func (b *BackupManager) BackupSnapshot(ctx context.Context, stackId uuid.UUID) (
 			logger.Error("failed to get thanos client", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
-		err = thanos.BackupSnapshot(ctx, thanosSDK)
+		snapshotInfo, err := thanos.BackupSnapshot(ctx, thanosSDK)
 		if err != nil {
 			logger.Error("failed to backup snapshot", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
+		logger.Info("backup snapshot info", zap.Any("backup snapshot info", snapshotInfo))
 	})
 
 	return &entities.Response{
@@ -213,11 +214,12 @@ func (b *BackupManager) BackupRestore(ctx context.Context, stackId uuid.UUID, re
 			logger.Error("failed to get thanos client", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
-		err = thanos.BackupRestore(ctx, thanosSDK, request)
+		backupRestoreInfo, err := thanos.BackupRestore(ctx, thanosSDK, request)
 		if err != nil {
 			logger.Error("failed to backup restore", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
+		logger.Info("backup restore info", zap.Any("backup restore info", backupRestoreInfo))
 	})
 
 	return &entities.Response{
@@ -252,11 +254,12 @@ func (b *BackupManager) BackupConfigure(ctx context.Context, stackId uuid.UUID, 
 			logger.Error("failed to get thanos client", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
-		err = thanos.BackupConfigure(ctx, thanosSDK, &request)
+		backupConfigureInfo, err := thanos.BackupConfigure(ctx, thanosSDK, &request)
 		if err != nil {
 			logger.Error("failed to backup configure", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
+		logger.Info("backup configure info", zap.Any("backup configure info", backupConfigureInfo))
 	})
 
 	return &entities.Response{
@@ -291,11 +294,12 @@ func (b *BackupManager) BackupAttach(ctx context.Context, stackId uuid.UUID, req
 			logger.Error("failed to get thanos client", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
-		err = thanos.BackupAttach(ctx, thanosSDK, &request)
+		backupAttachInfo, err := thanos.BackupAttach(ctx, thanosSDK, &request)
 		if err != nil {
 			logger.Error("failed to backup attach", zap.String("stackId", stackId.String()), zap.Error(err))
 			return
 		}
+		logger.Info("backup attach info", zap.Any("backup attach info", backupAttachInfo))
 	})
 
 	return &entities.Response{

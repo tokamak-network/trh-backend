@@ -280,12 +280,12 @@ func RegisterMetadataDAO(ctx context.Context, s *thanosStack.ThanosStack, regist
 	}, &metadataInfo)
 }
 
-func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack) error {
-	_, err := s.BackupSnapshot(ctx)
+func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTypes.BackupSnapshotInfo, error) {
+	snapshotInfo, err := s.BackupSnapshot(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return snapshotInfo, nil
 }
 
 func GetListBackup(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupRequest) ([]thanosTypes.RecoveryPoint, error) {
@@ -304,29 +304,28 @@ func GetBackupStatus(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTy
 	return backupRestoreInfo, nil
 }
 
-func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos.BackupRestoreRequest) error {
-	_, err := s.BackupRestore(ctx, request.RecoveryPointID)
+func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos.BackupRestoreRequest) (*thanosTypes.BackupRestoreInfo, error) {
+	backupRestoreInfo, err := s.BackupRestore(ctx, request.RecoveryPointID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return backupRestoreInfo, nil
 }
 
-// TODO: need to check
-func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest) error {
-	_, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss)
+func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest) (*thanosTypes.BackupAttachInfo, error) {
+	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return backupAttachInfo, nil
 }
 
-func BackupConfigure(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupConfigureRequest) error {
-	_, err := s.BackupConfigure(ctx, req.Daily, req.Keep, req.Reset)
+func BackupConfigure(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupConfigureRequest) (*thanosTypes.BackupConfigInfo, error) {
+	backupConfigureInfo, err := s.BackupConfigure(ctx, req.Daily, req.Keep, req.Reset)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return backupConfigureInfo, nil
 }
 
 func CleanupUnusedBackupResources(ctx context.Context, s *thanosStack.ThanosStack) error {
