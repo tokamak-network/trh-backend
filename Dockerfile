@@ -17,6 +17,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 ENV DEBCONF_NONINTERACTIVE_SEEN=true
 ENV DEBCONF_NOWARNINGS=true
+ENV SHELL=/bin/bash
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -32,6 +33,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Configure timezone non-interactively
 RUN ln -sf /usr/share/zoneinfo/UTC /etc/localtime && \
     echo 'UTC' > /etc/timezone
+
+# Set environment variables for tools (will be installed via setup.sh)
+ENV NVM_DIR=/root/.nvm
+ENV PNPM_HOME=/root/.local/share/pnpm
+ENV PATH="/root/.local/share/pnpm:/root/.nvm/versions/node/v20.16.0/bin:/root/.foundry/bin:/usr/local/go/bin:/root/go/bin:/usr/local/bin:${PATH}"
 
 WORKDIR /app
 
