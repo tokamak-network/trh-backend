@@ -35,10 +35,14 @@ type L2CrossTradeChainInput struct {
 	CrossDomainMessenger   string               `json:"cross_domain_messenger"`
 	CrossTradeProxyAddress string               `json:"cross_trade_proxy_address"`
 	CrossTradeAddress      string               `json:"cross_trade_address"`
+	USDTAddress            string               `json:"usdt_address"`
+	USDCAddress            string               `json:"usdc_address"`
+	TONAddress             string               `json:"ton_address"`
 }
 
 type InstallCrossChainBridgeRequest struct {
 	Mode          constants.CrossTradeDeployMode `json:"mode" binding:"required" validate:"oneof=l2_to_l1 l2_to_l2"`
+	ProjectID     string                         `json:"project_id" binding:"required"`
 	L1ChainConfig *L1CrossTradeChainInput        `json:"l1ChainConfig" binding:"required"`
 	L2ChainConfig []*L2CrossTradeChainInput      `json:"l2ChainConfig" binding:"required"`
 }

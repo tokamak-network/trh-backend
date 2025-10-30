@@ -402,6 +402,9 @@ func InstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, re
 			CrossDomainMessenger:   chainConfig.CrossDomainMessenger,
 			CrossTradeProxyAddress: chainConfig.CrossTradeProxyAddress,
 			CrossTradeAddress:      chainConfig.CrossTradeAddress,
+			USDTAddress:            chainConfig.USDTAddress,
+			USDCAddress:            chainConfig.USDCAddress,
+			TONAddress:             chainConfig.TONAddress,
 		}
 	}
 	l1ChainConfig := &thanosStack.L1CrossTradeChainInput{
@@ -415,17 +418,13 @@ func InstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, re
 
 	logger.Info("l1 chain config", zap.Any("l1 chain config", l1ChainConfig))
 	logger.Info("l2 chain configs", zap.Any("l2 chain configs", l2ChainConfigs))
-	return &thanosStack.DeployCrossTradeOutput{
-		DeployCrossTradeApplicationOutput: &thanosStack.DeployCrossTradeApplicationOutput{
-			URL: "https://cross-trade.com",
-		},
-		DeployCrossTradeContractsOutput: &thanosStack.DeployCrossTradeContractsOutput{},
-	}, nil
-	// return s.DeployCrossTrade(ctx, &thanosStack.DeployCrossTradeContractsInputs{
-	// 	Mode:          req.Mode,
-	// 	L1ChainConfig: l1ChainConfig,
-	// 	L2ChainConfig: l2ChainConfigs,
-	// })
+
+	return s.DeployCrossTrade(ctx, &thanosStack.DeployCrossTradeInputs{
+		ProjectID:     req.ProjectID,
+		Mode:          req.Mode,
+		L1ChainConfig: l1ChainConfig,
+		L2ChainConfig: l2ChainConfigs,
+	})
 }
 
 func UninstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack) error {
