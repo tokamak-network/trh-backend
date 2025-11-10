@@ -43,6 +43,7 @@ func NewIntegrationManager(
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationByStatus(stackId string, integrationType string, status entities.DeploymentStatus) (*entities.IntegrationEntity, error)
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
@@ -180,8 +181,8 @@ func (im *IntegrationManager) InstallCrossChainBridge(ctx context.Context, stack
 	return im.crossTrade.Install(ctx, stackId, request)
 }
 
-func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	return im.crossTrade.Uninstall(ctx, stackId.String())
+func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	return im.crossTrade.Uninstall(ctx, stackId.String(), integrationId.String())
 }
 
 // InstallUptimeService installs an uptime service for the given stack

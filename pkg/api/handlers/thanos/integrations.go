@@ -654,7 +654,7 @@ func (h *ThanosDeploymentHandler) InstallCrossChainBridge(c *gin.Context) {
 // @Produce		json
 // @Param			id	path		string	true	"Thanos Stack ID"
 // @Success		200	{object}	entities.Response
-// @Router			/stacks/thanos/{id}/integrations/cross-trade [delete]
+// @Router			/stacks/thanos/{id}/integrations/cross-trade/{integrationID} [delete]
 func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -666,7 +666,17 @@ func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.UninstallCrossChainBridge(c.Request.Context(), uuid.MustParse(id))
+	integrationId := c.Param("integrationID")
+	if integrationId == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "integrationID is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UninstallCrossChainBridge(c.Request.Context(), uuid.MustParse(id), uuid.MustParse(integrationId))
 	if err != nil {
 		logger.Error("failed to uninstall cross chain bridge", zap.Error(err), zap.String("id", id))
 	}
