@@ -32,12 +32,12 @@ type L2CrossTradeChainInput struct {
 	DeploymentScriptPath    string               `json:"deploymentScriptPath"`
 	ContractName            string               `json:"contractName"`
 	BlockExplorerConfig     *BlockExplorerConfig `json:"blockExplorerConfig"`
-	CrossDomainMessenger    string               `json:"cross_domain_messenger" binding:"required" validate:"eth_address"`
+	CrossDomainMessenger    string               `json:"crossDomainMessenger" binding:"required" validate:"eth_address"`
 	CrossTradeProxyAddress  string               `json:"crossTradeProxyAddress"`
+	NativeTokenAddress      string               `json:"nativeTokenAddress" binding:"required" validate:"eth_address"`
 	CrossTradeAddress       string               `json:"crossTradeAddress"`
 	L2Tokens                map[string]string    `json:"l2Tokens"`
 	L1Tokens                map[string]string    `json:"l1Tokens"`
-	NativeTokenAddressOnL1  string               `json:"nativeTokenAddressOnL1" binding:"required" validate:"eth_address"`
 	L1StandardBridgeAddress string               `json:"l1StandardBridgeAddress" binding:"required" validate:"eth_address"`
 	L1USDCBridgeAddress     string               `json:"l1USDCBridgeAddress" binding:"required" validate:"eth_address"`
 	L1CrossDomainMessenger  string               `json:"l1CrossDomainMessenger" binding:"required" validate:"eth_address"`

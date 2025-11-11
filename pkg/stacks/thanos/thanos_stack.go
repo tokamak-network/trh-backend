@@ -494,7 +494,7 @@ func InstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, re
 			CrossTradeAddress:       chainConfig.CrossTradeAddress,
 			L2Tokens:                chainConfig.L2Tokens,
 			L1Tokens:                chainConfig.L1Tokens,
-			NativeTokenAddressOnL1:  chainConfig.NativeTokenAddressOnL1,
+			NativeTokenAddressOnL1:  chainConfig.NativeTokenAddress,
 			L1StandardBridgeAddress: chainConfig.L1StandardBridgeAddress,
 			L1USDCBridgeAddress:     chainConfig.L1USDCBridgeAddress,
 			L1CrossDomainMessenger:  chainConfig.L1CrossDomainMessenger,
