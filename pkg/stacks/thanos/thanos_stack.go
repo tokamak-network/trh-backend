@@ -512,8 +512,8 @@ func InstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, re
 	})
 }
 
-func UninstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack) error {
-	return s.UninstallCrossTrade(ctx)
+func UninstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, mode string) error {
+	return s.UninstallCrossTrade(ctx, constants.CrossTradeDeployMode(mode))
 }
 
 func InstallUptimeService(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallUptimeServiceRequest) (string, error) {

@@ -20,6 +20,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
+	thanosConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
 	"go.uber.org/zap"
 )
 
@@ -471,7 +472,16 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, stack *
 		return
 	}
 
-	if err = thanos.UninstallCrossTradeBridge(ctx, sdkClient); err != nil {
+	var mode string
+	if integration.Type == enum.IntegrationTypeCrossTradeL2ToL1.String() {
+		mode = string(thanosConstants.CrossTradeDeployModeL2ToL1)
+	} else if integration.Type == enum.IntegrationTypeCrossTradeL2ToL2.String() {
+		mode = string(thanosConstants.CrossTradeDeployModeL2ToL2)
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", integration.Type))
+		return
+	}
+	if err = thanos.UninstallCrossTradeBridge(ctx, sdkClient, mode); err != nil {
 		logger.Error("failed to uninstall cross-trade", zap.String("plugin", integrationType), zap.Error(err))
 		if err := b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed); err != nil {
 			logger.Error("failed to update deployment status", zap.String("plugin", integrationType), zap.Error(err), zap.String("deploymentId", uninstallDeployment.ID.String()))
