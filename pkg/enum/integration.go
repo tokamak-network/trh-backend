@@ -9,6 +9,7 @@ const (
 	IntegrationTypeCrossTrade          IntegrationType = "cross-trade"
 	IntegrationTypeBlockExplorer       IntegrationType = "block-explorer"
 	IntegrationTypeMonitoring          IntegrationType = "monitoring"
+	IntegrationTypeUptimeService       IntegrationType = "uptime-service"
 )
 
 func (i IntegrationType) String() string {

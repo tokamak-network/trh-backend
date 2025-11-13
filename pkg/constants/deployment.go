@@ -14,4 +14,6 @@ const (
 	RegisterMetadataDAOStep       = "register-metadata-dao"
 	InstallCrossTradeBridgeStep   = "install-cross-trade-bridge"
 	UninstallCrossTradeBridgeStep = "uninstall-cross-trade-bridge"
+	InstallUptimeServiceStep      = "install-uptime-service"
+	UninstallUptimeServiceStep    = "uninstall-uptime-service"
 )
