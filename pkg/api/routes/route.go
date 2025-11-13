@@ -193,8 +193,8 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.GET("/:id/integrations/register-metadata-dao", handler.GetRegisterMetadataDAO)
 		adminRoutes.DELETE("/:id/integrations/bridge", handler.UninstallBridge)
 		adminRoutes.DELETE("/:id/integrations/block-explorer", handler.UninstallBlockExplorer)
-		adminRoutes.POST("/:id/integrations/uptime", handler.InstallUptimeService)
-		adminRoutes.DELETE("/:id/integrations/uptime", handler.UninstallUptimeService)
+		adminRoutes.POST("/:id/integrations/uptime-service", handler.InstallUptimeService)
+		adminRoutes.DELETE("/:id/integrations/uptime-service", handler.UninstallUptimeService)
 
 		// Monitoring management
 		adminRoutes.POST("/:id/integrations/monitoring", handler.InstallMonitoring)
