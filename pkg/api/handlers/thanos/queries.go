@@ -1,6 +1,7 @@
 package thanos
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -173,4 +174,77 @@ func (h *ThanosDeploymentHandler) DownloadRollupConfig(c *gin.Context) {
 		// At this point headers are already sent, so we can't send a JSON error response
 		return
 	}
+}
+
+// @Summary     Get Contracts File Content
+// @Description Fetches the contracts file stored in stack metadata and returns its contents
+// @Tags        Thanos Stack
+// @Accept      json
+// @Produce     application/octet-stream
+// @Param       id path string true "Thanos Stack ID"
+// @Success     200 {file} file "Contracts file content"
+// @Failure     400 {object} entities.Response
+// @Failure     404 {object} entities.Response
+// @Failure     500 {object} entities.Response
+// @Router      /stacks/thanos/{id}/contracts [get]
+func (h *ThanosDeploymentHandler) GetContractsFile(c *gin.Context) {
+	stackIdStr := c.Param("id")
+	if stackIdStr == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	stackId, err := uuid.Parse(stackIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack ID format",
+			Data:    nil,
+		})
+		return
+	}
+
+	content, err := h.ThanosDeploymentService.GetContractsFileContent(stackId)
+	if err != nil {
+		logger.Error("failed to read contracts file",
+			zap.String("stackId", stackIdStr),
+			zap.Error(err))
+
+		var statusCode int
+		switch err.Error() {
+		case "stack not found":
+			statusCode = http.StatusNotFound
+		case "stack metadata not found",
+			"contracts file not available for this stack",
+			"contracts file not found on filesystem":
+			statusCode = http.StatusNotFound
+		default:
+			statusCode = http.StatusInternalServerError
+		}
+
+		c.JSON(statusCode, &entities.Response{
+			Status:  uint64(statusCode),
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	var contractsData interface{}
+	if err := json.Unmarshal(content, &contractsData); err != nil {
+		logger.Warn("contracts file is not valid JSON, returning as string",
+			zap.String("stackId", stackIdStr),
+			zap.Error(err))
+		contractsData = string(content)
+	}
+
+	c.JSON(http.StatusOK, &entities.Response{
+		Status:  http.StatusOK,
+		Message: "contracts file content",
+		Data:    contractsData,
+	})
 }

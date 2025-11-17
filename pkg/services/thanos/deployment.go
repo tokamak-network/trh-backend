@@ -117,6 +117,7 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 		BridgeUrl:       chainInformation.BridgeUrl,
 		ExplorerUrl:     chainInformation.BlockExplorer,
 		RollupConfigUrl: chainInformation.RollupFilePath,
+		ContractsPath:   chainInformation.ContractsPath,
 		MonitoringUrl:   chainInformation.MonitoringUrl,
 	})
 	if err != nil {

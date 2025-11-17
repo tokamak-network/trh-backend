@@ -9,6 +9,7 @@ import (
 )
 
 type StackMetadata struct {
+<<<<<<< HEAD
 	Layer1           string `json:"layer1"`
 	Layer2           string `json:"layer2"`
 	L2RpcUrl         string `json:"l2RpcUrl"`
@@ -21,6 +22,20 @@ type StackMetadata struct {
 	RollupConfigUrl  string `json:"rollupConfigUrl,omitempty"`
 	MonitoringUrl    string `json:"monitoringUrl,omitempty"`
 	UptimeServiceUrl string `json:"uptimeServiceUrl,omitempty"`
+=======
+	Layer1          string `json:"layer1"`
+	Layer2          string `json:"layer2"`
+	L2RpcUrl        string `json:"l2RpcUrl"`
+	BridgeUrl       string `json:"bridgeUrl,omitempty"`
+	L1ChainId       int    `json:"l1ChainId"`
+	L2ChainId       int    `json:"l2ChainId"`
+	GrafanaUrl      string `json:"grafanaUrl,omitempty"`
+	ExplorerUrl     string `json:"explorerUrl,omitempty"`
+	CrossTradeUrl   string `json:"crossTradeUrl,omitempty"`
+	RollupConfigUrl string `json:"rollupConfigUrl,omitempty"`
+	ContractsPath   string `json:"contractsPath,omitempty"`
+	MonitoringUrl   string `json:"monitoringUrl,omitempty"`
+>>>>>>> 7a6c587 (feat: add the contracts info)
 }
 
 func (m *StackMetadata) Marshal() ([]byte, error) {

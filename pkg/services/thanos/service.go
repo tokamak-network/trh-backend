@@ -182,6 +182,55 @@ func (s *ThanosStackDeploymentService) GetRollupConfigFilePath(stackId uuid.UUID
 	return stack.Metadata.RollupConfigUrl, nil
 }
 
+// GetContractsFilePath returns the contracts file path from stack metadata and validates it exists
+func (s *ThanosStackDeploymentService) GetContractsFilePath(stackId uuid.UUID) (string, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return "", err
+	}
+	if stack == nil {
+		return "", errors.New("stack not found")
+	}
+
+	// Check if metadata exists
+	if stack.Metadata == nil {
+		return "", errors.New("stack metadata not found")
+	}
+
+	// Check if contracts path exists
+	if stack.Metadata.ContractsPath == "" {
+		return "", errors.New("contracts file not available for this stack")
+	}
+
+	// Verify file exists on filesystem
+	if _, err := os.Stat(stack.Metadata.ContractsPath); err != nil {
+		if os.IsNotExist(err) {
+			return "", errors.New("contracts file not found on filesystem")
+		}
+		return "", err
+	}
+
+	return stack.Metadata.ContractsPath, nil
+}
+
+// GetContractsFileContent returns the file bytes stored at the contracts path for the stack
+func (s *ThanosStackDeploymentService) GetContractsFileContent(stackId uuid.UUID) ([]byte, error) {
+	filePath, err := s.GetContractsFilePath(stackId)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errors.New("contracts file not found on filesystem")
+		}
+		return nil, err
+	}
+
+	return content, nil
+}
+
 func (s *ThanosStackDeploymentService) BackupStatus(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.BackupStatus(ctx, stackId)
 }
