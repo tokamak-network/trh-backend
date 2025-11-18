@@ -296,11 +296,21 @@ func (b *CrossTradeBridgeIntegration) installTask(ctx context.Context, stack *en
 		return
 	}
 
+	var step string
+	if integrationType == enum.IntegrationTypeCrossTradeL2ToL1.String() {
+		step = constants.InstallCrossTradeL2L1Step
+	} else if integrationType == enum.IntegrationTypeCrossTradeL2ToL2.String() {
+		step = constants.InstallCrossTradeL2L2Step
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", integrationType))
+		return
+	}
+
 	// Create deployment record for installing cross trade
 	deployment := &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Step:    constants.InstallCrossTradeBridgeStep,
+		Step:    step,
 		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  configBytes,
@@ -434,11 +444,21 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, stack *
 		return
 	}
 
+	var step string
+	if integrationType == enum.IntegrationTypeCrossTradeL2ToL1.String() {
+		step = constants.UninstallCrossTradeL2L1Step
+	} else if integrationType == enum.IntegrationTypeCrossTradeL2ToL2.String() {
+		step = constants.UninstallCrossTradeL2L2Step
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", integrationType))
+		return
+	}
+
 	// Create deployment record for uninstalling cross trade
 	uninstallDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
-		Step:    constants.UninstallCrossTradeBridgeStep,
+		Step:    step,
 		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
 		Config:  []byte("{}"),
