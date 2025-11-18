@@ -205,8 +205,6 @@ func (s *ThanosStackDeploymentService) GetContractsFilePath(stackId uuid.UUID) (
 		contractsPath = filepath.Join(stack.DeploymentPath, "tokamak-thanos", "packages", "tokamak", "contracts-bedrock", "deployments", fmt.Sprintf("%d-deploy.json", stack.Metadata.L1ChainId))
 	}
 
-	fmt.Println("contractsPath: ", contractsPath)
-
 	// Verify file exists on filesystem
 	if _, err := os.Stat(contractsPath); err != nil {
 		if os.IsNotExist(err) {
@@ -229,6 +227,57 @@ func (s *ThanosStackDeploymentService) GetContractsFileContent(stackId uuid.UUID
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errors.New("contracts file not found on filesystem")
+		}
+		return nil, err
+	}
+
+	return content, nil
+}
+
+// GetDeployConfigFilePath returns the deploy config file path from stack metadata and validates it exists
+func (s *ThanosStackDeploymentService) GetDeployConfigFilePath(stackId uuid.UUID) (string, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return "", err
+	}
+	if stack == nil {
+		return "", errors.New("stack not found")
+	}
+
+	// Check if metadata exists
+	if stack.Metadata == nil {
+		return "", errors.New("stack metadata not found")
+	}
+
+	deployConfigPath := stack.Metadata.DeployConfigPath
+
+	// Check if deploy config path exists, set default if not
+	if deployConfigPath == "" {
+		deployConfigPath = filepath.Join(stack.DeploymentPath, "tokamak-thanos", "packages", "tokamak", "contracts-bedrock", "scripts", "deploy-config.json")
+	}
+
+	// Verify file exists on filesystem
+	if _, err := os.Stat(deployConfigPath); err != nil {
+		if os.IsNotExist(err) {
+			return "", errors.New("deploy config file not found on filesystem")
+		}
+		return "", err
+	}
+
+	return deployConfigPath, nil
+}
+
+// GetDeployConfigFileContent returns the file bytes stored at the deploy config path for the stack
+func (s *ThanosStackDeploymentService) GetDeployConfigFileContent(stackId uuid.UUID) ([]byte, error) {
+	filePath, err := s.GetDeployConfigFilePath(stackId)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errors.New("deploy config file not found on filesystem")
 		}
 		return nil, err
 	}

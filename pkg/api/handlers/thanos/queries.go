@@ -248,3 +248,76 @@ func (h *ThanosDeploymentHandler) GetContractsFile(c *gin.Context) {
 		Data:    contractsData,
 	})
 }
+
+// @Summary     Get Deploy Config File Content
+// @Description Fetches the deploy config file stored in stack metadata and returns its contents
+// @Tags        Thanos Stack
+// @Accept      json
+// @Produce     json
+// @Param       id path string true "Thanos Stack ID"
+// @Success     200 {object} entities.Response
+// @Failure     400 {object} entities.Response
+// @Failure     404 {object} entities.Response
+// @Failure     500 {object} entities.Response
+// @Router      /stacks/thanos/{id}/deployconfig [get]
+func (h *ThanosDeploymentHandler) GetDeployConfigFile(c *gin.Context) {
+	stackIdStr := c.Param("id")
+	if stackIdStr == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	stackId, err := uuid.Parse(stackIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack ID format",
+			Data:    nil,
+		})
+		return
+	}
+
+	content, err := h.ThanosDeploymentService.GetDeployConfigFileContent(stackId)
+	if err != nil {
+		logger.Error("failed to read deploy config file",
+			zap.String("stackId", stackIdStr),
+			zap.Error(err))
+
+		var statusCode int
+		switch err.Error() {
+		case "stack not found":
+			statusCode = http.StatusNotFound
+		case "stack metadata not found",
+			"deploy config file not available for this stack",
+			"deploy config file not found on filesystem":
+			statusCode = http.StatusNotFound
+		default:
+			statusCode = http.StatusInternalServerError
+		}
+
+		c.JSON(statusCode, &entities.Response{
+			Status:  uint64(statusCode),
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	var deployConfigData interface{}
+	if err := json.Unmarshal(content, &deployConfigData); err != nil {
+		logger.Warn("deploy config file is not valid JSON, returning as string",
+			zap.String("stackId", stackIdStr),
+			zap.Error(err))
+		deployConfigData = string(content)
+	}
+
+	c.JSON(http.StatusOK, &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Success",
+		Data:    deployConfigData,
+	})
+}

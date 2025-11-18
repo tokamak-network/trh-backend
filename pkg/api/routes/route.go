@@ -232,6 +232,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		authenticatedRoutes.GET("/:id/status", handler.GetStackStatus)
 		authenticatedRoutes.GET("/:id/rollupconfig", handler.DownloadRollupConfig)
 		authenticatedRoutes.GET("/:id/contracts", handler.GetContractsFile)
+		authenticatedRoutes.GET("/:id/deployconfig", handler.GetDeployConfigFile)
 		authenticatedRoutes.GET("/:id/deployments", handler.GetDeployments)
 		authenticatedRoutes.GET("/:id/integrations", handler.GetIntegrations)
 		authenticatedRoutes.GET("/:id/integrations/:integrationId", handler.GetIntegrationById)
