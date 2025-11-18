@@ -202,9 +202,10 @@ func (s *ThanosStackDeploymentService) GetContractsFilePath(stackId uuid.UUID) (
 
 	// Check if contracts path exists
 	if contractsPath == "" {
-		// 		ContractsPath:  fmt.Sprintf("%s/tokamak-thanos/packages/tokamak/contracts-bedrock/deployments/%d-deploy.json", t.deploymentPath, t.deployConfig.L1ChainID),
-		contractsPath = filepath.Join(stack.DeploymentPath, "packages", "tokamak", "contracts-bedrock", "deployments", fmt.Sprintf("%d-deploy.json", stack.Metadata.L1ChainId))
+		contractsPath = filepath.Join(stack.DeploymentPath, "tokamak-thanos", "packages", "tokamak", "contracts-bedrock", "deployments", fmt.Sprintf("%d-deploy.json", stack.Metadata.L1ChainId))
 	}
+
+	fmt.Println("contractsPath: ", contractsPath)
 
 	// Verify file exists on filesystem
 	if _, err := os.Stat(contractsPath); err != nil {

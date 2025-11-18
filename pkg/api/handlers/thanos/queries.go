@@ -244,7 +244,7 @@ func (h *ThanosDeploymentHandler) GetContractsFile(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &entities.Response{
 		Status:  http.StatusOK,
-		Message: "contracts file content",
+		Message: "Success",
 		Data:    contractsData,
 	})
 }
