@@ -399,7 +399,15 @@ func (b *CrossTradeBridgeIntegration) installTask(ctx context.Context, stack *en
 		stack.Metadata = &entities.StackMetadata{}
 	}
 
-	stack.Metadata.CrossTradeUrl = crossTradeIntegrationOutputURL
+	if integrationType == enum.IntegrationTypeCrossTradeL2ToL1.String() {
+		stack.Metadata.L2L1CrossTradeUrl = crossTradeIntegrationOutputURL
+	} else if integrationType == enum.IntegrationTypeCrossTradeL2ToL2.String() {
+		stack.Metadata.L2L2CrossTradeUrl = crossTradeIntegrationOutputURL
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", integrationType))
+		return
+	}
+
 	if err = b.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stack.ID.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
