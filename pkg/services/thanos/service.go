@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
@@ -197,20 +198,23 @@ func (s *ThanosStackDeploymentService) GetContractsFilePath(stackId uuid.UUID) (
 		return "", errors.New("stack metadata not found")
 	}
 
+	contractsPath := stack.Metadata.ContractsPath
+
 	// Check if contracts path exists
-	if stack.Metadata.ContractsPath == "" {
-		return "", errors.New("contracts file not available for this stack")
+	if contractsPath == "" {
+		// 		ContractsPath:  fmt.Sprintf("%s/tokamak-thanos/packages/tokamak/contracts-bedrock/deployments/%d-deploy.json", t.deploymentPath, t.deployConfig.L1ChainID),
+		contractsPath = filepath.Join(stack.DeploymentPath, "packages", "tokamak", "contracts-bedrock", "deployments", fmt.Sprintf("%d-deploy.json", stack.Metadata.L1ChainId))
 	}
 
 	// Verify file exists on filesystem
-	if _, err := os.Stat(stack.Metadata.ContractsPath); err != nil {
+	if _, err := os.Stat(contractsPath); err != nil {
 		if os.IsNotExist(err) {
 			return "", errors.New("contracts file not found on filesystem")
 		}
 		return "", err
 	}
 
-	return stack.Metadata.ContractsPath, nil
+	return contractsPath, nil
 }
 
 // GetContractsFileContent returns the file bytes stored at the contracts path for the stack
