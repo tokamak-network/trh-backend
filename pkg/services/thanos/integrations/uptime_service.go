@@ -132,7 +132,7 @@ func (u *UptimeServiceIntegration) Install(ctx context.Context, stackId string) 
 		}, nil
 	}
 
-	logPath := utils.GetLogPath(stack.ID, "uptime-service")
+	logPath := utils.GetLogPath(stack.ID, "system-pulse")
 
 	uptimeServiceIntegration := &entities.IntegrationEntity{
 		ID:      uuid.New(),
@@ -152,7 +152,7 @@ func (u *UptimeServiceIntegration) Install(ctx context.Context, stackId string) 
 		}, err
 	}
 
-	taskId := fmt.Sprintf("install-uptime-service-%s", stackId)
+	taskId := fmt.Sprintf("install-system-pulse-%s", stackId)
 	u.taskManager.AddTask(taskId, func(ctx context.Context) {
 		u.installTask(ctx, stack, logPath)
 	})
@@ -183,13 +183,13 @@ func (u *UptimeServiceIntegration) Uninstall(ctx context.Context, stackId string
 		}, nil
 	}
 
-	logPath := utils.GetLogPath(stack.ID, "uninstall-uptime-service")
+	logPath := utils.GetLogPath(stack.ID, "uninstall-system-pulse")
 
 	uptimeServiceIntegration, _ := u.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeUptimeService.String())
 	if uptimeServiceIntegration == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
-			Message: "Uptime service integration not found",
+			Message: "System pulse integration not found",
 			Data:    nil,
 		}, nil
 	}
@@ -202,7 +202,7 @@ func (u *UptimeServiceIntegration) Uninstall(ctx context.Context, stackId string
 		}, err
 	}
 
-	taskId := fmt.Sprintf("uninstall-uptime-service-%s", stackId)
+	taskId := fmt.Sprintf("uninstall-system-pulse-%s", stackId)
 	u.taskManager.AddTask(taskId, func(ctx context.Context) {
 		u.uninstallTask(ctx, stack, stackId, logPath)
 	})
