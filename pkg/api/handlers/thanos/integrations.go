@@ -680,7 +680,7 @@ func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
 // @Produce		json
 // @Param			id	path		string	true	"Thanos Stack ID"
 // @Success		200	{object}	entities.Response
-// @Router			/stacks/thanos/{id}/integrations/uptime-service [post]
+// @Router			/stacks/thanos/{id}/integrations/system-pulse [post]
 func (h *ThanosDeploymentHandler) InstallUptimeService(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -706,7 +706,7 @@ func (h *ThanosDeploymentHandler) InstallUptimeService(c *gin.Context) {
 // @Produce		json
 // @Param			id	path		string	true	"Thanos Stack ID"
 // @Success		200	{object}	entities.Response
-// @Router			/stacks/thanos/{id}/integrations/uptime-service [delete]
+// @Router			/stacks/thanos/{id}/integrations/system-pulse [delete]
 func (h *ThanosDeploymentHandler) UninstallUptimeService(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
