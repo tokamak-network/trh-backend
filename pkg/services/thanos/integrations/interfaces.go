@@ -18,6 +18,7 @@ type IntegrationManager struct {
 	registerMetadataDAO *RegisterMetadataDAOIntegration
 	backupManager       *BackupManager
 	crossTrade          *CrossTradeBridgeIntegration
+	uptimeService       *UptimeServiceIntegration
 }
 
 // NewIntegrationManager creates a new integration manager with all integration handlers
@@ -53,6 +54,7 @@ func NewIntegrationManager(
 		registerCandidate:   NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerMetadataDAO: NewRegisterMetadataDAOIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		crossTrade:          NewCrossTradeBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		uptimeService:       NewUptimeServiceIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 	}
 }
 
@@ -173,4 +175,14 @@ func (im *IntegrationManager) InstallCrossChainBridge(ctx context.Context, stack
 
 func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return im.crossTrade.Uninstall(ctx, stackId.String())
+}
+
+// InstallUptimeService installs an uptime service for the given stack
+func (im *IntegrationManager) InstallUptimeService(ctx context.Context, stackId string) (*entities.Response, error) {
+	return im.uptimeService.Install(ctx, stackId)
+}
+
+// UninstallUptimeService uninstalls the uptime service for the given stack
+func (im *IntegrationManager) UninstallUptimeService(ctx context.Context, stackId string) (*entities.Response, error) {
+	return im.uptimeService.Uninstall(ctx, stackId)
 }

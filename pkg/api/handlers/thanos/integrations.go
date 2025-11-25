@@ -672,3 +672,55 @@ func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+// @Summary		Install Uptime Service
+// @Description	Install Uptime Service
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/system-pulse [post]
+func (h *ThanosDeploymentHandler) InstallUptimeService(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.InstallUptimeService(c, id)
+	if err != nil {
+		logger.Error("failed to install uptime service", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Uninstall Uptime Service
+// @Description	Uninstall Uptime Service
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/system-pulse [delete]
+func (h *ThanosDeploymentHandler) UninstallUptimeService(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UninstallUptimeService(c, id)
+	if err != nil {
+		logger.Error("failed to uninstall uptime service", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}

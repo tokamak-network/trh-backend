@@ -229,3 +229,13 @@ func (s *ThanosStackDeploymentService) InstallCrossChainBridge(ctx context.Conte
 func (s *ThanosStackDeploymentService) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.UninstallCrossChainBridge(ctx, stackId)
 }
+
+// InstallUptimeService installs an uptime service for the given stack
+func (s *ThanosStackDeploymentService) InstallUptimeService(ctx context.Context, stackId string) (*entities.Response, error) {
+	return s.integrationMgr.InstallUptimeService(ctx, stackId)
+}
+
+// UninstallUptimeService uninstalls the uptime service for the given stack
+func (s *ThanosStackDeploymentService) UninstallUptimeService(ctx context.Context, stackId string) (*entities.Response, error) {
+	return s.integrationMgr.UninstallUptimeService(ctx, stackId)
+}

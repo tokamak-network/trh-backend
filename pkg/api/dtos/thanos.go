@@ -461,3 +461,7 @@ func (r *UpdateTelegramConfigRequest) Validate() error {
 
 	return nil
 }
+
+type InstallUptimeServiceRequest struct {
+	// Empty request - config is retrieved from SDK
+}
