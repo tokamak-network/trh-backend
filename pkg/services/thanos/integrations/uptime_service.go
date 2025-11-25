@@ -185,7 +185,15 @@ func (u *UptimeServiceIntegration) Uninstall(ctx context.Context, stackId string
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-system-pulse")
 
-	uptimeServiceIntegration, _ := u.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeUptimeService.String())
+	uptimeServiceIntegration, err := u.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeUptimeService.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
 	if uptimeServiceIntegration == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
@@ -229,7 +237,7 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entit
 	}
 
 	if err := u.integrationRepo.UpdateIntegrationStatus(uptimeServiceIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
-		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
 		return
 	}
 
@@ -271,10 +279,9 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entit
 	uptimeServiceUrl, err := thanos.InstallUptimeService(ctx, sdkClient, req)
 	if err != nil {
 		logger.Error("failed to install uptime service", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
-		if updateErr := u.integrationRepo.UpdateIntegrationStatusWithReason(uptimeServiceIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(updateErr), zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+		if err := u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed); err != nil {
+			logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", deployment.ID.String()))
 		}
-		_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -308,8 +315,10 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entit
 	}
 
 	if err = u.integrationRepo.UpdateMetadataAfterInstalled(uptimeServiceIntegration.ID.String(), entities.IntegrationInfo(bytes)); err != nil {
-		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
-		_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		logger.Error("failed to update integration metadata", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
+		if err := u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed); err != nil {
+			logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", deployment.ID.String()))
+		}
 		return
 	}
 
@@ -317,15 +326,22 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entit
 	// Note: You may need to add UptimeServiceUrl field to StackMetadata if it doesn't exist
 	// For now, we'll skip this if the field doesn't exist
 	if stack.Metadata != nil {
-		// stack.Metadata.UptimeServiceUrl = uptimeServiceUrl
+		stack.Metadata.UptimeServiceUrl = uptimeServiceUrl
 		if err = u.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
 			logger.Error("failed to update stack metadata", zap.String("stackId", stack.ID.String()), zap.Error(err))
-			_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+			err = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+			if err != nil {
+				logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", deployment.ID.String()))
+			}
 			return
 		}
 	}
 
-	_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
+	err = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
+	if err != nil {
+		logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", deployment.ID.String()))
+		return
+	}
 }
 
 // uninstallTask handles the actual uninstallation process
@@ -401,8 +417,14 @@ func (u *UptimeServiceIntegration) uninstallTask(ctx context.Context, stack *ent
 	}
 	if err = thanos.UninstallUptimeService(ctx, sdkClient); err != nil {
 		logger.Error("failed to uninstall uptime service", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
-		_ = u.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
-		_ = u.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		err = u.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+		if err != nil {
+			logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", uninstallDeployment.ID.String()))
+		}
+		err = u.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		if err != nil {
+			logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integration.ID.String()))
+		}
 		return
 	}
 
@@ -413,14 +435,18 @@ func (u *UptimeServiceIntegration) uninstallTask(ctx context.Context, stack *ent
 
 	// Update stack metadata if needed
 	if stack.Metadata != nil {
-		// stack.Metadata.UptimeServiceUrl = ""
+		stack.Metadata.UptimeServiceUrl = ""
 		if err = u.stackRepo.UpdateMetadata(stackId, stack.Metadata); err != nil {
 			logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 			return
 		}
 	}
 
-	_ = u.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
+	err = u.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
+	if err != nil {
+		logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", uninstallDeployment.ID.String()))
+		return
+	}
 }
 
 // tailAndIngestLogs tails a log file and ingests each line into the database
