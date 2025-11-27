@@ -237,6 +237,8 @@ github.com/mailru/easyjson v0.0.0-20190614124828-94de47d64c63/go.mod h1:C1wdFJiN
 github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e/go.mod h1:C1wdFJiN94OJF2b5HbByQZoLdCWB1Yqtg26g4irojpc=
 github.com/mailru/easyjson v0.7.6 h1:8yTIVnZgCoiM1TgqoeTl+LfU5Jg6/xL3QhGQnimLYnA=
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
+github.com/maldikhan/go.socket.io v0.1.1 h1:4yNNZRwbdcpw6NyXSXyLiQOMzNEXJyKsUZKaMihkRi0=
+github.com/maldikhan/go.socket.io v0.1.1/go.mod h1:H1EoWDJvqfV2WryM8F9og6ZkH7NsZDlHr0BRkKb58tY=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
 github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
@@ -333,6 +335,8 @@ github.com/tokamak-network/trh-sdk v1.0.1-0.20251031071112-3cbdb1c17ac9 h1:NeX45
 github.com/tokamak-network/trh-sdk v1.0.1-0.20251031071112-3cbdb1c17ac9/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
 github.com/tokamak-network/trh-sdk v1.0.1-0.20251111085833-00382e5beced h1:aQSV9ejrolWbYhBeQntTO94e6R7xMCRdqDFvs+vBEgA=
 github.com/tokamak-network/trh-sdk v1.0.1-0.20251111085833-00382e5beced/go.mod h1:RYuRQH3FODdc0/cA5u4lRweAVT7kDEWO8B8M3eEWWLs=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20251126044057-e85b0b2c82c2 h1:kiSLSfmQAFQVCFa9Qaq4X8lFpfBlvbtqN/8+lDV+XZU=
+github.com/tokamak-network/trh-sdk v1.0.1-0.20251126044057-e85b0b2c82c2/go.mod h1:50mf116/A9ruCKXHADbKH4zv02pKCwdj4VGXZBDgYVg=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/tyler-smith/go-bip32 v1.0.0 h1:sDR9juArbUgX+bO/iblgZnMPeWY1KZMUC2AFUJdv5KE=
