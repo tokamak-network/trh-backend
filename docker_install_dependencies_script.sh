@@ -317,15 +317,15 @@ STEP=$((STEP + 1))
 echo
 
 # 12. Install Go
-echo "[$STEP/$TOTAL_STEPS] Installing Go (v1.22.6)..."
+echo "[$STEP/$TOTAL_STEPS] Installing Go (v1.23.8)..."
 export PATH="$PATH:/usr/local/go/bin"
 
 # Save the current Go version
 current_go_version=$(go version 2>/dev/null)
 
-# Check if the current version is not v1.22.6
-if ! echo "$current_go_version" | grep 'go1.22.6' &>/dev/null ; then
-    echo "Installing go1.22.6..."
+# Check if the current version is not v1.23.8
+if ! echo "$current_go_version" | grep 'go1.23.8' &>/dev/null ; then
+    echo "Installing go1.23.8..."
     # If Go is installed, remove it
     if command -v go &> /dev/null; then
         echo "Go is already installed. Removing the existing version..."
@@ -339,7 +339,7 @@ if ! echo "$current_go_version" | grep 'go1.22.6' &>/dev/null ; then
         echo "curl is already installed."
     fi
 
-    GO_FILE_NAME="go1.22.6.linux-${ARCH}.tar.gz"
+    GO_FILE_NAME="go1.23.8.linux-${ARCH}.tar.gz"
     GO_DOWNLOAD_URL="https://go.dev/dl/${GO_FILE_NAME}"
 
     sudo curl -L -o "${GO_FILE_NAME}" "${GO_DOWNLOAD_URL}"
@@ -368,7 +368,7 @@ if ! echo "$current_go_version" | grep 'go1.22.6' &>/dev/null ; then
 
     export PATH="$PATH:/usr/local/go/bin"
 else
-    echo "Go 1.22.6 is already installed."
+    echo "Go 1.23.8 is already installed."
 fi
 
 # Add required PATH exports if not already present
