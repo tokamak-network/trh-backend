@@ -6,7 +6,7 @@ This is the backend service for the TRH application. It is built using Go and ut
 
 ### Prerequisites
 
-- Go 1.22.6 which is compatible with the version of TRH SDK
+- Go 1.24.11 which is compatible with the version of TRH SDK
 - PostgreSQL
 
 ### Installation
