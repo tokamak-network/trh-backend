@@ -41,12 +41,14 @@ type BridgeIntegration struct {
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	}
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
 	}
 }
 
@@ -68,12 +70,14 @@ func NewBridgeIntegration(
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
 	},
 ) *BridgeIntegration {
 	return &BridgeIntegration{
@@ -469,4 +473,120 @@ func (b *BridgeIntegration) tailAndIngestLogs(
 			}
 		}
 	}
+}
+
+func (b *BridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	integration, err := b.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// check status before cancelling
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// stop the running task
+	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+	b.taskManager.StopTask(taskId)
+
+	if err := b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, "Cancelled by user"); err != nil {
+		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Integration cancelled successfully",
+		Data:    nil,
+	}, nil
+}
+
+func (b *BridgeIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	integration, err := b.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if integration.Status != string(entities.DeploymentStatusFailed) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only retry failed installations",
+			Data:    nil,
+		}, nil
+	}
+
+	stack, err := b.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if err := b.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusPending); err != nil {
+		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "install-bridge")
+
+	// bridge doesnt need any config, just kick it off again
+	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+	b.taskManager.AddTask(taskId, func(ctx context.Context) {
+		b.installTask(ctx, stack, logPath)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Integration retry started successfully",
+		Data:    nil,
+	}, nil
 }

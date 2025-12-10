@@ -41,12 +41,14 @@ type BlockExplorerIntegration struct {
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	}
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
 	}
 }
 
@@ -68,12 +70,14 @@ func NewBlockExplorerIntegration(
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
 	},
 ) *BlockExplorerIntegration {
 	return &BlockExplorerIntegration{
@@ -143,12 +147,23 @@ func (b *BlockExplorerIntegration) Install(ctx context.Context, stackId string, 
 
 	logPath := utils.GetLogPath(stack.ID, "block-explorer")
 
+	// important: save the actual config so we can retry later if installation fails
+	requestConfig, err := json.Marshal(request)
+	if err != nil {
+		logger.Error("failed to marshal request config", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
 	blockExplorerIntegration := &entities.IntegrationEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Type:    enum.IntegrationTypeBlockExplorer.String(),
 		Status:  string(entities.DeploymentStatusPending),
-		Config:  []byte("{}"),
+		Config:  requestConfig,
 		LogPath: logPath,
 	}
 
@@ -490,4 +505,140 @@ func (b *BlockExplorerIntegration) tailAndIngestLogs(
 			}
 		}
 	}
+}
+
+func (b *BlockExplorerIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	integration, err := b.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// only makes sense to cancel if its actually running
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// stop the task if its running, task manager handles gracefully if task doesn't exist
+	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+	b.taskManager.StopTask(taskId)
+
+	if err := b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, "Cancelled by user"); err != nil {
+		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Integration cancelled successfully",
+		Data:    nil,
+	}, nil
+}
+
+func (b *BlockExplorerIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	integration, err := b.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if integration.Status != string(entities.DeploymentStatusFailed) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only retry failed installations",
+			Data:    nil,
+		}, nil
+	}
+
+	stack, err := b.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if err := b.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusPending); err != nil {
+		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, fmt.Sprintf("install-%s", integration.Type))
+
+	// need the original config (passwords, api keys, etc) to retry installation
+	var request dtos.InstallBlockExplorerRequest
+	if integration.Config == nil || len(integration.Config) == 0 || string(integration.Config) == "{}" {
+		logger.Error("installation config is missing or empty", zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Cannot retry installation: original configuration not found. Please uninstall and reinstall instead.",
+			Data:    nil,
+		}, nil
+	}
+
+	if err := json.Unmarshal(integration.Config, &request); err != nil {
+		logger.Error("failed to unmarshal config", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to retrieve installation config",
+			Data:    nil,
+		}, err
+	}
+
+	//kick off the installation again with saved config
+	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+	b.taskManager.AddTask(taskId, func(ctx context.Context) {
+		b.installTask(ctx, stack, request, logPath)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Integration retry started successfully",
+		Data:    nil,
+	}, nil
 }

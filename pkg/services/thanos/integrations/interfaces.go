@@ -39,12 +39,14 @@ func NewIntegrationManager(
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
 	},
 ) *IntegrationManager {
 	return &IntegrationManager{
@@ -185,4 +187,92 @@ func (im *IntegrationManager) InstallUptimeService(ctx context.Context, stackId 
 // UninstallUptimeService uninstalls the uptime service for the given stack
 func (im *IntegrationManager) UninstallUptimeService(ctx context.Context, stackId string) (*entities.Response, error) {
 	return im.uptimeService.Uninstall(ctx, stackId)
+}
+
+func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	// fetch integration to see what type it is
+	integration, err := im.blockExplorer.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  500,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  404,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// route to the right handler for this integration type
+	switch integration.Type {
+	case "block-explorer":
+		return im.blockExplorer.Cancel(ctx, stackId, integrationId)
+	case "bridge":
+		return im.bridge.Cancel(ctx, stackId, integrationId)
+	case "monitoring":
+		return im.monitoring.Cancel(ctx, stackId, integrationId)
+	case "system-pulse":
+		return im.uptimeService.Cancel(ctx, stackId, integrationId)
+	case "register-candidate":
+		return &entities.Response{
+			Status:  400,
+			Message: "Cannot cancel register candidate operations",
+			Data:    nil,
+		}, nil
+	default:
+		return &entities.Response{
+			Status:  400,
+			Message: "Cancel not supported for this integration type",
+			Data:    nil,
+		}, nil
+	}
+}
+
+func (im *IntegrationManager) RetryIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	// get integration to check its type
+	integration, err := im.blockExplorer.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  500,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  404,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// route to the right handler
+	switch integration.Type {
+	case "block-explorer":
+		return im.blockExplorer.Retry(ctx, stackId, integrationId)
+	case "bridge":
+		return im.bridge.Retry(ctx, stackId, integrationId)
+	case "monitoring":
+		return im.monitoring.Retry(ctx, stackId, integrationId)
+	case "system-pulse":
+		return im.uptimeService.Retry(ctx, stackId, integrationId)
+	case "register-candidate":
+		return &entities.Response{
+			Status:  400,
+			Message: "Cannot retry register candidate operations",
+			Data:    nil,
+		}, nil
+	default:
+		return &entities.Response{
+			Status:  400,
+			Message: "Retry not supported for this integration type",
+			Data:    nil,
+		}, nil
+	}
 }

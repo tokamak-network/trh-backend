@@ -724,3 +724,101 @@ func (h *ThanosDeploymentHandler) UninstallUptimeService(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+func (h *ThanosDeploymentHandler) CancelIntegration(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	integrationId := c.Param("integrationId")
+	if integrationId == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "integrationId is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	//parse uuids safely - dont want to crash the whole server on bad input
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	integrationUUID, err := uuid.Parse(integrationId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid integration id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.CancelIntegration(c.Request.Context(), stackUUID, integrationUUID)
+	if err != nil {
+		logger.Error("failed to cancel integration", zap.Error(err), zap.String("id", id), zap.String("integrationId", integrationId))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+func (h *ThanosDeploymentHandler) RetryIntegration(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	integrationId := c.Param("integrationId")
+	if integrationId == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "integrationId is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	// parse uuids safely - don't want to crash the whole server on bad input
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	integrationUUID, err := uuid.Parse(integrationId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid integration id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.RetryIntegration(c.Request.Context(), stackUUID, integrationUUID)
+	if err != nil {
+		logger.Error("failed to retry integration", zap.Error(err), zap.String("id", id), zap.String("integrationId", integrationId))
+	}
+	c.JSON(int(response.Status), response)
+}
