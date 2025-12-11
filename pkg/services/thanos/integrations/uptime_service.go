@@ -282,6 +282,10 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entit
 		if err := u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed); err != nil {
 			logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", deployment.ID.String()))
 		}
+		err = u.integrationRepo.UpdateIntegrationStatusWithReason(uptimeServiceIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		if err != nil {
+			logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+		}
 		return
 	}
 
