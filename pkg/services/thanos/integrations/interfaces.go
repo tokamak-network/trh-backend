@@ -3,10 +3,14 @@ package integrations
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
+	"go.uber.org/zap"
 )
 
 // IntegrationManager provides a unified interface for managing all integrations
@@ -275,4 +279,162 @@ func (im *IntegrationManager) RetryIntegration(ctx context.Context, stackId uuid
 			Data:    nil,
 		}, nil
 	}
+}
+
+// BadRequestError represents a client error (400) in integration operations
+type BadRequestError struct {
+	message string
+}
+
+func (e *BadRequestError) Error() string {
+	return e.message
+}
+
+// cancelIntegrationCommon implements common cancellation logic for all integration types
+func cancelIntegrationCommon(
+	_ context.Context,
+	stackId uuid.UUID,
+	integrationId uuid.UUID,
+	integrationRepo interface {
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
+	},
+	taskManager interface {
+		StopTask(id string)
+	},
+) (*entities.Response, error) {
+	integration, err := integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// can only cancel if its running or waiting to start
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// stop the task
+	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+	taskManager.StopTask(taskId)
+
+	if err := integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled by user"); err != nil {
+		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Integration cancelled successfully",
+		Data:    nil,
+	}, nil
+}
+
+// retryIntegrationCommon implements common retry logic for all integration types
+func retryIntegrationCommon(
+	_ context.Context,
+	stackId uuid.UUID,
+	integrationId uuid.UUID,
+	integrationRepo interface {
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
+	},
+	stackRepo interface {
+		GetStackByID(id string) (*entities.StackEntity, error)
+	},
+	retryCallback func(stack *entities.StackEntity, integration *entities.IntegrationEntity) error,
+) (*entities.Response, error) {
+	integration, err := integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if integration.Status != string(entities.DeploymentStatusFailed) && integration.Status != string(entities.DeploymentStatusCancelled) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only retry failed or cancelled installations",
+			Data:    nil,
+		}, nil
+	}
+
+	stack, err := stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if err := integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusPending); err != nil {
+		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	// invoke the callback to start the retry
+	if err := retryCallback(stack, integration); err != nil {
+		if _, ok := err.(*BadRequestError); ok {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: err.Error(),
+				Data:    nil,
+			}, err
+		}
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Integration retry started successfully",
+		Data:    nil,
+	}, nil
 }

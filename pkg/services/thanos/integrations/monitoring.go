@@ -1238,137 +1238,32 @@ func (m *MonitoringIntegration) tailAndIngestLogs(
 }
 
 func (m *MonitoringIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	integration, err := m.integrationRepo.GetIntegrationById(integrationId.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	if integration == nil {
-		return &entities.Response{
-			Status:  http.StatusNotFound,
-			Message: "Integration not found",
-			Data:    nil,
-		}, nil
-	}
-
-	// cant cancel something that's not running
-	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "Can only cancel installations that are in progress or pending",
-			Data:    nil,
-		}, nil
-	}
-
-	// tell task manager to stop it
-	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
-	m.taskManager.StopTask(taskId)
-
-	if err := m.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled by user"); err != nil {
-		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	return &entities.Response{
-		Status:  http.StatusOK,
-		Message: "Integration cancelled successfully",
-		Data:    nil,
-	}, nil
+	return cancelIntegrationCommon(ctx, stackId, integrationId, m.integrationRepo, m.taskManager)
 }
 
 func (m *MonitoringIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	integration, err := m.integrationRepo.GetIntegrationById(integrationId.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
+	return retryIntegrationCommon(ctx, stackId, integrationId, m.integrationRepo, m.stackRepo,
+		func(stack *entities.StackEntity, integration *entities.IntegrationEntity) error {
+			logPath := utils.GetLogPath(stack.ID, "install-monitoring")
 
-	if integration == nil {
-		return &entities.Response{
-			Status:  http.StatusNotFound,
-			Message: "Integration not found",
-			Data:    nil,
-		}, nil
-	}
+			// grab the saved config (grafana password, alert settings, etc)
+			var request dtos.InstallMonitoringRequest
+			if integration.Config == nil || len(integration.Config) == 0 || string(integration.Config) == "{}" {
+				logger.Error("installation config is missing or empty", zap.String("integrationId", integrationId.String()))
+				return &BadRequestError{message: "Cannot retry installation: original configuration not found. Please uninstall and reinstall instead."}
+			}
 
-	if integration.Status != string(entities.DeploymentStatusFailed) && integration.Status != string(entities.DeploymentStatusCancelled) {
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "Can only retry failed or cancelled installations",
-			Data:    nil,
-		}, nil
-	}
+			if err := json.Unmarshal(integration.Config, &request); err != nil {
+				logger.Error("failed to unmarshal config", zap.Error(err), zap.String("integrationId", integrationId.String()))
+				return fmt.Errorf("Failed to retrieve installation config")
+			}
 
-	stack, err := m.stackRepo.GetStackByID(stackId.String())
-	if err != nil {
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
+			// start installation again
+			taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+			m.taskManager.AddTask(taskId, func(ctx context.Context) {
+				m.installTask(ctx, stack, request, logPath, stackId.String())
+			})
 
-	if stack == nil {
-		return &entities.Response{
-			Status:  http.StatusNotFound,
-			Message: "Stack not found",
-			Data:    nil,
-		}, nil
-	}
-
-	if err := m.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusPending); err != nil {
-		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	logPath := utils.GetLogPath(stack.ID, "install-monitoring")
-
-	// grab the saved config (grafana password, alert settings, etc)
-	var request dtos.InstallMonitoringRequest
-	if integration.Config == nil || len(integration.Config) == 0 || string(integration.Config) == "{}" {
-		logger.Error("installation config is missing or empty", zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "Cannot retry installation: original configuration not found. Please uninstall and reinstall instead.",
-			Data:    nil,
-		}, nil
-	}
-
-	if err := json.Unmarshal(integration.Config, &request); err != nil {
-		logger.Error("failed to unmarshal config", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Failed to retrieve installation config",
-			Data:    nil,
-		}, err
-	}
-
-	// start installation again
-	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
-	m.taskManager.AddTask(taskId, func(ctx context.Context) {
-		m.installTask(ctx, stack, request, logPath, stackId.String())
-	})
-
-	return &entities.Response{
-		Status:  http.StatusOK,
-		Message: "Integration retry started successfully",
-		Data:    nil,
-	}, nil
+			return nil
+		})
 }

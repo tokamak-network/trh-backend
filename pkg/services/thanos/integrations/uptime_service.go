@@ -516,117 +516,20 @@ func (u *UptimeServiceIntegration) tailAndIngestLogs(
 }
 
 func (u *UptimeServiceIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	integration, err := u.integrationRepo.GetIntegrationById(integrationId.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	if integration == nil {
-		return &entities.Response{
-			Status:  http.StatusNotFound,
-			Message: "Integration not found",
-			Data:    nil,
-		}, nil
-	}
-
-	// validate status
-	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "Can only cancel installations that are in progress or pending",
-			Data:    nil,
-		}, nil
-	}
-
-	// stop the task
-	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
-	u.taskManager.StopTask(taskId)
-
-	if err := u.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled by user"); err != nil {
-		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	return &entities.Response{
-		Status:  http.StatusOK,
-		Message: "Integration cancelled successfully",
-		Data:    nil,
-	}, nil
+	return cancelIntegrationCommon(ctx, stackId, integrationId, u.integrationRepo, u.taskManager)
 }
 
 func (u *UptimeServiceIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	integration, err := u.integrationRepo.GetIntegrationById(integrationId.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
+	return retryIntegrationCommon(ctx, stackId, integrationId, u.integrationRepo, u.stackRepo,
+		func(stack *entities.StackEntity, integration *entities.IntegrationEntity) error {
+			logPath := utils.GetLogPath(stack.ID, "install-system-pulse")
 
-	if integration == nil {
-		return &entities.Response{
-			Status:  http.StatusNotFound,
-			Message: "Integration not found",
-			Data:    nil,
-		}, nil
-	}
+			// no config needed for uptime, just retry the installation
+			taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+			u.taskManager.AddTask(taskId, func(ctx context.Context) {
+				u.installTask(ctx, stack, logPath)
+			})
 
-	if integration.Status != string(entities.DeploymentStatusFailed) && integration.Status != string(entities.DeploymentStatusCancelled) {
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "Can only retry failed or cancelled installations",
-			Data:    nil,
-		}, nil
-	}
-
-	stack, err := u.stackRepo.GetStackByID(stackId.String())
-	if err != nil {
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	if stack == nil {
-		return &entities.Response{
-			Status:  http.StatusNotFound,
-			Message: "Stack not found",
-			Data:    nil,
-		}, nil
-	}
-
-	if err := u.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusPending); err != nil {
-		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	logPath := utils.GetLogPath(stack.ID, "install-system-pulse")
-
-	// no config needed for uptime, just retry the installation
-	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
-	u.taskManager.AddTask(taskId, func(ctx context.Context) {
-		u.installTask(ctx, stack, logPath)
-	})
-
-	return &entities.Response{
-		Status:  http.StatusOK,
-		Message: "Integration retry started successfully",
-		Data:    nil,
-	}, nil
+			return nil
+		})
 }
