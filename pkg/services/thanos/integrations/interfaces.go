@@ -185,6 +185,14 @@ func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, sta
 	return im.crossTrade.Uninstall(ctx, stackId.String(), integrationId.String())
 }
 
+func (im *IntegrationManager) RegisterTokens(ctx context.Context, stackId uuid.UUID, mode string, request dtos.RegisterTokensAPIRequest) (*entities.Response, error) {
+	return im.crossTrade.RegisterTokens(ctx, stackId, mode, request)
+}
+
+func (im *IntegrationManager) DeployNewL2Chain(ctx context.Context, stackId uuid.UUID, mode string, request dtos.DeployNewL2ChainRequest) (*entities.Response, error) {
+	return im.crossTrade.DeployNewL2Chain(ctx, stackId, mode, request)
+}
+
 // InstallUptimeService installs an uptime service for the given stack
 func (im *IntegrationManager) InstallUptimeService(ctx context.Context, stackId string) (*entities.Response, error) {
 	return im.uptimeService.Install(ctx, stackId)

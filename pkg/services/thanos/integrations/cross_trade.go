@@ -534,6 +534,346 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, stack *
 	_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
 }
 
+func (b *CrossTradeBridgeIntegration) RegisterTokens(
+	ctx context.Context,
+	stackId uuid.UUID,
+	mode string,
+	request dtos.RegisterTokensAPIRequest,
+) (*entities.Response, error) {
+	stack, err := b.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	var pluginType string
+	if mode == string(thanosConstants.CrossTradeDeployModeL2ToL1) {
+		pluginType = string(enum.IntegrationTypeCrossTradeL2ToL1)
+	} else if mode == string(thanosConstants.CrossTradeDeployModeL2ToL2) {
+		pluginType = string(enum.IntegrationTypeCrossTradeL2ToL2)
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", mode))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid cross trade mode",
+			Data:    nil,
+		}, errors.New("invalid cross trade mode")
+	}
+
+	crossTradeIntegration, err := b.integrationRepo.GetInstalledIntegration(stackId.String(), pluginType)
+	if err != nil {
+		logger.Error("failed to get cross trade integration", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to get cross trade integration",
+			Data:    nil,
+		}, err
+	}
+	if crossTradeIntegration == nil {
+		logger.Error("cross trade integration not found", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType))
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Cross trade integration not found",
+			Data:    nil,
+		}, nil
+	}
+	logPath := utils.GetLogPath(stack.ID, "register-tokens")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create SDK client",
+			Data:    nil,
+		}, err
+	}
+
+	crossTradeMode := thanosConstants.CrossTradeDeployMode(mode)
+	// Create deployment record for uninstalling cross trade
+	var registerTokensDeployment *entities.DeploymentEntity
+	var integration *entities.IntegrationEntity
+	defer func() {
+		if r := recover(); r != nil {
+			if registerTokensDeployment != nil {
+				_ = b.deploymentRepo.UpdateDeploymentStatus(registerTokensDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+			}
+			if integration != nil {
+				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
+			}
+		}
+	}()
+	var step string
+	if mode == string(thanosConstants.CrossTradeDeployModeL2ToL1) {
+		step = constants.RegisterTokensL2L1Step
+	} else if mode == string(thanosConstants.CrossTradeDeployModeL2ToL2) {
+		step = constants.RegisterTokensL2L2Step
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", mode))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid cross trade mode",
+			Data:    nil,
+		}, errors.New("invalid cross trade mode")
+	}
+	registerTokensDeployment = &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    step,
+		Status:  entities.DeploymentRunStatusInProgress,
+		LogPath: logPath,
+		Config:  []byte("{}"),
+	}
+	if err := b.deploymentRepo.CreateDeployment(registerTokensDeployment); err != nil {
+		logger.Error("failed to create register tokens deployment record", zap.String("mode", mode), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create deployment record",
+			Data:    nil,
+		}, err
+	}
+
+	b.taskManager.AddTask(fmt.Sprintf("register-tokens-%s-%s", stackId.String(), mode), func(ctx context.Context) {
+		output, err := thanos.RegisterTokens(ctx, sdkClient, crossTradeMode, request.Tokens)
+		if err != nil {
+			logger.Error("failed to register tokens", zap.String("stackId", stackId.String()), zap.String("mode", mode), zap.Error(err))
+			_ = b.deploymentRepo.UpdateDeploymentStatus(registerTokensDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+			return
+		}
+
+		// Update integration metadata
+		metadata := map[string]interface{}{
+			"contracts":         output.DeployCrossTradeContractsOutput,
+			"url":               output.DeployCrossTradeApplicationOutput.URL,
+			"registered_tokens": output.RegisterTokens,
+		}
+		metadataBytes, err := json.Marshal(metadata)
+		if err != nil {
+			logger.Error("failed to marshal cross trade integration metadata", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
+		}
+		if err := b.integrationRepo.UpdateMetadataAfterInstalled(crossTradeIntegration.ID.String(), entities.IntegrationInfo(metadataBytes)); err != nil {
+			logger.Error("failed to update cross trade integration metadata", zap.String("stackId", stackId.String()), zap.Error(err))
+			return
+		}
+
+		_ = b.deploymentRepo.UpdateDeploymentStatus(registerTokensDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
+}
+
+func (b *CrossTradeBridgeIntegration) DeployNewL2Chain(
+	ctx context.Context,
+	stackId uuid.UUID,
+	mode string,
+	request dtos.DeployNewL2ChainRequest,
+) (*entities.Response, error) {
+	stack, err := b.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	var pluginType string
+	if mode == string(thanosConstants.CrossTradeDeployModeL2ToL1) {
+		pluginType = string(enum.IntegrationTypeCrossTradeL2ToL1)
+	} else if mode == string(thanosConstants.CrossTradeDeployModeL2ToL2) {
+		pluginType = string(enum.IntegrationTypeCrossTradeL2ToL2)
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", mode))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid cross trade mode",
+			Data:    nil,
+		}, errors.New("invalid cross trade mode")
+	}
+
+	crossTradeIntegration, err := b.integrationRepo.GetInstalledIntegration(stackId.String(), pluginType)
+	if err != nil {
+		logger.Error("failed to get cross trade integration", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to get cross trade integration",
+			Data:    nil,
+		}, err
+	}
+	if crossTradeIntegration == nil {
+		logger.Error("cross trade integration not found", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType))
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Cross trade integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "deploy-new-l2-chain")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create SDK client",
+			Data:    nil,
+		}, err
+	}
+	var deployNewL2ChainDeployment *entities.DeploymentEntity
+	var integration *entities.IntegrationEntity
+	defer func() {
+		if r := recover(); r != nil {
+			if deployNewL2ChainDeployment != nil {
+				_ = b.deploymentRepo.UpdateDeploymentStatus(deployNewL2ChainDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+			}
+			if integration != nil {
+				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
+			}
+		}
+	}()
+	var step string
+	if mode == string(thanosConstants.CrossTradeDeployModeL2ToL1) {
+		step = constants.DeployNewL2ChainL2L1Step
+	} else if mode == string(thanosConstants.CrossTradeDeployModeL2ToL2) {
+		step = constants.DeployNewL2ChainL2L2Step
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", mode))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid cross trade mode",
+			Data:    nil,
+		}, errors.New("invalid cross trade mode")
+	}
+	deployNewL2ChainDeployment = &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    step,
+		Status:  entities.DeploymentRunStatusInProgress,
+		LogPath: logPath,
+		Config:  []byte("{}"),
+	}
+	if err := b.deploymentRepo.CreateDeployment(deployNewL2ChainDeployment); err != nil {
+		logger.Error("failed to create deploy new L2 chain deployment record", zap.String("mode", mode), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create deployment record",
+			Data:    nil,
+		}, err
+	}
+	crossTradeMode := thanosConstants.CrossTradeDeployMode(mode)
+	b.taskManager.AddTask(fmt.Sprintf("deploy-new-l2-chain-%s-%s", stackId.String(), mode), func(ctx context.Context) {
+		output, err := thanos.DeployNewL2Chain(ctx, sdkClient, crossTradeMode, request.L2ChainConfig)
+		if err != nil {
+			logger.Error("failed to deploy new L2 chain", zap.String("stackId", stackId.String()), zap.String("mode", mode), zap.Error(err))
+			_ = b.deploymentRepo.UpdateDeploymentStatus(deployNewL2ChainDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+			return
+		}
+
+		// Update integration metadata
+		metadata := map[string]interface{}{
+			"contracts":         output.DeployCrossTradeContractsOutput,
+			"url":               output.DeployCrossTradeApplicationOutput.URL,
+			"registered_tokens": output.RegisterTokens,
+		}
+		metadataBytes, err := json.Marshal(metadata)
+		if err != nil {
+			logger.Error("failed to marshal cross trade integration metadata", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType), zap.Error(err))
+			return
+		}
+		if err := b.integrationRepo.UpdateMetadataAfterInstalled(crossTradeIntegration.ID.String(), entities.IntegrationInfo(metadataBytes)); err != nil {
+			logger.Error("failed to update cross trade integration metadata", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType), zap.Error(err))
+			return
+		}
+
+		var config dtos.InstallCrossChainBridgeRequest
+		if err := json.Unmarshal(crossTradeIntegration.Config, &config); err != nil {
+			logger.Error("failed to unmarshal cross trade integration config", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType), zap.Error(err))
+			return
+		}
+		config.L2ChainConfig = append(config.L2ChainConfig, request.L2ChainConfig)
+		configBytes, err := json.Marshal(config)
+		if err != nil {
+			logger.Error("failed to marshal cross trade integration config", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType), zap.Error(err))
+			return
+		}
+		if err := b.integrationRepo.UpdateConfig(crossTradeIntegration.ID.String(), configBytes); err != nil {
+			logger.Error("failed to update cross trade integration config", zap.String("stackId", stackId.String()), zap.String("pluginType", pluginType), zap.Error(err))
+			return
+		}
+
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployNewL2ChainDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
+}
+
 // tailAndIngestLogs tails a log file and ingests each line into the database
 func (b *CrossTradeBridgeIntegration) tailAndIngestLogs(
 	ctx context.Context,

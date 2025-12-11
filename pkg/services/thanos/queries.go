@@ -1,12 +1,18 @@
 package thanos
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/internal/utils"
+	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
+	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
+	thanosConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
 	"go.uber.org/zap"
 )
 
@@ -297,5 +303,85 @@ func (s *ThanosStackDeploymentService) GetIntegration(
 		Status:  http.StatusOK,
 		Message: "Successfully",
 		Data:    map[string]interface{}{"integration": integration},
+	}, nil
+}
+
+func (s *ThanosStackDeploymentService) GetDefaultContractAddresses() (*entities.Response, error) {
+	addresses := thanos.GetDefaultContractAddresses()
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    addresses,
+	}, nil
+}
+
+func (s *ThanosStackDeploymentService) GetDeployedL2ChainConfigurationForCrossTrade(
+	ctx context.Context,
+	stackId uuid.UUID,
+	mode string,
+) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "get-l2-chain-config")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.String("stackId", stackId.String()), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create SDK client",
+			Data:    nil,
+		}, err
+	}
+
+	crossTradeMode := thanosConstants.CrossTradeDeployMode(mode)
+	l2ChainConfig, err := thanos.GetDeployedL2ChainConfigurationForCrossTrade(ctx, sdkClient, crossTradeMode)
+	if err != nil {
+		logger.Error("failed to get L2 chain configuration", zap.String("stackId", stackId.String()), zap.String("mode", mode), zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to get L2 chain configuration",
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    l2ChainConfig,
 	}, nil
 }

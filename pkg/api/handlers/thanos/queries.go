@@ -208,7 +208,7 @@ func (h *ThanosDeploymentHandler) GetContractsFile(c *gin.Context) {
 		return
 	}
 
-	content, err := h.ThanosDeploymentService.GetContractsFileContent(stackId)
+	contracts, err := h.ThanosDeploymentService.GetContractsFileContent(stackId)
 	if err != nil {
 		logger.Error("failed to read contracts file",
 			zap.String("stackId", stackIdStr),
@@ -234,18 +234,10 @@ func (h *ThanosDeploymentHandler) GetContractsFile(c *gin.Context) {
 		return
 	}
 
-	var contractsData interface{}
-	if err := json.Unmarshal(content, &contractsData); err != nil {
-		logger.Warn("contracts file is not valid JSON, returning as string",
-			zap.String("stackId", stackIdStr),
-			zap.Error(err))
-		contractsData = string(content)
-	}
-
 	c.JSON(http.StatusOK, &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Success",
-		Data:    contractsData,
+		Data:    contracts,
 	})
 }
 
@@ -320,4 +312,66 @@ func (h *ThanosDeploymentHandler) GetDeployConfigFile(c *gin.Context) {
 		Message: "Success",
 		Data:    deployConfigData,
 	})
+}
+
+// @Summary		Get Default Contract Addresses
+// @Description	Get Default Contract Addresses
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{object}	entities.Response
+// @Failure		401	{object}	map[string]interface{}
+// @Router			/stacks/thanos/default-contract-addresses [get]
+func (h *ThanosDeploymentHandler) GetDefaultContractAddresses(c *gin.Context) {
+	response, err := h.ThanosDeploymentService.GetDefaultContractAddresses()
+	if err != nil {
+		logger.Error("failed to get default contract addresses", zap.Error(err))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Get Deployed L2 Chain Configuration For Cross Trade
+// @Description	Get Deployed L2 Chain Configuration For Cross Trade
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			id		path		string	true	"Thanos Stack ID"
+// @Param			mode	query		string	true	"Cross Trade Deploy Mode (l2_to_l1 or l2_to_l2)"
+// @Success		200		{object}	entities.Response
+// @Failure		400		{object}	entities.Response
+// @Failure		401		{object}	map[string]interface{}
+// @Failure		404		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/cross-trade/l2-chain-config [get]
+func (h *ThanosDeploymentHandler) GetDeployedL2ChainConfigurationForCrossTrade(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	mode := c.Query("mode")
+	if mode == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "mode query parameter is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.GetDeployedL2ChainConfigurationForCrossTrade(
+		c.Request.Context(),
+		uuid.MustParse(id),
+		mode,
+	)
+	if err != nil {
+		logger.Error("failed to get deployed L2 chain configuration", zap.Error(err), zap.String("id", id), zap.String("mode", mode))
+	}
+	c.JSON(int(response.Status), response)
 }

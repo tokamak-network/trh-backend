@@ -20,4 +20,8 @@ const (
 	UninstallCrossTradeL2L1Step   = "uninstall-cross-trade-l2-l1"
 	InstallCrossTradeL2L2Step     = "install-cross-trade-l2-l2"
 	UninstallCrossTradeL2L2Step   = "uninstall-cross-trade-l2-l2"
+	RegisterTokensL2L1Step        = "register-tokens-l2-l1"
+	RegisterTokensL2L2Step        = "register-tokens-l2-l2"
+	DeployNewL2ChainL2L1Step      = "deploy-new-l2-chain-l2-l1"
+	DeployNewL2ChainL2L2Step      = "deploy-new-l2-chain-l2-l2"
 )

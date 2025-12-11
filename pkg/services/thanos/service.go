@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -217,7 +218,7 @@ func (s *ThanosStackDeploymentService) GetContractsFilePath(stackId uuid.UUID) (
 }
 
 // GetContractsFileContent returns the file bytes stored at the contracts path for the stack
-func (s *ThanosStackDeploymentService) GetContractsFileContent(stackId uuid.UUID) ([]byte, error) {
+func (s *ThanosStackDeploymentService) GetContractsFileContent(stackId uuid.UUID) (map[string]string, error) {
 	filePath, err := s.GetContractsFilePath(stackId)
 	if err != nil {
 		return nil, err
@@ -231,7 +232,13 @@ func (s *ThanosStackDeploymentService) GetContractsFileContent(stackId uuid.UUID
 		return nil, err
 	}
 
-	return content, nil
+	var contracts map[string]string
+	if err := json.Unmarshal(content, &contracts); err != nil {
+		return nil, errors.New("failed to convert the contracts")
+	}
+
+	contracts["L2CrossDomainMessengerProxy"] = "0x4200000000000000000000000000000000000007"
+	return contracts, nil
 }
 
 // GetDeployConfigFilePath returns the deploy config file path from stack metadata and validates it exists
@@ -339,6 +346,14 @@ func (s *ThanosStackDeploymentService) InstallCrossChainBridge(ctx context.Conte
 
 func (s *ThanosStackDeploymentService) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.UninstallCrossChainBridge(ctx, stackId, integrationId)
+}
+
+func (s *ThanosStackDeploymentService) RegisterTokens(ctx context.Context, stackId uuid.UUID, mode string, request dtos.RegisterTokensAPIRequest) (*entities.Response, error) {
+	return s.integrationMgr.RegisterTokens(ctx, stackId, mode, request)
+}
+
+func (s *ThanosStackDeploymentService) DeployNewL2Chain(ctx context.Context, stackId uuid.UUID, mode string, request dtos.DeployNewL2ChainRequest) (*entities.Response, error) {
+	return s.integrationMgr.DeployNewL2Chain(ctx, stackId, mode, request)
 }
 
 // InstallUptimeService installs an uptime service for the given stack

@@ -765,6 +765,115 @@ func (h *ThanosDeploymentHandler) RetryIntegration(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+// @Summary		Deploy New L2 Chain
+// @Description	Deploy New L2 Chain for Cross Trade
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			id		path		string						true	"Thanos Stack ID"
+// @Param			request	body		dtos.DeployNewL2ChainRequest	true	"Deploy New L2 Chain Request"
+// @Success		200		{object}	entities.Response
+// @Failure		400		{object}	entities.Response
+// @Failure		401		{object}	map[string]interface{}
+// @Failure		404		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/cross-trade/deploy-l2-chain [post]
+func (h *ThanosDeploymentHandler) DeployNewL2Chain(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+	var request dtos.DeployNewL2ChainRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	if err := request.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.DeployNewL2Chain(
+		c.Request.Context(),
+		uuid.MustParse(id),
+		string(request.Mode),
+		request,
+	)
+	if err != nil {
+		logger.Error("failed to deploy new L2 chain", zap.Error(err), zap.String("id", id), zap.String("mode", string(request.Mode)))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Register Tokens
+// @Description	Register Tokens for Cross Trade
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			id		path		string						true	"Thanos Stack ID"
+// @Param			request	body		dtos.RegisterTokensAPIRequest	true	"Register Tokens Request"
+// @Success		200		{object}	entities.Response
+// @Failure		400		{object}	entities.Response
+// @Failure		401		{object}	map[string]interface{}
+// @Failure		404		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/cross-trade/register-tokens [post]
+func (h *ThanosDeploymentHandler) RegisterTokens(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	var request dtos.RegisterTokensAPIRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	if err := request.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.RegisterTokens(
+		c.Request.Context(),
+		uuid.MustParse(id),
+		string(request.Mode),
+		request,
+	)
+	if err != nil {
+		logger.Error("failed to register tokens", zap.Error(err), zap.String("id", id), zap.String("mode", string(request.Mode)))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 // parseAndValidateIntegrationIDs extracts and validates stack and integration IDs from request params
 func parseAndValidateIntegrationIDs(c *gin.Context) (stackUUID uuid.UUID, integrationUUID uuid.UUID, handled bool) {
 	id := c.Param("id")
