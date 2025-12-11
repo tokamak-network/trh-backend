@@ -34,6 +34,7 @@ const (
 	DeploymentStatusCompleted   DeploymentStatus = "Completed"
 	DeploymentStatusTerminating DeploymentStatus = "Terminating"
 	DeploymentStatusTerminated  DeploymentStatus = "Terminated"
+	DeploymentStatusCancelled   DeploymentStatus = "Cancelled"
 	DeploymentStatusUnknown     DeploymentStatus = "Unknown"
 )
 

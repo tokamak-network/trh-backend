@@ -547,7 +547,7 @@ func (u *UptimeServiceIntegration) Cancel(ctx context.Context, stackId uuid.UUID
 	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
 	u.taskManager.StopTask(taskId)
 
-	if err := u.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, "Cancelled by user"); err != nil {
+	if err := u.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled by user"); err != nil {
 		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
@@ -582,10 +582,10 @@ func (u *UptimeServiceIntegration) Retry(ctx context.Context, stackId uuid.UUID,
 		}, nil
 	}
 
-	if integration.Status != string(entities.DeploymentStatusFailed) {
+	if integration.Status != string(entities.DeploymentStatusFailed) && integration.Status != string(entities.DeploymentStatusCancelled) {
 		return &entities.Response{
 			Status:  http.StatusBadRequest,
-			Message: "Can only retry failed installations",
+			Message: "Can only retry failed or cancelled installations",
 			Data:    nil,
 		}, nil
 	}
