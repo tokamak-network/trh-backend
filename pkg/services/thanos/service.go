@@ -35,6 +35,10 @@ func (tmw *taskManagerWrapper) StopTask(id string) {
 	tmw.taskManager.StopTask(id)
 }
 
+func (tmw *taskManagerWrapper) IsTaskRunning(id string) bool {
+	return tmw.taskManager.IsTaskRunning(id)
+}
+
 func NewThanosService(
 	deploymentRepo DeploymentRepository,
 	stackRepo StackRepository,

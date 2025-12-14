@@ -3,7 +3,6 @@ package integrations
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -44,6 +43,7 @@ func NewIntegrationManager(
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -51,6 +51,7 @@ func NewIntegrationManager(
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 		StopTask(id string)
+		IsTaskRunning(id string) bool
 	},
 ) *IntegrationManager {
 	return &IntegrationManager{
@@ -223,11 +224,7 @@ func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uui
 	case "system-pulse":
 		return im.uptimeService.Cancel(ctx, stackId, integrationId)
 	case "register-candidate":
-		return &entities.Response{
-			Status:  400,
-			Message: "Cannot cancel register candidate operations",
-			Data:    nil,
-		}, nil
+		return im.registerCandidate.Cancel(ctx, stackId, integrationId)
 	default:
 		return &entities.Response{
 			Status:  400,
@@ -289,66 +286,67 @@ type BadRequestError struct {
 func (e *BadRequestError) Error() string {
 	return e.message
 }
+// implemented cancle individually per integration with sdk cleanup 
 
 // cancelIntegrationCommon implements common cancellation logic for all integration types
-func cancelIntegrationCommon(
-	_ context.Context,
-	stackId uuid.UUID,
-	integrationId uuid.UUID,
-	integrationRepo interface {
-		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
-		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
-	},
-	taskManager interface {
-		StopTask(id string)
-	},
-) (*entities.Response, error) {
-	integration, err := integrationRepo.GetIntegrationById(integrationId.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	if integration == nil {
-		return &entities.Response{
-			Status:  http.StatusNotFound,
-			Message: "Integration not found",
-			Data:    nil,
-		}, nil
-	}
-
-	// can only cancel if its running or waiting to start
-	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "Can only cancel installations that are in progress or pending",
-			Data:    nil,
-		}, nil
-	}
-
-	// stop the task
-	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
-	taskManager.StopTask(taskId)
-
-	if err := integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled by user"); err != nil {
-		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
-	return &entities.Response{
-		Status:  http.StatusOK,
-		Message: "Integration cancelled successfully",
-		Data:    nil,
-	}, nil
-}
+// func cancelIntegrationCommon(
+// 	_ context.Context,
+// 	stackId uuid.UUID,
+// 	integrationId uuid.UUID,
+// 	integrationRepo interface {
+// 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+// 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
+// 	},
+// 	taskManager interface {
+// 		StopTask(id string)
+// 	},
+// ) (*entities.Response, error) {
+// 	integration, err := integrationRepo.GetIntegrationById(integrationId.String())
+// 	if err != nil {
+// 		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+// 		return &entities.Response{
+// 			Status:  http.StatusInternalServerError,
+// 			Message: "Internal server error",
+// 			Data:    nil,
+// 		}, err
+// 	}
+//
+// 	if integration == nil {
+// 		return &entities.Response{
+// 			Status:  http.StatusNotFound,
+// 			Message: "Integration not found",
+// 			Data:    nil,
+// 		}, nil
+// 	}
+//
+// 	// can only cancel if its running or waiting to start
+// 	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+// 		return &entities.Response{
+// 			Status:  http.StatusBadRequest,
+// 			Message: "Can only cancel installations that are in progress or pending",
+// 			Data:    nil,
+// 		}, nil
+// 	}
+//
+// 	// stop the task
+// 	taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+// 	taskManager.StopTask(taskId)
+//
+// 	if err := integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled by user"); err != nil {
+// 		logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationId.String()))
+// 		return &entities.Response{
+// 			Status:  http.StatusInternalServerError,
+// 			Message: "Internal server error",
+// 			Data:    nil,
+// 		}, err
+// 	}
+//
+// 	return &entities.Response{
+// 		Status:  http.StatusOK,
+// 		Message: "Integration cancelled successfully",
+// 		Data:    nil,
+// 	}, nil
+// }
 
 // retryIntegrationCommon implements common retry logic for all integration types
 func retryIntegrationCommon(
@@ -382,10 +380,12 @@ func retryIntegrationCommon(
 		}, nil
 	}
 
-	if integration.Status != string(entities.DeploymentStatusFailed) && integration.Status != string(entities.DeploymentStatusCancelled) {
+	//  only allow retry for Cancelled not Failed
+	// if integration.Status != string(entities.DeploymentStatusFailed) && integration.Status != string(entities.DeploymentStatusCancelled) {
+	if integration.Status != string(entities.DeploymentStatusCancelled) {
 		return &entities.Response{
 			Status:  http.StatusBadRequest,
-			Message: "Can only retry failed or cancelled installations",
+			Message: "Can only retry cancelled installations",
 			Data:    nil,
 		}, nil
 	}

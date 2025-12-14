@@ -34,6 +34,7 @@ const (
 	DeploymentStatusCompleted   DeploymentStatus = "Completed"
 	DeploymentStatusTerminating DeploymentStatus = "Terminating"
 	DeploymentStatusTerminated  DeploymentStatus = "Terminated"
+	DeploymentStatusCancelling  DeploymentStatus = "Cancelling"
 	DeploymentStatusCancelled   DeploymentStatus = "Cancelled"
 	DeploymentStatusUnknown     DeploymentStatus = "Unknown"
 )
@@ -47,6 +48,7 @@ const (
 	DeploymentRunStatusFailed     DeploymentRunStatus = "Failed"
 	DeploymentRunStatusSuccess    DeploymentRunStatus = "Success"
 	DeploymentRunStatusStopped    DeploymentRunStatus = "Stopped"
+	DeploymentRunStatusCancelled  DeploymentRunStatus = "Cancelled"
 )
 
 type UserRole string

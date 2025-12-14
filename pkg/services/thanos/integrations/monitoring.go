@@ -42,6 +42,7 @@ type MonitoringIntegration struct {
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -49,6 +50,7 @@ type MonitoringIntegration struct {
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 		StopTask(id string)
+		IsTaskRunning(id string) bool
 	}
 }
 
@@ -71,6 +73,7 @@ func NewMonitoringIntegration(
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -78,6 +81,7 @@ func NewMonitoringIntegration(
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 		StopTask(id string)
+		IsTaskRunning(id string) bool
 	},
 ) *MonitoringIntegration {
 	return &MonitoringIntegration{
@@ -232,6 +236,10 @@ func (m *MonitoringIntegration) Uninstall(ctx context.Context, stackId uuid.UUID
 
 // installTask handles the actual installation process
 func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities.StackEntity, req dtos.InstallMonitoringRequest, logPath string, stackId string) {
+	// Create context with 30min timeout to prevent infinite running installations
+	taskCtx, taskCancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer taskCancel()
+
 	configBytes, err := json.Marshal(req)
 	if err != nil {
 		logger.Error("failed to marshal monitoring config", zap.Error(err))
@@ -241,6 +249,13 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 	monitoringIntegration, err := m.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeMonitoring.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
+		return
+	}
+
+	// Check for cancellation before starting
+	if monitoringIntegration.CancellationRequested {
+		logger.Info("Cancellation requested before install started", zap.String("integrationId", monitoringIntegration.ID.String()))
+		_ = m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled before installation started")
 		return
 	}
 
@@ -270,7 +285,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 	}
 
 	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
+		taskCtx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -284,7 +299,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 		return
 	}
 
-	monitoringConfig, err := thanos.GetMonitoringConfig(ctx, sdkClient, &req)
+	monitoringConfig, err := thanos.GetMonitoringConfig(taskCtx, sdkClient, &req)
 	if err != nil {
 		logger.Error("failed to get monitoring config", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -299,13 +314,92 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 	defer cancel()
 	go m.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
-	monitoringInfo, err := thanos.InstallMonitoring(ctx, sdkClient, monitoringConfig)
+	monitoringInfo, err := thanos.InstallMonitoring(taskCtx, sdkClient, monitoringConfig)
 	if err != nil {
 		logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
+
+		// Check if this failure was due to cancellation
+		monitoringIntegration, fetchErr := m.integrationRepo.GetIntegrationById(monitoringIntegration.ID.String())
+		if fetchErr == nil && monitoringIntegration.CancellationRequested {
+			logger.Info("Installation failed due to cancellation, cleaning up resources", zap.String("integrationId", monitoringIntegration.ID.String()))
+
+			// Update status to show we are cleaning up
+			_ = m.integrationRepo.UpdateIntegrationStatusWithReason(
+				monitoringIntegration.ID.String(),
+				entities.DeploymentStatusCancelling,
+				"Installation stopped. Cleaning up AWS resources (removing Grafana, Prometheus, networking resources)...",
+			)
+
+			// Call SDK uninstall to clean up any partially created resources
+			logger.Info("Starting cleanup of AWS resources", zap.String("integrationId", monitoringIntegration.ID.String()))
+			// IMP: Use a fresh context for cleanup since taskCtx is cancelled
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+			defer cleanupCancel()
+
+			if cleanupErr := thanos.UninstallMonitoring(cleanupCtx, sdkClient); cleanupErr != nil {
+				logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
+				_ = m.integrationRepo.UpdateIntegrationStatusWithReason(
+					monitoringIntegration.ID.String(),
+					entities.DeploymentStatusCancelled,
+					fmt.Sprintf("Installation cancelled but some resources may remain. Manual cleanup may be required: %v", cleanupErr),
+				)
+				_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+			} else {
+				logger.Info("Cleanup completed successfully", zap.String("integrationId", monitoringIntegration.ID.String()))
+				_ = m.integrationRepo.UpdateIntegrationStatusWithReason(
+					monitoringIntegration.ID.String(),
+					entities.DeploymentStatusCancelled,
+					"Installation cancelled successfully. All AWS resources have been cleaned up.",
+				)
+				_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+			}
+			return
+		}
+
+		// Not a cancellation, regular failure
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(monitoringIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(updateErr), zap.String("integrationId", monitoringIntegration.ID.String()))
 		}
 		_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		return
+	}
+
+	// Check for cancellation after SDK install completes -main point!
+	// Refetch integration to get latest cancellation state
+	monitoringIntegration, err = m.integrationRepo.GetIntegrationById(monitoringIntegration.ID.String())
+	if err == nil && monitoringIntegration.CancellationRequested {
+		logger.Info("Cancellation requested after install, cleaning up resources", zap.String("integrationId", monitoringIntegration.ID.String()))
+
+		// Update status to show we are cleaning up
+		_ = m.integrationRepo.UpdateIntegrationStatusWithReason(
+			monitoringIntegration.ID.String(),
+			entities.DeploymentStatusCancelling,
+			"Installation stopped. Cleaning up AWS resources (removing Grafana, Prometheus, networking resources)...",
+		)
+
+		// Call SDK uninstall to clean up the resources we just created
+		logger.Info("Starting cleanup of AWS resources", zap.String("integrationId", monitoringIntegration.ID.String()))
+		// IMP: Use a fresh context for cleanup since taskCtx is cancelled
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cleanupCancel()
+
+		if cleanupErr := thanos.UninstallMonitoring(cleanupCtx, sdkClient); cleanupErr != nil {
+			logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
+			_ = m.integrationRepo.UpdateIntegrationStatusWithReason(
+				monitoringIntegration.ID.String(),
+				entities.DeploymentStatusCancelled,
+				fmt.Sprintf("Installation cancelled but some resources may remain. Manual cleanup may be required: %v", cleanupErr),
+			)
+			_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+		} else {
+			logger.Info("Cleanup completed successfully", zap.String("integrationId", monitoringIntegration.ID.String()))
+			_ = m.integrationRepo.UpdateIntegrationStatusWithReason(
+				monitoringIntegration.ID.String(),
+				entities.DeploymentStatusCancelled,
+				"Installation cancelled successfully. All AWS resources have been cleaned up.",
+			)
+			_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+		}
 		return
 	}
 
@@ -332,11 +426,13 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 	config, err := json.Marshal(req)
 	if err != nil {
 		logger.Error("failed to marshal monitoring config", zap.Error(err))
+		_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
 	if err = m.integrationRepo.UpdateConfig(monitoringIntegration.ID.String(), json.RawMessage(config)); err != nil {
 		logger.Error("failed to update monitoring integration config", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
+		_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -352,6 +448,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, stack *entities
 	bytes, err := json.Marshal(monitoringMetadata)
 	if err != nil {
 		logger.Error("failed to marshal monitoring metadata", zap.Error(err))
+		_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -1237,8 +1334,61 @@ func (m *MonitoringIntegration) tailAndIngestLogs(
 	}
 }
 
+// Cancel sets the cancellation flag and handles cancel
 func (m *MonitoringIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	return cancelIntegrationCommon(ctx, stackId, integrationId, m.integrationRepo, m.taskManager)
+	// 1 Fetch integration
+	integration, err := m.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// 2 Validate status: can only cancel if inprogress or pending
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// 3 Set cancellation flag - the install task will see this and handle cleanup
+	if err = m.integrationRepo.RequestCancellation(integration.ID.String()); err != nil {
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to request cancellation"}, err
+	}
+
+	// Stop the running task to cancel the context immediately
+	taskId := fmt.Sprintf("install-monitoring-%s", stackId.String())
+	m.taskManager.StopTask(taskId)
+
+	// 4 Update status to Cancelling (install task will complete the cancellation)
+	if err = m.integrationRepo.UpdateIntegrationStatusWithReason(
+		integration.ID.String(),
+		entities.DeploymentStatusCancelling,
+		"Stopping installation process. This may take a few minutes to safely clean up AWS resources.",
+	); err != nil {
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to update status"}, err
+	}
+
+	logger.Info("Cancellation requested successfully", zap.String("integrationId", integrationId.String()))
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Cancellation in progress. Installation will be stopped and AWS resources will be cleaned up. This may take 3-5 minutes for safe cleanup.",
+		Data:    nil,
+	}, nil
 }
 
 func (m *MonitoringIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {

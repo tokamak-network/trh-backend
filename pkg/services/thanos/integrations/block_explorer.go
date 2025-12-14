@@ -42,6 +42,7 @@ type BlockExplorerIntegration struct {
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -49,6 +50,7 @@ type BlockExplorerIntegration struct {
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 		StopTask(id string)
+		IsTaskRunning(id string) bool
 	}
 }
 
@@ -71,6 +73,7 @@ func NewBlockExplorerIntegration(
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -78,6 +81,7 @@ func NewBlockExplorerIntegration(
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 		StopTask(id string)
+		IsTaskRunning(id string) bool
 	},
 ) *BlockExplorerIntegration {
 	return &BlockExplorerIntegration{
@@ -251,6 +255,10 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 
 // installTask handles the actual installation process
 func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entities.StackEntity, request dtos.InstallBlockExplorerRequest, logPath string) {
+	// creates ctx with 30min timeout to prevent infinite running installations
+	taskCtx, taskCancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer taskCancel()
+
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
@@ -260,6 +268,13 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 	blockExplorerIntegration, err := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBlockExplorer.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return
+	}
+
+	// checks for cancellation before starting
+	if blockExplorerIntegration.CancellationRequested {
+		logger.Info("Cancellation requested before install started", zap.String("integrationId", blockExplorerIntegration.ID.String()))
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(blockExplorerIntegration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled before installation started")
 		return
 	}
 
@@ -289,12 +304,12 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 	}
 
 	// Start log ingestion for this plugin installation
-	ingestCtx, cancel := context.WithCancel(ctx)
+	ingestCtx, cancel := context.WithCancel(taskCtx)
 	defer cancel()
 	go b.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
 	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
+		taskCtx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -307,13 +322,92 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
 	}
-	blockExplorerUrl, err := thanos.InstallBlockExplorer(ctx, sdkClient, &request)
+	blockExplorerUrl, err := thanos.InstallBlockExplorer(taskCtx, sdkClient, &request)
 	if err != nil {
 		logger.Error("failed to install block explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+
+		// this would check if this failure was due to cancellation
+		blockExplorerIntegration, fetchErr := b.integrationRepo.GetIntegrationById(blockExplorerIntegration.ID.String())
+		if fetchErr == nil && blockExplorerIntegration.CancellationRequested {
+			logger.Info("Installation failed due to cancellation, cleaning up resources", zap.String("integrationId", blockExplorerIntegration.ID.String()))
+
+			// update status to show we are cleaning up
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+				blockExplorerIntegration.ID.String(),
+				entities.DeploymentStatusCancelling,
+				"Installation stopped. Cleaning up AWS resources (removing RDS database, destroying networking resources)...",
+			)
+
+			// Call SDK uninstall to clean up any partially created resources
+			// uses fresh context for cleanup since taskCtx is cancelled this is imp
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+			defer cleanupCancel()
+
+			logger.Info("Starting cleanup of AWS resources", zap.String("integrationId", blockExplorerIntegration.ID.String()))
+			if cleanupErr := thanos.UninstallBlockExplorer(cleanupCtx, sdkClient); cleanupErr != nil {
+				logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
+				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+					blockExplorerIntegration.ID.String(),
+					entities.DeploymentStatusCancelled,
+					fmt.Sprintf("Installation cancelled but some resources may remain. Manual cleanup may be required: %v", cleanupErr),
+				)
+				_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+			} else {
+				logger.Info("Cleanup completed successfully", zap.String("integrationId", blockExplorerIntegration.ID.String()))
+				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+					blockExplorerIntegration.ID.String(),
+					entities.DeploymentStatusCancelled,
+					"Installation cancelled successfully. All AWS resources have been cleaned up.",
+				)
+				_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+			}
+			return
+		}
+
+		// if not  a cancellation: regular failure
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(blockExplorerIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(updateErr), zap.String("integrationId", blockExplorerIntegration.ID.String()))
 		}
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		return
+	}
+
+	// Check for cancellation after SDK install completes - critical point!
+	// Re-fetch integration to get latest cancellation state
+	blockExplorerIntegration, err = b.integrationRepo.GetIntegrationById(blockExplorerIntegration.ID.String())
+	if err == nil && blockExplorerIntegration.CancellationRequested {
+		logger.Info("Cancellation requested after install, cleaning up resources", zap.String("integrationId", blockExplorerIntegration.ID.String()))
+
+		// Update status to show we're cleaning up
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+			blockExplorerIntegration.ID.String(),
+			entities.DeploymentStatusCancelling,
+			"Installation stopped. Cleaning up AWS resources (removing RDS database, destroying networking resources)...",
+		)
+
+		// Call SDK uninstall to clean up the resources we just created
+		// IMPORTANT: Use a fresh context for cleanup since taskCtx is cancelled
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cleanupCancel()
+
+		logger.Info("Starting cleanup of AWS resources", zap.String("integrationId", blockExplorerIntegration.ID.String()))
+		if cleanupErr := thanos.UninstallBlockExplorer(cleanupCtx, sdkClient); cleanupErr != nil {
+			logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+				blockExplorerIntegration.ID.String(),
+				entities.DeploymentStatusCancelled,
+				fmt.Sprintf("Installation cancelled but some resources may remain. Manual cleanup may be required: %v", cleanupErr),
+			)
+			_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+		} else {
+			logger.Info("Cleanup completed successfully", zap.String("integrationId", blockExplorerIntegration.ID.String()))
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+				blockExplorerIntegration.ID.String(),
+				entities.DeploymentStatusCancelled,
+				"Installation cancelled successfully. All AWS resources have been cleaned up.",
+			)
+			_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+		}
 		return
 	}
 
@@ -330,6 +424,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 
 	if err = b.integrationRepo.UpdateConfig(blockExplorerIntegration.ID.String(), json.RawMessage(configBytes)); err != nil {
 		logger.Error("failed to update block explorer integration config", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -337,6 +432,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, stack *entit
 	metadataBytes, err := json.Marshal(blockExplorerMetadata)
 	if err != nil {
 		logger.Error("failed to marshal block explorer metadata", zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -507,8 +603,71 @@ func (b *BlockExplorerIntegration) tailAndIngestLogs(
 	}
 }
 
+// Cancel sets the cancellation flag,the install task will detect and do cleanup
 func (b *BlockExplorerIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	return cancelIntegrationCommon(ctx, stackId, integrationId, b.integrationRepo, b.taskManager)
+	// 1 Fetch integration
+	integration, err := b.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// 2 validate status: can only cancel if inprogress or pending
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// 3 Set cancellation flag: the install task will see this and handle cleanup
+	if err = b.integrationRepo.RequestCancellation(integration.ID.String()); err != nil {
+		logger.Error("failed to request cancellation", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to request cancellation",
+			Data:    nil,
+		}, err
+	}
+
+	// then stop the running task to cancel the context immediately
+	taskId := fmt.Sprintf("install-block-explorer-%s", stackId.String())
+	b.taskManager.StopTask(taskId)
+
+	// 4 Update status to Cancelling (install task will complete the cancellation )
+	if err = b.integrationRepo.UpdateIntegrationStatusWithReason(
+		integration.ID.String(),
+		entities.DeploymentStatusCancelling,
+		"Stopping installation process. This may take several minutes to safely clean up AWS resources (RDS database, networking).",
+	); err != nil {
+		logger.Error("failed to update status", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to update status",
+			Data:    nil,
+		}, err
+	}
+
+	logger.Info("Cancellation requested successfully", zap.String("integrationId", integrationId.String()))
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Cancellation in progress. Installation will be stopped and AWS resources will be cleaned up. This may take 5-10 minutes for safe cleanup.",
+		Data:    nil,
+	}, nil
 }
 
 func (b *BlockExplorerIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {

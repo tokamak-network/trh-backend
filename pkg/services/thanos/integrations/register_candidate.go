@@ -39,12 +39,16 @@ type RegisterCandidateIntegration struct {
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	}
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
+		IsTaskRunning(id string) bool
 	}
 }
 
@@ -64,12 +68,16 @@ func NewRegisterCandidateIntegration(
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
+		IsTaskRunning(id string) bool
 	},
 ) *RegisterCandidateIntegration {
 	return &RegisterCandidateIntegration{
@@ -174,12 +182,14 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
 		return
 	}
+
 	if err := r.integrationRepo.UpdateIntegrationStatus(registerCandidateIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
 		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
 		return
 	}
 
-	// Create deployment record for register candidate
+	// Create deployment record for register candidate BEFORE checking cancellation
+	// This ensures deployment history exists even if cancelled early
 	deployment := &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stackId,
@@ -193,10 +203,20 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 		return
 	}
 
+	// Check for cancellation before starting blockchain operation
+	if registerCandidateIntegration.CancellationRequested {
+		logger.Info("Cancellation requested before register started", zap.String("integrationId", registerCandidateIntegration.ID.String()))
+		_ = r.integrationRepo.UpdateIntegrationStatusWithReason(registerCandidateIntegration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled before blockchain transaction")
+		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+		return
+	}
+
 	stackConfig := dtos.DeployThanosRequest{}
 	err = json.Unmarshal(stack.Config, &stackConfig)
 	if err != nil {
 		logger.Error("failed to unmarshal stack config", zap.Error(err))
+		_ = r.integrationRepo.UpdateIntegrationStatusWithReason(registerCandidateIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 	thanosClient, err := thanos.NewThanosSDKClient(
@@ -212,6 +232,8 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		_ = r.integrationRepo.UpdateIntegrationStatusWithReason(registerCandidateIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -222,12 +244,33 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 
 	if err = thanos.VerifyRegisterCandidates(ctx, thanosClient, &req); err != nil {
 		logger.Error("failed to register candidate", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("stackId", stackId.String()))
+
+		// Check if this failure was due to cancellation
+		registerCandidateIntegration, fetchErr := r.integrationRepo.GetIntegrationById(registerCandidateIntegration.ID.String())
+		if fetchErr == nil && registerCandidateIntegration.CancellationRequested {
+			logger.Info("Registration failed due to cancellation - blockchain transaction not sent", zap.String("integrationId", registerCandidateIntegration.ID.String()))
+			_ = r.integrationRepo.UpdateIntegrationStatusWithReason(
+				registerCandidateIntegration.ID.String(),
+				entities.DeploymentStatusCancelled,
+				"Cancelled - blockchain transaction was not submitted",
+			)
+			_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+			return
+		}
+
+		// Not a cancellation - regular failure
 		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(registerCandidateIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(updateErr), zap.String("integrationId", registerCandidateIntegration.ID.String()))
 		}
 		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
+
+	// Use deferred deployment status update to ensure its set even on early returns
+	deploymentStatus := entities.DeploymentRunStatusSuccess
+	defer func() {
+		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
+	}()
 
 	if err = r.integrationRepo.UpdateIntegrationStatus(registerCandidateIntegration.ID.String(), entities.DeploymentStatusCompleted); err != nil {
 		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err), zap.String("integrationId", registerCandidateIntegration.ID.String()))
@@ -236,23 +279,24 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, stack *
 	registerCandidateInfo, err := thanos.GetRegisterCandidatesInfo(ctx, thanosClient, &req)
 	if err != nil {
 		logger.Error("failed to get register candidate info", zap.Error(err))
+		deploymentStatus = entities.DeploymentRunStatusFailed
 		return
 	}
 
 	bytes, err := json.Marshal(registerCandidateInfo)
 	if err != nil {
 		logger.Error("failed to marshal register candidate info", zap.Error(err))
+		deploymentStatus = entities.DeploymentRunStatusFailed
 		return
 	}
 
 	if err = r.integrationRepo.UpdateMetadataAfterInstalled(registerCandidateIntegration.ID.String(), bytes); err != nil {
 		logger.Error("failed to update register candidate integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
+		deploymentStatus = entities.DeploymentRunStatusFailed
 		return
 	}
 
 	logger.Info("Register candidate successfully", zap.String("stackId", stackId.String()))
-
-	_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
 }
 
 // tailAndIngestLogs tails a log file and ingests each line into the database
@@ -311,4 +355,56 @@ func (r *RegisterCandidateIntegration) tailAndIngestLogs(
 			}
 		}
 	}
+}
+
+// Cancel sets the cancellation flag the register task will detect and stop before submitting blockchain transaction
+// A Register candidate doesnt create AWS resources, so no cleanup needed
+func (r *RegisterCandidateIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	// 1 Fetch integration
+	integration, err := r.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// 2 Validate status: can only cancel if inprogress or pending
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel operations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// 3 Set cancellation flag - the register task will see this and stop before blockchain transaction
+	if err = r.integrationRepo.RequestCancellation(integration.ID.String()); err != nil {
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to request cancellation"}, err
+	}
+
+	// Stop the running task to cancel the context immediately
+	taskId := fmt.Sprintf("register-candidate-%s", stackId.String())
+	r.taskManager.StopTask(taskId)
+
+	// 4 Update status to Cancelling (register task will complete the cancellation)
+	if err = r.integrationRepo.UpdateIntegrationStatusWithReason(
+		integration.ID.String(),
+		entities.DeploymentStatusCancelling,
+		"Cancellation requested - will stop before blockchain transaction",
+	); err != nil {
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to update status"}, err
+	}
+
+	return &entities.Response{Status: http.StatusOK, Message: "Cancellation requested - operation will stop before blockchain transaction"}, nil
 }

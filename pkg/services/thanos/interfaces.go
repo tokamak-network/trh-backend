@@ -92,6 +92,9 @@ type IntegrationRepository interface {
 		id string,
 		config json.RawMessage,
 	) error
+	RequestCancellation(
+		id string,
+	) error
 }
 
 type LogRepository interface {
@@ -104,5 +107,6 @@ type TaskManager interface {
 	Start()
 	AddTask(id string, task entities.Task)
 	StopTask(id string)
+	IsTaskRunning(id string) bool
 	Stop()
 }

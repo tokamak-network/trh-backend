@@ -42,6 +42,7 @@ type UptimeServiceIntegration struct {
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -49,6 +50,7 @@ type UptimeServiceIntegration struct {
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 		StopTask(id string)
+		IsTaskRunning(id string) bool
 	}
 }
 
@@ -71,6 +73,7 @@ func NewUptimeServiceIntegration(
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+		RequestCancellation(id string) error
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -78,6 +81,7 @@ func NewUptimeServiceIntegration(
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
 		StopTask(id string)
+		IsTaskRunning(id string) bool
 	},
 ) *UptimeServiceIntegration {
 	return &UptimeServiceIntegration{
@@ -228,6 +232,10 @@ func (u *UptimeServiceIntegration) Uninstall(ctx context.Context, stackId string
 
 // installTask handles the actual installation process
 func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entities.StackEntity, logPath string) {
+	// Create context with 30min timeout to prevent infinite running installations
+	taskCtx, taskCancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer taskCancel()
+
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
@@ -237,6 +245,13 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entit
 	uptimeServiceIntegration, err := u.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeUptimeService.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
+		return
+	}
+
+	// Check for cancellation before starting
+	if uptimeServiceIntegration.CancellationRequested {
+		logger.Info("Cancellation requested before install started", zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+		_ = u.integrationRepo.UpdateIntegrationStatusWithReason(uptimeServiceIntegration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled before installation started")
 		return
 	}
 
@@ -265,7 +280,7 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entit
 	go u.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
 	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
+		taskCtx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -280,11 +295,91 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, stack *entit
 	}
 
 	req := &dtos.InstallUptimeServiceRequest{}
-	uptimeServiceUrl, err := thanos.InstallUptimeService(ctx, sdkClient, req)
+	uptimeServiceUrl, err := thanos.InstallUptimeService(taskCtx, sdkClient, req)
 	if err != nil {
 		logger.Error("failed to install uptime service", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
-		if err := u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed); err != nil {
-			logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", deployment.ID.String()))
+
+		// Check if this failure was due to cancellation
+		uptimeServiceIntegration, fetchErr := u.integrationRepo.GetIntegrationById(uptimeServiceIntegration.ID.String())
+		if fetchErr == nil && uptimeServiceIntegration.CancellationRequested {
+			logger.Info("Installation failed due to cancellation, cleaning up resources", zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+
+			// Update status to show we are cleaning up
+			_ = u.integrationRepo.UpdateIntegrationStatusWithReason(
+				uptimeServiceIntegration.ID.String(),
+				entities.DeploymentStatusCancelling,
+				"Installation stopped. Cleaning up AWS resources...",
+			)
+
+			// Call SDK uninstall to clean up any partially created resources
+			logger.Info("Starting cleanup of AWS resources", zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+			// IMP: Use a fresh context for cleanup since taskCtx is cancelled
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+			defer cleanupCancel()
+
+			if cleanupErr := thanos.UninstallUptimeService(cleanupCtx, sdkClient); cleanupErr != nil {
+				logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
+				_ = u.integrationRepo.UpdateIntegrationStatusWithReason(
+					uptimeServiceIntegration.ID.String(),
+					entities.DeploymentStatusCancelled,
+					fmt.Sprintf("Installation cancelled but some resources may remain. Manual cleanup may be required: %v", cleanupErr),
+				)
+				_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+			} else {
+				logger.Info("Cleanup completed successfully", zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+				_ = u.integrationRepo.UpdateIntegrationStatusWithReason(
+					uptimeServiceIntegration.ID.String(),
+					entities.DeploymentStatusCancelled,
+					"Installation cancelled successfully. All AWS resources have been cleaned up.",
+				)
+				_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+			}
+			return
+		}
+
+		// not a cancellation regular failure
+		if updateErr := u.integrationRepo.UpdateIntegrationStatusWithReason(uptimeServiceIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(updateErr), zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+		}
+		_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		return
+	}
+
+	// Check for cancellation after SDK install completes -main point!
+	// Re fetch integration to get latest cancellation state
+	uptimeServiceIntegration, err = u.integrationRepo.GetIntegrationById(uptimeServiceIntegration.ID.String())
+	if err == nil && uptimeServiceIntegration.CancellationRequested {
+		logger.Info("Cancellation requested after install, cleaning up resources", zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+
+		// Update status to show we are cleaning up
+		_ = u.integrationRepo.UpdateIntegrationStatusWithReason(
+			uptimeServiceIntegration.ID.String(),
+			entities.DeploymentStatusCancelling,
+			"Installation stopped. Cleaning up AWS resources (removing uptime service components)...",
+		)
+
+		// Call SDK uninstall to clean up the resources we just created
+		logger.Info("Starting cleanup of AWS resources", zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+		// IMP: Use a fresh context for cleanup since taskCtx is cancelled
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cleanupCancel()
+
+		if cleanupErr := thanos.UninstallUptimeService(cleanupCtx, sdkClient); cleanupErr != nil {
+			logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
+			_ = u.integrationRepo.UpdateIntegrationStatusWithReason(
+				uptimeServiceIntegration.ID.String(),
+				entities.DeploymentStatusCancelled,
+				fmt.Sprintf("Installation cancelled but some resources may remain. Manual cleanup may be required: %v", cleanupErr),
+			)
+			_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
+		} else {
+			logger.Info("Cleanup completed successfully", zap.String("integrationId", uptimeServiceIntegration.ID.String()))
+			_ = u.integrationRepo.UpdateIntegrationStatusWithReason(
+				uptimeServiceIntegration.ID.String(),
+				entities.DeploymentStatusCancelled,
+				"Installation cancelled successfully. All AWS resources have been cleaned up.",
+			)
+			_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
 		}
 		err = u.integrationRepo.UpdateIntegrationStatusWithReason(uptimeServiceIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
 		if err != nil {
@@ -515,8 +610,61 @@ func (u *UptimeServiceIntegration) tailAndIngestLogs(
 	}
 }
 
+// Cancel sets the cancellation flag , it detects and handle cleanup
 func (u *UptimeServiceIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	return cancelIntegrationCommon(ctx, stackId, integrationId, u.integrationRepo, u.taskManager)
+	// 1 Fetch integration
+	integration, err := u.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// 2 Validate status: can only cancel if inprogress or pending
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// 3 Set cancellation flag the install task will see this and handle cleanup
+	if err = u.integrationRepo.RequestCancellation(integration.ID.String()); err != nil {
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to request cancellation"}, err
+	}
+
+	// Stop the running task to cancel the context immediately
+	taskId := fmt.Sprintf("install-system-pulse-%s", stackId.String())
+	u.taskManager.StopTask(taskId)
+
+	// 4 Update status to Cancelling (install task will complete the cancellation)
+	if err = u.integrationRepo.UpdateIntegrationStatusWithReason(
+		integration.ID.String(),
+		entities.DeploymentStatusCancelling,
+		"Stopping installation process. This may take a few minutes to safely clean up AWS resources.",
+	); err != nil {
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to update status"}, err
+	}
+
+	logger.Info("Cancellation requested successfully", zap.String("integrationId", integrationId.String()))
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Cancellation in progress. Installation will be stopped and AWS resources will be cleaned up. This may take 2-3 minutes for safe cleanup.",
+		Data:    nil,
+	}, nil
 }
 
 func (u *UptimeServiceIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {

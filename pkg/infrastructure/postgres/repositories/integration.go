@@ -83,6 +83,15 @@ func (r *IntegrationRepository) UpdateConfig(
 		Error
 }
 
+func (r *IntegrationRepository) RequestCancellation(
+	id string,
+) error {
+	return r.db.Model(&schemas.Integration{}).
+		Where("id = ?", id).
+		Update("cancellation_requested", true).
+		Error
+}
+
 func (r *IntegrationRepository) UpdateIntegrationsStatusByStackID(
 	stackID string,
 	status entities.DeploymentStatus,
@@ -124,7 +133,16 @@ func (r *IntegrationRepository) GetActiveIntegrations(
 	integrationType string,
 ) ([]*entities.IntegrationEntity, error) {
 	var integrations []schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("type = ?", integrationType).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at desc").Find(&integrations).Error; err != nil {
+	// if err := r.db.Where("stack_id = ?", stackId).Where("type = ?", integrationType).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at desc").Find(&integrations).Error; err != nil {
+	if err := r.db.Where("stack_id = ?", stackId).
+		Where("type = ?", integrationType).
+		Where("status NOT IN ?", []string{
+			string(entities.DeploymentStatusTerminated),
+			string(entities.DeploymentStatusCancelled),
+			string(entities.DeploymentStatusFailed),
+		}).
+		Order("created_at desc").
+		Find(&integrations).Error; err != nil {
 		return nil, err
 	}
 	integrationEntities := make([]*entities.IntegrationEntity, len(integrations))
@@ -215,12 +233,14 @@ func ToIntegrationEntity(
 	integration *schemas.Integration,
 ) *entities.IntegrationEntity {
 	return &entities.IntegrationEntity{
-		ID:      integration.ID,
-		StackID: integration.StackID,
-		Type:    integration.Type,
-		Status:  string(integration.Status),
-		Config:  json.RawMessage(integration.Config),
-		Info:    json.RawMessage(integration.Info),
-		LogPath: integration.LogPath,
+		ID:                    integration.ID,
+		StackID:               integration.StackID,
+		Type:                  integration.Type,
+		Status:                string(integration.Status),
+		Config:                json.RawMessage(integration.Config),
+		Info:                  json.RawMessage(integration.Info),
+		LogPath:               integration.LogPath,
+		Reason:                integration.Reason,
+		CancellationRequested: integration.CancellationRequested,
 	}
 }
