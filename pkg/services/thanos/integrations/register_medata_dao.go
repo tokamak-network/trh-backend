@@ -246,7 +246,11 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack
 		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(registerMetadataDaoIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(updateErr), zap.String("integrationId", registerMetadataDaoIntegration.ID.String()))
 		}
-		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		deploymentStatus := entities.DeploymentRunStatusFailed
+		if errors.Is(err, context.Canceled) {
+			deploymentStatus = entities.DeploymentRunStatusStopped
+		}
+		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
 		return
 	}
 

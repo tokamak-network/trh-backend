@@ -279,7 +279,11 @@ func (b *BridgeIntegration) installTask(ctx context.Context, newIntegrationID uu
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
-		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		deploymentStatus := entities.DeploymentRunStatusFailed
+		if errors.Is(err, context.Canceled) {
+			deploymentStatus = entities.DeploymentRunStatusStopped
+		}
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
 		return
 	}
 
@@ -512,16 +516,6 @@ func (b *BridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integ
 	}
 
 	b.taskManager.AddTask(fmt.Sprintf("cancel-bridge-%s", stackId.String()), func(ctx context.Context) {
-		defer func() {
-			deployment, err := b.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.InstallBridgeStep, entities.DeploymentStatusInProgress)
-			if err != nil {
-				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
-				return
-			}
-			if deployment != nil {
-				_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
-			}
-		}()
 		// then stop the running task to cancel the context immediately
 		taskId := fmt.Sprintf("install-bridge-%s", stackId.String())
 		b.taskManager.StopTask(taskId)

@@ -234,7 +234,11 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, newInte
 		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
-		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		deploymentStatus := entities.DeploymentRunStatusFailed
+		if errors.Is(err, context.Canceled) {
+			deploymentStatus = entities.DeploymentRunStatusStopped
+		}
+		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
 		return
 	}
 
@@ -371,16 +375,6 @@ func (r *RegisterCandidateIntegration) Cancel(ctx context.Context, stackId uuid.
 
 	r.taskManager.AddTask(fmt.Sprintf("cancel-register-candidate-%s", stackId.String()), func(ctx context.Context) {
 		// Stop the running task to cancel the context immediately
-		defer func() {
-			deployment, err := r.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.RegisterCandidateStep, entities.DeploymentStatusInProgress)
-			if err != nil {
-				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
-				return
-			}
-			if deployment != nil {
-				_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
-			}
-		}()
 		taskId := fmt.Sprintf("register-candidate-%s", stackId.String())
 		r.taskManager.StopTask(taskId)
 

@@ -289,7 +289,12 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, newIntegrati
 		if updateErr := u.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
-		_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+
+		deploymentStatus := entities.DeploymentRunStatusFailed
+		if errors.Is(err, context.Canceled) {
+			deploymentStatus = entities.DeploymentRunStatusStopped
+		}
+		_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
 		return
 	}
 
@@ -540,16 +545,7 @@ func (u *UptimeServiceIntegration) Cancel(ctx context.Context, stackId uuid.UUID
 	}
 
 	u.taskManager.AddTask(fmt.Sprintf("cancel-system-pulse-%s", stackId.String()), func(ctx context.Context) {
-		defer func() {
-			deployment, err := u.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.InstallUptimeServiceStep, entities.DeploymentStatusInProgress)
-			if err != nil {
-				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
-				return
-			}
-			if deployment != nil {
-				_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
-			}
-		}()
+
 		// Stop the running task to cancel the context immediately
 		taskId := fmt.Sprintf("install-system-pulse-%s", stackId.String())
 		u.taskManager.StopTask(taskId)

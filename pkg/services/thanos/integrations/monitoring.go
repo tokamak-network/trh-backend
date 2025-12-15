@@ -308,7 +308,11 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, newIntegrationI
 		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
-		_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		deploymentStatus := entities.DeploymentRunStatusFailed
+		if errors.Is(err, context.Canceled) {
+			deploymentStatus = entities.DeploymentRunStatusStopped
+		}
+		_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
 		return
 	}
 
@@ -1269,16 +1273,6 @@ func (m *MonitoringIntegration) Cancel(ctx context.Context, stackId uuid.UUID, i
 	}
 
 	m.taskManager.AddTask(fmt.Sprintf("cancel-monitoring-%s", stackId.String()), func(ctx context.Context) {
-		defer func() {
-			deployment, err := m.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.InstallMonitoringStep, entities.DeploymentStatusInProgress)
-			if err != nil {
-				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
-				return
-			}
-			if deployment != nil {
-				_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
-			}
-		}()
 		// then stop the running task to cancel the context immediately
 		taskId := fmt.Sprintf("install-monitoring-%s", stackId.String())
 		m.taskManager.StopTask(taskId)

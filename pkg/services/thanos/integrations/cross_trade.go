@@ -299,7 +299,11 @@ func (b *CrossTradeBridgeIntegration) installTask(ctx context.Context, stack *en
 		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(CrossTradeBridgeIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeCrossTrade.String()), zap.Error(updateErr), zap.String("integrationId", CrossTradeBridgeIntegration.ID.String()))
 		}
-		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		deploymentStatus := entities.DeploymentRunStatusFailed
+		if errors.Is(err, context.Canceled) {
+			deploymentStatus = entities.DeploymentRunStatusStopped
+		}
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
 		return
 	}
 	crossTradeIntegrationOutputURL := crossTradeIntegrationOutput.DeployCrossTradeApplicationOutput.URL
