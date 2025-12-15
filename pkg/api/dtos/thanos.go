@@ -17,7 +17,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]*$`)
+var chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]{0,13}$`)
 
 type RegisterCandidateRequest struct {
 	Amount   float64 `json:"amount" binding:"required" validate:"min=0"`
@@ -70,7 +70,7 @@ func (request *DeployThanosRequest) Validate() error {
 	if !chainNameRegex.MatchString(request.ChainName) {
 		logger.Error("invalid chainName", zap.String("chainName", request.ChainName))
 		return errors.New(
-			"invalid chain name, chain name must contain only letters (a-z, A-Z), numbers (0-9), spaces. Special characters are not allowed",
+			"invalid chain name. It must start with a letter, contain only letters, numbers, and spaces, and be 1-14 characters long.",
 		)
 	}
 
