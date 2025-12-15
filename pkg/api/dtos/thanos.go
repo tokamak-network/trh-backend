@@ -17,7 +17,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]*$`)
+var chainNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9 ]{0,13}$`)
 
 type RegisterCandidateRequest struct {
 	Amount   float64 `json:"amount" binding:"required" validate:"min=0"`
