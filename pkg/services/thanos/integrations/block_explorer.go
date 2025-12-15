@@ -32,6 +32,7 @@ type BlockExplorerIntegration struct {
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -62,6 +63,7 @@ func NewBlockExplorerIntegration(
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -533,6 +535,16 @@ func (b *BlockExplorerIntegration) Cancel(ctx context.Context, stackId uuid.UUID
 
 	b.taskManager.AddTask(fmt.Sprintf("cancel-block-explorer-%s", stackId.String()), func(ctx context.Context) {
 		// then stop the running task to cancel the context immediately
+		defer func() {
+			deployment, err := b.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.InstallBlockExplorerStep, entities.DeploymentStatusInProgress)
+			if err != nil {
+				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
+				return
+			}
+			if deployment != nil {
+				_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
+			}
+		}()
 		taskId := fmt.Sprintf("install-block-explorer-%s", stackId.String())
 		b.taskManager.StopTask(taskId)
 

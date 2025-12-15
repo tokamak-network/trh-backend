@@ -32,6 +32,7 @@ type UptimeServiceIntegration struct {
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -62,6 +63,7 @@ func NewUptimeServiceIntegration(
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -538,6 +540,16 @@ func (u *UptimeServiceIntegration) Cancel(ctx context.Context, stackId uuid.UUID
 	}
 
 	u.taskManager.AddTask(fmt.Sprintf("cancel-system-pulse-%s", stackId.String()), func(ctx context.Context) {
+		defer func() {
+			deployment, err := u.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.InstallUptimeServiceStep, entities.DeploymentStatusInProgress)
+			if err != nil {
+				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
+				return
+			}
+			if deployment != nil {
+				_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
+			}
+		}()
 		// Stop the running task to cancel the context immediately
 		taskId := fmt.Sprintf("install-system-pulse-%s", stackId.String())
 		u.taskManager.StopTask(taskId)

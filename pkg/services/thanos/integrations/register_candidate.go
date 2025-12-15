@@ -31,6 +31,7 @@ type RegisterCandidateIntegration struct {
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -59,6 +60,7 @@ func NewRegisterCandidateIntegration(
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -369,6 +371,16 @@ func (r *RegisterCandidateIntegration) Cancel(ctx context.Context, stackId uuid.
 
 	r.taskManager.AddTask(fmt.Sprintf("cancel-register-candidate-%s", stackId.String()), func(ctx context.Context) {
 		// Stop the running task to cancel the context immediately
+		defer func() {
+			deployment, err := r.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.RegisterCandidateStep, entities.DeploymentStatusInProgress)
+			if err != nil {
+				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
+				return
+			}
+			if deployment != nil {
+				_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
+			}
+		}()
 		taskId := fmt.Sprintf("register-candidate-%s", stackId.String())
 		r.taskManager.StopTask(taskId)
 
@@ -378,6 +390,7 @@ func (r *RegisterCandidateIntegration) Cancel(ctx context.Context, stackId uuid.
 			entities.DeploymentStatusCancelled,
 			"Registration cancelled successfully. All AWS resources have been cleaned up.",
 		)
+
 	})
 	return &entities.Response{Status: http.StatusOK, Message: "Cancellation requested - operation will stop before blockchain transaction"}, nil
 }

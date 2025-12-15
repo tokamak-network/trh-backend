@@ -8,6 +8,7 @@ import (
 
 type DeploymentRepository interface {
 	CreateDeployment(deployment *entities.DeploymentEntity) error
+	GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	GetDeploymentsByStackID(stackId string) ([]*entities.DeploymentEntity, error)
 	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
 	GetDeploymentByID(deploymentId string) (*entities.DeploymentEntity, error)

@@ -32,6 +32,7 @@ type MonitoringIntegration struct {
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -62,6 +63,7 @@ func NewMonitoringIntegration(
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -1267,6 +1269,16 @@ func (m *MonitoringIntegration) Cancel(ctx context.Context, stackId uuid.UUID, i
 	}
 
 	m.taskManager.AddTask(fmt.Sprintf("cancel-monitoring-%s", stackId.String()), func(ctx context.Context) {
+		defer func() {
+			deployment, err := m.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.InstallMonitoringStep, entities.DeploymentStatusInProgress)
+			if err != nil {
+				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
+				return
+			}
+			if deployment != nil {
+				_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
+			}
+		}()
 		// then stop the running task to cancel the context immediately
 		taskId := fmt.Sprintf("install-monitoring-%s", stackId.String())
 		m.taskManager.StopTask(taskId)

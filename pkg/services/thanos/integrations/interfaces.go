@@ -33,6 +33,7 @@ func NewIntegrationManager(
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)

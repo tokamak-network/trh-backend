@@ -32,6 +32,7 @@ type BridgeIntegration struct {
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -62,6 +63,7 @@ func NewBridgeIntegration(
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -510,6 +512,16 @@ func (b *BridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integ
 	}
 
 	b.taskManager.AddTask(fmt.Sprintf("cancel-bridge-%s", stackId.String()), func(ctx context.Context) {
+		defer func() {
+			deployment, err := b.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.InstallBridgeStep, entities.DeploymentStatusInProgress)
+			if err != nil {
+				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
+				return
+			}
+			if deployment != nil {
+				_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
+			}
+		}()
 		// then stop the running task to cancel the context immediately
 		taskId := fmt.Sprintf("install-bridge-%s", stackId.String())
 		b.taskManager.StopTask(taskId)
@@ -554,6 +566,7 @@ func (b *BridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integ
 			entities.DeploymentStatusCancelled,
 			"Installation cancelled successfully. All AWS resources have been cleaned up.",
 		)
+
 	})
 
 	return &entities.Response{
