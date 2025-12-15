@@ -70,7 +70,7 @@ func (request *DeployThanosRequest) Validate() error {
 	if !chainNameRegex.MatchString(request.ChainName) {
 		logger.Error("invalid chainName", zap.String("chainName", request.ChainName))
 		return errors.New(
-			"invalid chain name, chain name must contain only letters (a-z, A-Z), numbers (0-9), spaces. Special characters are not allowed",
+			"invalid chain name. It must start with a letter, contain only letters, numbers, and spaces, and be 1-14 characters long.",
 		)
 	}
 
