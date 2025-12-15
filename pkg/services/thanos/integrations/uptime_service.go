@@ -218,7 +218,7 @@ func (u *UptimeServiceIntegration) Uninstall(ctx context.Context, stackId string
 
 	taskId := fmt.Sprintf("uninstall-system-pulse-%s", stackId)
 	u.taskManager.AddTask(taskId, func(ctx context.Context) {
-		u.uninstallTask(ctx, stack, stackId, logPath)
+		u.uninstallTask(ctx, uptimeServiceIntegration.ID, stack, stackId, logPath)
 	})
 
 	return &entities.Response{
@@ -351,7 +351,7 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, newIntegrati
 }
 
 // uninstallTask handles the actual uninstallation process
-func (u *UptimeServiceIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, stackId string, logPath string) {
+func (u *UptimeServiceIntegration) uninstallTask(ctx context.Context, integrationID uuid.UUID, stack *entities.StackEntity, stackId string, logPath string) {
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
@@ -359,31 +359,17 @@ func (u *UptimeServiceIntegration) uninstallTask(ctx context.Context, stack *ent
 	}
 
 	var uninstallDeployment *entities.DeploymentEntity
-	var integration *entities.IntegrationEntity
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error("panic during uptime service uninstall", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Any("recover", r))
 			if uninstallDeployment != nil {
 				_ = u.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 			}
-			if integration != nil {
-				_ = u.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
-			}
+			_ = u.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
 		}
 	}()
 
-	integration, err := u.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeUptimeService.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
-		return
-	}
-
-	if integration == nil {
-		logger.Error("integration not found", zap.String("plugin", enum.IntegrationTypeUptimeService.String()))
-		return
-	}
-
-	if err = u.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating); err != nil {
+	if err := u.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminating); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
 		return
 	}
@@ -427,14 +413,14 @@ func (u *UptimeServiceIntegration) uninstallTask(ctx context.Context, stack *ent
 		if err != nil {
 			logger.Error("failed to update deployment status", zap.Error(err), zap.String("deploymentId", uninstallDeployment.ID.String()))
 		}
-		err = u.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		err = u.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error())
 		if err != nil {
-			logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integration.ID.String()))
+			logger.Error("failed to update integration status", zap.Error(err), zap.String("integrationId", integrationID.String()))
 		}
 		return
 	}
 
-	if err = u.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated); err != nil {
+	if err = u.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminated); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
 		return
 	}

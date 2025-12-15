@@ -230,18 +230,9 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 		}, nil
 	}
 
-	if err := b.integrationRepo.UpdateIntegrationStatus(blockExplorerIntegration.ID.String(), entities.DeploymentStatusPending); err != nil {
-		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Internal server error",
-			Data:    nil,
-		}, err
-	}
-
 	taskId := fmt.Sprintf("uninstall-block-explorer-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.uninstallTask(ctx, stack, stackId, logPath)
+		b.uninstallTask(ctx, blockExplorerIntegration.ID, stack, stackId, logPath)
 	})
 
 	return &entities.Response{
@@ -360,7 +351,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, newIntegrati
 }
 
 // uninstallTask handles the actual uninstallation process
-func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, stackId string, logPath string) {
+func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, integrationID uuid.UUID, stack *entities.StackEntity, stackId string, logPath string) {
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
@@ -368,31 +359,17 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 	}
 
 	var uninstallDeployment *entities.DeploymentEntity
-	var integration *entities.IntegrationEntity
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error("panic during block-explorer uninstall", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Any("recover", r))
 			if uninstallDeployment != nil {
 				_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 			}
-			if integration != nil {
-				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
-			}
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
 		}
 	}()
 
-	integration, err := b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBlockExplorer.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
-		return
-	}
-
-	if integration == nil {
-		logger.Error("integration not found", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()))
-		return
-	}
-
-	if err = b.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating); err != nil {
+	if err := b.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminating); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		return
 	}
@@ -434,11 +411,11 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, stack *ent
 	if err = thanos.UninstallBlockExplorer(ctx, sdkClient); err != nil {
 		logger.Error("failed to uninstall block-explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
-		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error())
 		return
 	}
 
-	if err = b.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated); err != nil {
+	if err = b.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminated); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 		return
 	}

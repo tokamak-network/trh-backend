@@ -222,7 +222,7 @@ func (m *MonitoringIntegration) Uninstall(ctx context.Context, stackId uuid.UUID
 
 	taskId := fmt.Sprintf("uninstall-monitoring-%s", stackId)
 	m.taskManager.AddTask(taskId, func(ctx context.Context) {
-		m.uninstallTask(ctx, stack, stackId.String(), logPath)
+		m.uninstallTask(ctx, monitoringIntegration.ID, stack, stackId.String(), logPath)
 	})
 
 	return &entities.Response{
@@ -376,33 +376,19 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, newIntegrationI
 }
 
 // uninstallTask handles the actual uninstallation process
-func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, stackId string, logPath string) {
+func (m *MonitoringIntegration) uninstallTask(ctx context.Context, integrationID uuid.UUID, stack *entities.StackEntity, stackId string, logPath string) {
 	var uninstallDeployment *entities.DeploymentEntity
-	var integration *entities.IntegrationEntity
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error("panic during monitoring uninstall", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Any("recover", r))
 			if uninstallDeployment != nil {
 				_ = m.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 			}
-			if integration != nil {
-				_ = m.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
-			}
+			_ = m.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
 		}
 	}()
 	var err error
-	integration, err = m.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeMonitoring.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
-		return
-	}
-
-	if integration == nil {
-		logger.Error("integration not found", zap.String("plugin", enum.IntegrationTypeMonitoring.String()))
-		return
-	}
-
-	if err = m.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating); err != nil {
+	if err = m.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminating); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		return
 	}
@@ -450,11 +436,11 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, stack *entiti
 	if err = thanos.UninstallMonitoring(ctx, sdkClient); err != nil {
 		logger.Error("failed to uninstall monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		_ = m.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
-		_ = m.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		_ = m.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error())
 		return
 	}
 
-	if err = m.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated); err != nil {
+	if err = m.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminated); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 		return
 	}
