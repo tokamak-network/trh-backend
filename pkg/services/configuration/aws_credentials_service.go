@@ -151,10 +151,8 @@ func (s *AWSCredentialsService) entityToResponse(entity *entities.AWSCredentials
 func (s *AWSCredentialsService) GetAvailableRegions(req *dtos.GetAvailableRegionsRequest) (*dtos.GetAvailableRegionsResponse, error) {
 	regions, err := aws.GetAvailableRegions(req.AccessKeyID, req.SecretAccessKey, "us-east-1") // aws default bootstrap region
 	if err != nil {
-		return &dtos.GetAvailableRegionsResponse{
-			Regions: []string{},
-			Total:   0,
-		}, nil
+		// Rreturns the full error
+		return nil, err
 	}
 
 	return &dtos.GetAvailableRegionsResponse{

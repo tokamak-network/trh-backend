@@ -8,6 +8,7 @@ import (
 
 type DeploymentRepository interface {
 	CreateDeployment(deployment *entities.DeploymentEntity) error
+	GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	GetDeploymentsByStackID(stackId string) ([]*entities.DeploymentEntity, error)
 	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
 	GetDeploymentByID(deploymentId string) (*entities.DeploymentEntity, error)
@@ -104,5 +105,6 @@ type TaskManager interface {
 	Start()
 	AddTask(id string, task entities.Task)
 	StopTask(id string)
+	IsTaskRunning(id string) bool
 	Stop()
 }

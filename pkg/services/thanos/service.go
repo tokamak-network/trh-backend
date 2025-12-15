@@ -31,6 +31,14 @@ func (tmw *taskManagerWrapper) AddTask(id string, task func(ctx context.Context)
 	tmw.taskManager.AddTask(id, task)
 }
 
+func (tmw *taskManagerWrapper) StopTask(id string) {
+	tmw.taskManager.StopTask(id)
+}
+
+func (tmw *taskManagerWrapper) IsTaskRunning(id string) bool {
+	return tmw.taskManager.IsTaskRunning(id)
+}
+
 func NewThanosService(
 	deploymentRepo DeploymentRepository,
 	stackRepo StackRepository,
@@ -238,4 +246,12 @@ func (s *ThanosStackDeploymentService) InstallUptimeService(ctx context.Context,
 // UninstallUptimeService uninstalls the uptime service for the given stack
 func (s *ThanosStackDeploymentService) UninstallUptimeService(ctx context.Context, stackId string) (*entities.Response, error) {
 	return s.integrationMgr.UninstallUptimeService(ctx, stackId)
+}
+
+func (s *ThanosStackDeploymentService) CancelIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.CancelIntegration(ctx, stackId, integrationId)
+}
+
+func (s *ThanosStackDeploymentService) RetryIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	return s.integrationMgr.RetryIntegration(ctx, stackId, integrationId)
 }

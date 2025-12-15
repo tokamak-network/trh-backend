@@ -32,6 +32,7 @@ type BridgeIntegration struct {
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	}
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -41,12 +42,15 @@ type BridgeIntegration struct {
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	}
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
+		IsTaskRunning(id string) bool
 	}
 }
 
@@ -59,6 +63,7 @@ func NewBridgeIntegration(
 	deploymentRepo interface {
 		CreateDeployment(deployment *entities.DeploymentEntity) error
 		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
 	},
 	integrationRepo interface {
 		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
@@ -68,12 +73,15 @@ func NewBridgeIntegration(
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
+		IsTaskRunning(id string) bool
 	},
 ) *BridgeIntegration {
 	return &BridgeIntegration{
@@ -154,7 +162,7 @@ func (b *BridgeIntegration) Install(ctx context.Context, stackId string) (*entit
 
 	taskId := fmt.Sprintf("install-bridge-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.installTask(ctx, stack, logPath)
+		b.installTask(ctx, bridgeIntegration.ID, stack, logPath)
 	})
 
 	return &entities.Response{
@@ -204,7 +212,7 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 
 	taskId := fmt.Sprintf("uninstall-bridge-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.uninstallTask(ctx, stack, stackId, logPath)
+		b.uninstallTask(ctx, bridgeIntegration.ID, stack, stackId, logPath)
 	})
 
 	return &entities.Response{
@@ -215,20 +223,18 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 }
 
 // installTask handles the actual installation process
-func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.StackEntity, logPath string) {
+func (b *BridgeIntegration) installTask(ctx context.Context, newIntegrationID uuid.UUID, stack *entities.StackEntity, logPath string) {
+	// creates context with 30min timeout so to prevent infinite running installations
+	taskCtx, taskCancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer taskCancel()
+
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
 		return
 	}
 
-	bridgeIntegration, err := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBridge.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		return
-	}
-
-	if err := b.integrationRepo.UpdateIntegrationStatus(bridgeIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+	if err := b.integrationRepo.UpdateIntegrationStatus(newIntegrationID.String(), entities.DeploymentStatusInProgress); err != nil {
 		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
@@ -253,7 +259,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 	go b.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
 	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
+		taskCtx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,
@@ -266,11 +272,12 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
 	}
-	bridgeUrl, err := thanos.InstallBridge(ctx, sdkClient)
+	bridgeUrl, err := thanos.InstallBridge(taskCtx, sdkClient)
 	if err != nil {
 		logger.Error("failed to install bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", bridgeIntegration.ID.String()))
+
+		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
@@ -278,8 +285,8 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 
 	if bridgeUrl == "" {
 		logger.Error("bridge URL is empty", zap.String("plugin", enum.IntegrationTypeBridge.String()))
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, "Bridge URL is empty"); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", bridgeIntegration.ID.String()))
+		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, "Bridge URL is empty"); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
@@ -290,11 +297,13 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 	config, err := json.Marshal(map[string]string{})
 	if err != nil {
 		logger.Error("failed to marshal bridge config", zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
-	if err = b.integrationRepo.UpdateConfig(bridgeIntegration.ID.String(), json.RawMessage(config)); err != nil {
+	if err = b.integrationRepo.UpdateConfig(newIntegrationID.String(), json.RawMessage(config)); err != nil {
 		logger.Error("failed to update bridge integration config", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
@@ -302,10 +311,11 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 	bytes, err := json.Marshal(bridgeMetadata)
 	if err != nil {
 		logger.Error("failed to marshal bridge metadata", zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
-	if err = b.integrationRepo.UpdateMetadataAfterInstalled(bridgeIntegration.ID.String(), entities.IntegrationInfo(bytes)); err != nil {
+	if err = b.integrationRepo.UpdateMetadataAfterInstalled(newIntegrationID.String(), entities.IntegrationInfo(bytes)); err != nil {
 		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
@@ -322,7 +332,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 }
 
 // uninstallTask handles the actual uninstallation process
-func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, stackId string, logPath string) {
+func (b *BridgeIntegration) uninstallTask(ctx context.Context, integrationID uuid.UUID, stack *entities.StackEntity, stackId string, logPath string) {
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
@@ -330,31 +340,17 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 	}
 
 	var uninstallDeployment *entities.DeploymentEntity
-	var integration *entities.IntegrationEntity
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error("panic during bridge uninstall", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Any("recover", r))
 			if uninstallDeployment != nil {
 				_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 			}
-			if integration != nil {
-				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
-			}
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, fmt.Sprint(r))
 		}
 	}()
 
-	integration, err := b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBridge.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		return
-	}
-
-	if integration == nil {
-		logger.Error("integration not found", zap.String("plugin", enum.IntegrationTypeBridge.String()))
-		return
-	}
-
-	if err = b.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating); err != nil {
+	if err := b.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminating); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
@@ -395,11 +391,11 @@ func (b *BridgeIntegration) uninstallTask(ctx context.Context, stack *entities.S
 	if err = thanos.UninstallBridge(ctx, sdkClient); err != nil {
 		logger.Error("failed to uninstall bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
-		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error())
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error())
 		return
 	}
 
-	if err = b.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated); err != nil {
+	if err = b.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminated); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
@@ -469,4 +465,128 @@ func (b *BridgeIntegration) tailAndIngestLogs(
 			}
 		}
 	}
+}
+
+// Cancel sets the cancellation flag the task will be detect and do cleanup
+func (b *BridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	// 1 Fetch integration
+	integration, err := b.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	// 2 Validate status: can only cancel if inprogress or pending
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// Set the integration status to cancelling
+	if err = b.integrationRepo.UpdateIntegrationStatusWithReason(
+		integration.ID.String(),
+		entities.DeploymentStatusCancelling,
+		"Stopping installation process. This may take several minutes to safely clean up AWS resources (ECS tasks, networking).",
+	); err != nil {
+		logger.Error("failed to request cancellation", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to request cancellation",
+			Data:    nil,
+		}, err
+	}
+
+	b.taskManager.AddTask(fmt.Sprintf("cancel-bridge-%s", stackId.String()), func(ctx context.Context) {
+		defer func() {
+			deployment, err := b.deploymentRepo.GetDeploymentByStepAndStatus(stackId.String(), constants.InstallBridgeStep, entities.DeploymentStatusInProgress)
+			if err != nil {
+				logger.Error("failed to get deployment record", zap.Error(err), zap.String("stackId", stackId.String()))
+				return
+			}
+			if deployment != nil {
+				_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusStopped)
+			}
+		}()
+		// then stop the running task to cancel the context immediately
+		taskId := fmt.Sprintf("install-bridge-%s", stackId.String())
+		b.taskManager.StopTask(taskId)
+
+		stack, err := b.stackRepo.GetStackByID(stackId.String())
+		if err != nil {
+			logger.Error("failed to get stack", zap.Error(err), zap.String("stackId", stackId.String()))
+			return
+		}
+
+		stackConfig := dtos.DeployThanosRequest{}
+		if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+			logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+			return
+		}
+
+		sdkClient, err := thanos.NewThanosSDKClient(
+			ctx,
+			utils.GetLogPath(stack.ID, "cancel-bridge"),
+			string(stack.Network),
+			stack.DeploymentPath,
+			stackConfig.RegisterCandidate,
+			stackConfig.AwsAccessKey,
+			stackConfig.AwsSecretAccessKey,
+			stackConfig.AwsRegion,
+		)
+
+		if err = thanos.UninstallBridge(ctx, sdkClient); err != nil {
+			logger.Error("failed to uninstall bridge", zap.Error(err))
+
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+				integration.ID.String(),
+				entities.DeploymentStatusFailed,
+				err.Error(),
+			)
+			return
+		}
+
+		logger.Info("Cancellation requested successfully", zap.String("integrationId", integrationId.String()))
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+			integration.ID.String(),
+			entities.DeploymentStatusCancelled,
+			"Installation cancelled successfully. All AWS resources have been cleaned up.",
+		)
+
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Cancellation in progress. Installation will be stopped and AWS resources will be cleaned up. This may take 3-5 minutes for safe cleanup.",
+		Data:    nil,
+	}, nil
+}
+
+func (b *BridgeIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	return retryIntegrationCommon(ctx, stackId, integrationId, b.integrationRepo, b.stackRepo,
+		func(stack *entities.StackEntity, integration *entities.IntegrationEntity) error {
+			logPath := utils.GetLogPath(stack.ID, "install-bridge")
+
+			// bridge doesnt need any config, just kick it off again
+			taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
+			b.taskManager.AddTask(taskId, func(ctx context.Context) {
+				b.installTask(ctx, integration.ID, stack, logPath)
+			})
+
+			return nil
+		})
 }

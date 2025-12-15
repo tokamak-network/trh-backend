@@ -105,6 +105,14 @@ func (tm *TaskManager) StopTask(id string) {
 	}
 }
 
+// IsTaskRunning checks if a task is currently running
+func (tm *TaskManager) IsTaskRunning(id string) bool {
+	tm.taskLock.RLock()
+	defer tm.taskLock.RUnlock()
+	_, exists := tm.activeTasks[id]
+	return exists
+}
+
 // Stop stops all workers and tasks
 func (tm *TaskManager) Stop() {
 	logger.Info("Stopping TaskManager...")

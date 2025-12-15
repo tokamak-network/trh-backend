@@ -150,6 +150,28 @@ func (r *DeploymentRepository) GetDeploymentStatus(id string) (entities.Deployme
 	return deployment.Status, nil
 }
 
+func (r *DeploymentRepository) GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error) {
+	var deployment schemas.Deployment
+	if err := r.db.Where("stack_id = ?", stackID).
+		Where("step = ?", step).
+		Where("status = ?", status).
+		First(&deployment).Error; err != nil {
+		return nil, err
+	}
+	return &entities.DeploymentEntity{
+		ID:         deployment.ID,
+		StackID:    deployment.StackID,
+		Step:       deployment.Step,
+		Status:     deployment.Status,
+		LogPath:    deployment.LogPath,
+		Config:     json.RawMessage(deployment.Config),
+		CreatedAt:  deployment.CreatedAt,
+		UpdatedAt:  deployment.UpdatedAt,
+		StartedAt:  deployment.StartedAt,
+		FinishedAt: deployment.FinishedAt,
+	}, nil
+}
+
 func ToDeploymentSchema(d *entities.DeploymentEntity) *schemas.Deployment {
 	return &schemas.Deployment{
 		ID:         d.ID,

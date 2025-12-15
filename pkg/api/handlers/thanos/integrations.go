@@ -724,3 +724,78 @@ func (h *ThanosDeploymentHandler) UninstallUptimeService(c *gin.Context) {
 	}
 	c.JSON(int(response.Status), response)
 }
+
+func (h *ThanosDeploymentHandler) CancelIntegration(c *gin.Context) {
+	stackUUID, integrationUUID, handled := parseAndValidateIntegrationIDs(c)
+	if handled {
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.CancelIntegration(c.Request.Context(), stackUUID, integrationUUID)
+	if err != nil {
+		logger.Error("failed to cancel integration", zap.Error(err),
+			zap.String("id", stackUUID.String()),
+			zap.String("integrationId", integrationUUID.String()))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+func (h *ThanosDeploymentHandler) RetryIntegration(c *gin.Context) {
+	stackUUID, integrationUUID, handled := parseAndValidateIntegrationIDs(c)
+	if handled {
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.RetryIntegration(c.Request.Context(), stackUUID, integrationUUID)
+	if err != nil {
+		logger.Error("failed to retry integration", zap.Error(err),
+			zap.String("id", stackUUID.String()),
+			zap.String("integrationId", integrationUUID.String()))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// parseAndValidateIntegrationIDs extracts and validates stack and integration IDs from request params
+func parseAndValidateIntegrationIDs(c *gin.Context) (stackUUID uuid.UUID, integrationUUID uuid.UUID, handled bool) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return uuid.Nil, uuid.Nil, true
+	}
+
+	integrationId := c.Param("integrationId")
+	if integrationId == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "integrationId is required",
+			Data:    nil,
+		})
+		return uuid.Nil, uuid.Nil, true
+	}
+
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return uuid.Nil, uuid.Nil, true
+	}
+
+	integrationUUID, err = uuid.Parse(integrationId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid integration id format",
+			Data:    nil,
+		})
+		return uuid.Nil, uuid.Nil, true
+	}
+
+	return stackUUID, integrationUUID, false
+}

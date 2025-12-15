@@ -106,10 +106,6 @@ func (r *IntegrationRepository) GetInstalledIntegration(
 	var integration schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status IN (?)", []string{
 		string(entities.DeploymentStatusCompleted),
-		string(entities.DeploymentStatusFailed),
-		string(entities.DeploymentStatusInProgress),
-		string(entities.DeploymentStatusPending),
-		string(entities.DeploymentStatusUnknown),
 	}).First(&integration).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No integration found
@@ -124,7 +120,17 @@ func (r *IntegrationRepository) GetActiveIntegrations(
 	integrationType string,
 ) ([]*entities.IntegrationEntity, error) {
 	var integrations []schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("type = ?", integrationType).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at desc").Find(&integrations).Error; err != nil {
+	// if err := r.db.Where("stack_id = ?", stackId).Where("type = ?", integrationType).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at desc").Find(&integrations).Error; err != nil {
+	if err := r.db.Where("stack_id = ?", stackId).
+		Where("type = ?", integrationType).
+		Where("status NOT IN ?", []string{
+			string(entities.DeploymentStatusTerminated),
+			string(entities.DeploymentStatusCancelled),
+			string(entities.DeploymentStatusFailed),
+			string(entities.DeploymentStatusCancelling),
+		}).
+		Order("created_at desc").
+		Find(&integrations).Error; err != nil {
 		return nil, err
 	}
 	integrationEntities := make([]*entities.IntegrationEntity, len(integrations))
@@ -222,5 +228,6 @@ func ToIntegrationEntity(
 		Config:  json.RawMessage(integration.Config),
 		Info:    json.RawMessage(integration.Info),
 		LogPath: integration.LogPath,
+		Reason:  integration.Reason,
 	}
 }
