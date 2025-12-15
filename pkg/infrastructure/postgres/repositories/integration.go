@@ -83,15 +83,6 @@ func (r *IntegrationRepository) UpdateConfig(
 		Error
 }
 
-func (r *IntegrationRepository) RequestCancellation(
-	id string,
-) error {
-	return r.db.Model(&schemas.Integration{}).
-		Where("id = ?", id).
-		Update("cancellation_requested", true).
-		Error
-}
-
 func (r *IntegrationRepository) UpdateIntegrationsStatusByStackID(
 	stackID string,
 	status entities.DeploymentStatus,
@@ -115,10 +106,6 @@ func (r *IntegrationRepository) GetInstalledIntegration(
 	var integration schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status IN (?)", []string{
 		string(entities.DeploymentStatusCompleted),
-		string(entities.DeploymentStatusFailed),
-		string(entities.DeploymentStatusInProgress),
-		string(entities.DeploymentStatusPending),
-		string(entities.DeploymentStatusUnknown),
 	}).First(&integration).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No integration found
@@ -140,6 +127,7 @@ func (r *IntegrationRepository) GetActiveIntegrations(
 			string(entities.DeploymentStatusTerminated),
 			string(entities.DeploymentStatusCancelled),
 			string(entities.DeploymentStatusFailed),
+			string(entities.DeploymentStatusCancelling),
 		}).
 		Order("created_at desc").
 		Find(&integrations).Error; err != nil {
@@ -233,14 +221,13 @@ func ToIntegrationEntity(
 	integration *schemas.Integration,
 ) *entities.IntegrationEntity {
 	return &entities.IntegrationEntity{
-		ID:                    integration.ID,
-		StackID:               integration.StackID,
-		Type:                  integration.Type,
-		Status:                string(integration.Status),
-		Config:                json.RawMessage(integration.Config),
-		Info:                  json.RawMessage(integration.Info),
-		LogPath:               integration.LogPath,
-		Reason:                integration.Reason,
-		CancellationRequested: integration.CancellationRequested,
+		ID:      integration.ID,
+		StackID: integration.StackID,
+		Type:    integration.Type,
+		Status:  string(integration.Status),
+		Config:  json.RawMessage(integration.Config),
+		Info:    json.RawMessage(integration.Info),
+		LogPath: integration.LogPath,
+		Reason:  integration.Reason,
 	}
 }

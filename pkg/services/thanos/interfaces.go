@@ -92,9 +92,6 @@ type IntegrationRepository interface {
 		id string,
 		config json.RawMessage,
 	) error
-	RequestCancellation(
-		id string,
-	) error
 }
 
 type LogRepository interface {

@@ -16,13 +16,12 @@ func (info IntegrationInfo) ToJson() (json.RawMessage, error) {
 }
 
 type IntegrationEntity struct {
-	ID                    uuid.UUID       `json:"id"`
-	StackID               *uuid.UUID      `json:"stack_id"`
-	Type                  string          `json:"type"`
-	Status                string          `json:"status"`
-	Config                json.RawMessage `json:"config"`
-	Info                  json.RawMessage `json:"info"`
-	LogPath               string          `json:"log_path"`
-	Reason                string          `json:"reason"`
-	CancellationRequested bool            `json:"cancellation_requested"`
+	ID      uuid.UUID       `json:"id"`
+	StackID *uuid.UUID      `json:"stack_id"`
+	Type    string          `json:"type"`
+	Status  string          `json:"status"`
+	Config  json.RawMessage `json:"config"`
+	Info    json.RawMessage `json:"info"`
+	LogPath string          `json:"log_path"`
+	Reason  string          `json:"reason"`
 }

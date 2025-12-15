@@ -42,7 +42,6 @@ type BridgeIntegration struct {
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
-		RequestCancellation(id string) error
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -73,7 +72,6 @@ func NewBridgeIntegration(
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
-		RequestCancellation(id string) error
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -162,7 +160,7 @@ func (b *BridgeIntegration) Install(ctx context.Context, stackId string) (*entit
 
 	taskId := fmt.Sprintf("install-bridge-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.installTask(ctx, stack, logPath)
+		b.installTask(ctx, bridgeIntegration.ID, stack, logPath)
 	})
 
 	return &entities.Response{
@@ -223,7 +221,7 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 }
 
 // installTask handles the actual installation process
-func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.StackEntity, logPath string) {
+func (b *BridgeIntegration) installTask(ctx context.Context, newIntegrationID uuid.UUID, stack *entities.StackEntity, logPath string) {
 	// creates context with 30min timeout so to prevent infinite running installations
 	taskCtx, taskCancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer taskCancel()
@@ -234,20 +232,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 		return
 	}
 
-	bridgeIntegration, err := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBridge.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
-		return
-	}
-
-	// Check for cancellation before starting
-	if bridgeIntegration.CancellationRequested {
-		logger.Info("Cancellation requested before install started", zap.String("integrationId", bridgeIntegration.ID.String()))
-		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusCancelled, "Cancelled before installation started")
-		return
-	}
-
-	if err := b.integrationRepo.UpdateIntegrationStatus(bridgeIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+	if err := b.integrationRepo.UpdateIntegrationStatus(newIntegrationID.String(), entities.DeploymentStatusInProgress); err != nil {
 		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		return
 	}
@@ -289,93 +274,17 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 	if err != nil {
 		logger.Error("failed to install bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 
-		// checks if this failure was due to cancellation
-		bridgeIntegration, fetchErr := b.integrationRepo.GetIntegrationById(bridgeIntegration.ID.String())
-		if fetchErr == nil && bridgeIntegration.CancellationRequested {
-			logger.Info("Installation failed due to cancellation, cleaning up resources", zap.String("integrationId", bridgeIntegration.ID.String()))
-
-			// update status to show we are cleaning up
-			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-				bridgeIntegration.ID.String(),
-				entities.DeploymentStatusCancelling,
-				"Installation stopped. Cleaning up AWS resources (removing ECS tasks, destroying networking resources)...",
-			)
-
-			// Call SDK uninstall to clean up any partially created resources
-			logger.Info("Starting cleanup of AWS resources", zap.String("integrationId", bridgeIntegration.ID.String()))
-			// IMP: Use a fresh context for cleanup since taskCtx is cancelled
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-			defer cleanupCancel()
-
-			if cleanupErr := thanos.UninstallBridge(cleanupCtx, sdkClient); cleanupErr != nil {
-				logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
-				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-					bridgeIntegration.ID.String(),
-					entities.DeploymentStatusCancelled,
-					fmt.Sprintf("Installation cancelled but some resources may remain. Manual cleanup may be required: %v", cleanupErr),
-				)
-				_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
-			} else {
-				logger.Info("Cleanup completed successfully", zap.String("integrationId", bridgeIntegration.ID.String()))
-				_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-					bridgeIntegration.ID.String(),
-					entities.DeploymentStatusCancelled,
-					"Installation cancelled successfully. All AWS resources have been cleaned up.",
-				)
-				_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
-			}
-			return
-		}
-
-		//not cancellation -regular failure
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", bridgeIntegration.ID.String()))
+		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
-	// check for cancellation after SDK install completes -main point!!!
-	bridgeIntegration, err = b.integrationRepo.GetIntegrationById(bridgeIntegration.ID.String())
-	if err == nil && bridgeIntegration.CancellationRequested {
-		logger.Info("Cancellation requested after install, cleaning up resources", zap.String("integrationId", bridgeIntegration.ID.String()))
-
-		// update status to show we are cleaning up
-		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-			bridgeIntegration.ID.String(),
-			entities.DeploymentStatusCancelling,
-			"Installation stopped. Cleaning up AWS resources (removing ECS tasks, destroying networking resources)...",
-		)
-
-		logger.Info("Starting cleanup of AWS resources", zap.String("integrationId", bridgeIntegration.ID.String()))
-		// IMP: Use a fresh context for cleanup since taskCtx is cancelled
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer cleanupCancel()
-
-		if cleanupErr := thanos.UninstallBridge(cleanupCtx, sdkClient); cleanupErr != nil {
-			logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
-			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-				bridgeIntegration.ID.String(),
-				entities.DeploymentStatusCancelled,
-				fmt.Sprintf("Installation cancelled but some resources may remain. Manual cleanup may be required: %v", cleanupErr),
-			)
-			_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
-		} else {
-			logger.Info("Cleanup completed successfully", zap.String("integrationId", bridgeIntegration.ID.String()))
-			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-				bridgeIntegration.ID.String(),
-				entities.DeploymentStatusCancelled,
-				"Installation cancelled successfully. All AWS resources have been cleaned up.",
-			)
-			_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusCancelled)
-		}
-		return
-	}
-
 	if bridgeUrl == "" {
 		logger.Error("bridge URL is empty", zap.String("plugin", enum.IntegrationTypeBridge.String()))
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(bridgeIntegration.ID.String(), entities.DeploymentStatusFailed, "Bridge URL is empty"); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", bridgeIntegration.ID.String()))
+		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, "Bridge URL is empty"); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
@@ -390,7 +299,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 		return
 	}
 
-	if err = b.integrationRepo.UpdateConfig(bridgeIntegration.ID.String(), json.RawMessage(config)); err != nil {
+	if err = b.integrationRepo.UpdateConfig(newIntegrationID.String(), json.RawMessage(config)); err != nil {
 		logger.Error("failed to update bridge integration config", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
@@ -404,7 +313,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, stack *entities.Sta
 		return
 	}
 
-	if err = b.integrationRepo.UpdateMetadataAfterInstalled(bridgeIntegration.ID.String(), entities.IntegrationInfo(bytes)); err != nil {
+	if err = b.integrationRepo.UpdateMetadataAfterInstalled(newIntegrationID.String(), entities.IntegrationInfo(bytes)); err != nil {
 		logger.Error("failed to create integration", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
@@ -600,25 +509,72 @@ func (b *BridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integ
 		}, nil
 	}
 
-	// 3 Set cancellation flag - the install task will see this and handle cleanup
-	if err = b.integrationRepo.RequestCancellation(integration.ID.String()); err != nil {
-		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to request cancellation"}, err
-	}
-
-	// Stop the running task to cancel the context immediately
-	taskId := fmt.Sprintf("install-bridge-%s", stackId.String())
-	b.taskManager.StopTask(taskId)
-
-	// 4 Update status to Cancelling
+	// Set the integration status to cancelling
 	if err = b.integrationRepo.UpdateIntegrationStatusWithReason(
 		integration.ID.String(),
 		entities.DeploymentStatusCancelling,
 		"Stopping installation process. This may take several minutes to safely clean up AWS resources (ECS tasks, networking).",
 	); err != nil {
-		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to update status"}, err
+		logger.Error("failed to request cancellation", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to request cancellation",
+			Data:    nil,
+		}, err
 	}
 
-	return &entities.Response{Status: http.StatusOK, Message: "Cancellation in progress. Installation will be stopped and AWS resources will be cleaned up. This may take 3-5 minutes for safe cleanup."}, nil
+	b.taskManager.AddTask(fmt.Sprintf("cancel-bridge-%s", stackId.String()), func(ctx context.Context) {
+		// then stop the running task to cancel the context immediately
+		taskId := fmt.Sprintf("install-bridge-%s", stackId.String())
+		b.taskManager.StopTask(taskId)
+
+		stack, err := b.stackRepo.GetStackByID(stackId.String())
+		if err != nil {
+			logger.Error("failed to get stack", zap.Error(err), zap.String("stackId", stackId.String()))
+			return
+		}
+
+		stackConfig := dtos.DeployThanosRequest{}
+		if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+			logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+			return
+		}
+
+		sdkClient, err := thanos.NewThanosSDKClient(
+			ctx,
+			utils.GetLogPath(stack.ID, "cancel-bridge"),
+			string(stack.Network),
+			stack.DeploymentPath,
+			stackConfig.RegisterCandidate,
+			stackConfig.AwsAccessKey,
+			stackConfig.AwsSecretAccessKey,
+			stackConfig.AwsRegion,
+		)
+
+		if err = thanos.UninstallBridge(ctx, sdkClient); err != nil {
+			logger.Error("failed to uninstall bridge", zap.Error(err))
+
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+				integration.ID.String(),
+				entities.DeploymentStatusFailed,
+				err.Error(),
+			)
+			return
+		}
+
+		logger.Info("Cancellation requested successfully", zap.String("integrationId", integrationId.String()))
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+			integration.ID.String(),
+			entities.DeploymentStatusCancelled,
+			"Installation cancelled successfully. All AWS resources have been cleaned up.",
+		)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Cancellation in progress. Installation will be stopped and AWS resources will be cleaned up. This may take 3-5 minutes for safe cleanup.",
+		Data:    nil,
+	}, nil
 }
 
 func (b *BridgeIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
@@ -629,7 +585,7 @@ func (b *BridgeIntegration) Retry(ctx context.Context, stackId uuid.UUID, integr
 			// bridge doesnt need any config, just kick it off again
 			taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId.String())
 			b.taskManager.AddTask(taskId, func(ctx context.Context) {
-				b.installTask(ctx, stack, logPath)
+				b.installTask(ctx, integration.ID, stack, logPath)
 			})
 
 			return nil

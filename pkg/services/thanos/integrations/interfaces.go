@@ -43,7 +43,6 @@ func NewIntegrationManager(
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
-		RequestCancellation(id string) error
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -286,7 +285,8 @@ type BadRequestError struct {
 func (e *BadRequestError) Error() string {
 	return e.message
 }
-// implemented cancle individually per integration with sdk cleanup 
+
+// implemented cancle individually per integration with sdk cleanup
 
 // cancelIntegrationCommon implements common cancellation logic for all integration types
 // func cancelIntegrationCommon(
