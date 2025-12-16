@@ -2,7 +2,7 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: fix/email-alert-failed
+    branches: [main]
 
 env:
   REGISTRY: docker.io
