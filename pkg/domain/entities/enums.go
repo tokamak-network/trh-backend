@@ -26,6 +26,14 @@ const (
 
 type DeploymentStatus string
 
+var DeploymentStatusesAllowedToInstall = []DeploymentStatus{
+	DeploymentStatusFailed,     // When failed, we can try to install again
+	DeploymentStatusStopped,    // When stopped, we can try to install again
+	DeploymentStatusTerminated, // When terminated, we can try to install again
+	DeploymentStatusCancelled,  // When cancelled, we can try to install again
+	DeploymentStatusUnknown,    // When unknown, we can try to install again
+}
+
 const (
 	DeploymentStatusPending     DeploymentStatus = "Pending"
 	DeploymentStatusInProgress  DeploymentStatus = "InProgress"

@@ -123,12 +123,7 @@ func (r *IntegrationRepository) GetActiveIntegrations(
 	// if err := r.db.Where("stack_id = ?", stackId).Where("type = ?", integrationType).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at desc").Find(&integrations).Error; err != nil {
 	if err := r.db.Where("stack_id = ?", stackId).
 		Where("type = ?", integrationType).
-		Where("status NOT IN ?", []string{
-			string(entities.DeploymentStatusTerminated),
-			string(entities.DeploymentStatusCancelled),
-			string(entities.DeploymentStatusFailed),
-			string(entities.DeploymentStatusCancelling),
-		}).
+		Where("status NOT IN ?", entities.DeploymentStatusesAllowedToInstall).
 		Order("created_at desc").
 		Find(&integrations).Error; err != nil {
 		return nil, err
