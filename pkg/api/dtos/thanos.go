@@ -269,7 +269,7 @@ func (r *InstallMonitoringRequest) Validate() error {
 				Enabled:          r.AlertManager.Email.Enabled,
 				SmtpSmarthost:    r.AlertManager.Email.SmtpSmarthost,
 				SmtpFrom:         r.AlertManager.Email.SmtpFrom,
-				SmtpAuthPassword: r.AlertManager.Email.SmtpAuthPassword,
+				SmtpAuthPassword: trhSdkUtils.CleanPasswordInput(r.AlertManager.Email.SmtpAuthPassword),
 				AlertReceivers:   r.AlertManager.Email.AlertReceivers,
 			},
 		},
