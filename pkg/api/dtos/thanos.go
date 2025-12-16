@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/mail"
 	"regexp"
-	"strings"
 
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -432,7 +431,7 @@ func (r *UpdateEmailConfigRequest) Validate() error {
 	// Clean password: Remove all whitespace characters
 	// Gmail app passwords are displayed with spaces (e.g., "abcd efgh ijkl mnop")
 	// but must be used without spaces (e.g., "abcdefghijklmnop")
-	r.SmtpAuthPassword = cleanPassword(r.SmtpAuthPassword)
+	r.SmtpAuthPassword = trhSdkUtils.CleanPasswordInput(r.SmtpAuthPassword)
 
 	// Validate email addresses
 	for _, email := range r.AlertReceivers {
@@ -442,20 +441,6 @@ func (r *UpdateEmailConfigRequest) Validate() error {
 	}
 
 	return nil
-}
-
-// cleanPassword removes all whitespace characters from password string
-// This is critical for Gmail app passwords which contain spaces when copied
-func cleanPassword(password string) string {
-	// Remove all types of whitespace
-	password = strings.ReplaceAll(password, " ", "")
-	password = strings.ReplaceAll(password, "\t", "")
-	password = strings.ReplaceAll(password, "\n", "")
-	password = strings.ReplaceAll(password, "\r", "")
-	password = strings.ReplaceAll(password, "\u00A0", "") // NBSP
-	password = strings.ReplaceAll(password, "\u200B", "") // Zero-width space
-	password = strings.ReplaceAll(password, "\uFEFF", "") // BOM
-	return strings.TrimSpace(password)
 }
 
 // UpdateTelegramConfigRequest holds the request for updating telegram alert configuration
