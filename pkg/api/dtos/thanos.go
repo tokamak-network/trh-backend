@@ -428,6 +428,11 @@ func (r *UpdateEmailConfigRequest) Validate() error {
 		return errors.New("alertReceivers is required")
 	}
 
+	// Clean password: Remove all whitespace characters
+	// Gmail app passwords are displayed with spaces (e.g., "abcd efgh ijkl mnop")
+	// but must be used without spaces (e.g., "abcdefghijklmnop")
+	r.SmtpAuthPassword = trhSdkUtils.CleanPasswordInput(r.SmtpAuthPassword)
+
 	// Validate email addresses
 	for _, email := range r.AlertReceivers {
 		if _, err := mail.ParseAddress(email); err != nil {

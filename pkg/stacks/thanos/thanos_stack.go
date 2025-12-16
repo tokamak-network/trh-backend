@@ -352,17 +352,12 @@ func RemoveTelegramConfig(ctx context.Context, s *thanosStack.ThanosStack) error
 func UpdateEmailConfig(ctx context.Context, s *thanosStack.ThanosStack, emailConfig *dtos.UpdateEmailConfigRequest) error {
 	alertCustomization := &thanosStack.AlertCustomization{Stack: s}
 
-	// Convert receivers slice to comma-separated string if needed
-	var receiversStr string
-	if len(emailConfig.AlertReceivers) > 0 {
-		receiversStr = strings.Join(emailConfig.AlertReceivers, ",")
-	}
-
+	// For Gmail, smtpUsername should be the same as smtpFrom (email address)
 	return alertCustomization.UpdateEmailConfig(ctx,
 		emailConfig.SmtpSmarthost,
 		emailConfig.SmtpFrom,
-		emailConfig.SmtpAuthPassword,
-		receiversStr,
+		emailConfig.SmtpFrom,         // smtpUsername = smtpFrom (email address)
+		emailConfig.SmtpAuthPassword, // smtpPassword
 		emailConfig.AlertReceivers,
 	)
 }
