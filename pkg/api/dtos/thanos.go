@@ -251,6 +251,9 @@ type InstallMonitoringRequest struct {
 }
 
 func (r *InstallMonitoringRequest) Validate() error {
+	// Clean password input before validation
+	r.AlertManager.Email.SmtpAuthPassword = trhSdkUtils.CleanPasswordInput(r.AlertManager.Email.SmtpAuthPassword)
+
 	telegramReceivers := make([]trhSdkTypes.TelegramReceiver, len(r.AlertManager.Telegram.CriticalReceivers))
 	for i, receiver := range r.AlertManager.Telegram.CriticalReceivers {
 		telegramReceivers[i] = trhSdkTypes.TelegramReceiver{
@@ -269,7 +272,7 @@ func (r *InstallMonitoringRequest) Validate() error {
 				Enabled:          r.AlertManager.Email.Enabled,
 				SmtpSmarthost:    r.AlertManager.Email.SmtpSmarthost,
 				SmtpFrom:         r.AlertManager.Email.SmtpFrom,
-				SmtpAuthPassword: trhSdkUtils.CleanPasswordInput(r.AlertManager.Email.SmtpAuthPassword),
+				SmtpAuthPassword: r.AlertManager.Email.SmtpAuthPassword,
 				AlertReceivers:   r.AlertManager.Email.AlertReceivers,
 			},
 		},
