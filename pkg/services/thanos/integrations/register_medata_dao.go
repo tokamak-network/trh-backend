@@ -172,7 +172,7 @@ func (r *RegisterMetadataDAOIntegration) Register(ctx context.Context, stackId u
 
 	taskId := fmt.Sprintf("register-metadata-dao-%s", stackId.String())
 	r.taskManager.AddTask(taskId, func(ctx context.Context) {
-		r.registerTask(ctx, stack, req, registerMetadataDaoLogPath, stackId, registerMetadataDaoIntegration.ID)
+		r.registerTask(ctx, stack, req, registerMetadataDaoLogPath, stackId, registerMetadataDaoIntegration.ID, integrationConfig)
 	})
 
 	return &entities.Response{
@@ -183,12 +183,7 @@ func (r *RegisterMetadataDAOIntegration) Register(ctx context.Context, stackId u
 }
 
 // registerTask handles the actual registration process
-func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack *entities.StackEntity, req dtos.RegisterMetadataDAORequest, logPath string, stackId uuid.UUID, integrationID uuid.UUID) {
-	integrationConfig, err := json.Marshal(req)
-	if err != nil {
-		logger.Error("failed to marshal integration config", zap.Error(err))
-		return
-	}
+func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack *entities.StackEntity, req dtos.RegisterMetadataDAORequest, logPath string, stackId uuid.UUID, integrationID uuid.UUID, integrationConfig []byte) {
 
 	if err := r.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusInProgress); err != nil {
 		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
@@ -210,8 +205,7 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}
-	err = json.Unmarshal(stack.Config, &stackConfig)
-	if err != nil {
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.Error(err))
 		return
 	}
@@ -235,7 +229,7 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack
 	defer cancel()
 	go r.tailAndIngestLogs(ingestCtx, stackId, deployment.ID, logPath)
 
-	registerMedataDaoResult, err := thanos.RegisterMetadataDAO(ctx, sdkClient, &req)
+	registerMetadataDaoResult, err := thanos.RegisterMetadataDAO(ctx, sdkClient, &req)
 	if err != nil {
 		logger.Error("failed to register metadata dao", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err), zap.String("stackId", stackId.String()))
 		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
@@ -259,14 +253,14 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack
 		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err), zap.String("integrationId", integrationID.String()))
 	}
 
-	bytes, err := json.Marshal(registerMedataDaoResult)
+	bytes, err := json.Marshal(registerMetadataDaoResult)
 	if err != nil {
 		logger.Error("failed to marshal register metadata dao info", zap.Error(err))
 		deploymentStatus = entities.DeploymentRunStatusFailed
 		return
 	}
 
-	if err = r.integrationRepo.UpdateMetadataAfterInstalled(integrationID.String(), bytes); err != nil {
+	if err = r.integrationRepo.UpdateMetadataAfterInstalled(integrationID.String(), entities.IntegrationInfo(bytes)); err != nil {
 		logger.Error("failed to update register metadata dao integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
 		deploymentStatus = entities.DeploymentRunStatusFailed
 		return
