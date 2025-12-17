@@ -172,7 +172,7 @@ func (r *RegisterMetadataDAOIntegration) Register(ctx context.Context, stackId u
 
 	taskId := fmt.Sprintf("register-metadata-dao-%s", stackId.String())
 	r.taskManager.AddTask(taskId, func(ctx context.Context) {
-		r.registerTask(ctx, stack, req, registerMetadataDaoLogPath, stackId)
+		r.registerTask(ctx, stack, req, registerMetadataDaoLogPath, stackId, registerMetadataDaoIntegration.ID)
 	})
 
 	return &entities.Response{
@@ -183,19 +183,14 @@ func (r *RegisterMetadataDAOIntegration) Register(ctx context.Context, stackId u
 }
 
 // registerTask handles the actual registration process
-func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack *entities.StackEntity, req dtos.RegisterMetadataDAORequest, logPath string, stackId uuid.UUID) {
+func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack *entities.StackEntity, req dtos.RegisterMetadataDAORequest, logPath string, stackId uuid.UUID, integrationID uuid.UUID) {
 	integrationConfig, err := json.Marshal(req)
 	if err != nil {
 		logger.Error("failed to marshal integration config", zap.Error(err))
 		return
 	}
 
-	registerMetadataDaoIntegration, err := r.integrationRepo.GetInstalledIntegration(stackId.String(), enum.IntegrationTypeRegisterMetadataDAO.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
-		return
-	}
-	if err := r.integrationRepo.UpdateIntegrationStatus(registerMetadataDaoIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+	if err := r.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusInProgress); err != nil {
 		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
 		return
 	}
@@ -243,8 +238,8 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack
 	registerMedataDaoResult, err := thanos.RegisterMetadataDAO(ctx, sdkClient, &req)
 	if err != nil {
 		logger.Error("failed to register metadata dao", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err), zap.String("stackId", stackId.String()))
-		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(registerMetadataDaoIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(updateErr), zap.String("integrationId", registerMetadataDaoIntegration.ID.String()))
+		if updateErr := r.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(updateErr), zap.String("integrationId", integrationID.String()))
 		}
 		deploymentStatus := entities.DeploymentRunStatusFailed
 		if errors.Is(err, context.Canceled) {
@@ -260,8 +255,8 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack
 		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
 	}()
 
-	if err = r.integrationRepo.UpdateIntegrationStatus(registerMetadataDaoIntegration.ID.String(), entities.DeploymentStatusCompleted); err != nil {
-		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err), zap.String("integrationId", registerMetadataDaoIntegration.ID.String()))
+	if err = r.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusCompleted); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err), zap.String("integrationId", integrationID.String()))
 	}
 
 	bytes, err := json.Marshal(registerMedataDaoResult)
@@ -271,7 +266,7 @@ func (r *RegisterMetadataDAOIntegration) registerTask(ctx context.Context, stack
 		return
 	}
 
-	if err = r.integrationRepo.UpdateMetadataAfterInstalled(registerMetadataDaoIntegration.ID.String(), bytes); err != nil {
+	if err = r.integrationRepo.UpdateMetadataAfterInstalled(integrationID.String(), bytes); err != nil {
 		logger.Error("failed to update register metadata dao integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterMetadataDAO.String()), zap.Error(err))
 		deploymentStatus = entities.DeploymentRunStatusFailed
 		return
