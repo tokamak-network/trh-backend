@@ -2,6 +2,8 @@ module github.com/tokamak-network/trh-backend
 
 go 1.24.11
 
+replace github.com/tokamak-network/trh-sdk => ../trh-sdk
+
 require (
 	github.com/ethereum/go-ethereum v1.15.2
 	github.com/gin-contrib/cors v1.6.0
@@ -12,7 +14,7 @@ require (
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
-	github.com/tokamak-network/trh-sdk v1.0.1-0.20251211080155-d8ddbb931c4a
+	github.com/tokamak-network/trh-sdk v1.0.4-0.20251221073728-2d1b4a952ac4
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.45.0
 	gorm.io/datatypes v1.2.5
@@ -98,6 +100,7 @@ require (
 	github.com/tyler-smith/go-bip32 v1.0.0 // indirect
 	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
+	github.com/urfave/cli/v3 v3.0.0-beta1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect

@@ -252,11 +252,7 @@ func (b *CrossTradeBridgeIntegration) Uninstall(ctx context.Context, stackId str
 
 	taskId := fmt.Sprintf("uninstall-cross-trade-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-<<<<<<< HEAD
-		b.uninstallTask(ctx, CrossTradeBridgeIntegration.ID, stack, stackId, logPath)
-=======
-		b.uninstallTask(ctx, stack, stackId, logPath, installedIntegration.Type)
->>>>>>> f1a2e14 (feat: cross trade integration)
+		b.uninstallTask(ctx, installedIntegration.ID, stack, stackId, logPath, installedIntegration.Type)
 	})
 
 	return &entities.Response{
@@ -418,7 +414,7 @@ func (b *CrossTradeBridgeIntegration) installTask(ctx context.Context, stack *en
 }
 
 // uninstallTask handles the actual uninstallation process
-func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, stack *entities.StackEntity, stackId string, logPath string, integrationType string) {
+func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, integrationID uuid.UUID, stack *entities.StackEntity, stackId string, logPath string, integrationType string) {
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
@@ -436,18 +432,7 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, stack *
 		}
 	}()
 
-	integration, err := b.integrationRepo.GetInstalledIntegration(stackId, integrationType)
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", integrationType), zap.Error(err))
-		return
-	}
-
-	if integration == nil {
-		logger.Error("integration not found", zap.String("plugin", integrationType))
-		return
-	}
-
-	if err = b.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminating); err != nil {
+	if err := b.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminating); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", integrationType), zap.Error(err))
 		return
 	}
@@ -493,20 +478,20 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, stack *
 	)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", integrationType), zap.Error(updateErr), zap.String("integrationId", integration.ID.String()))
+		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", integrationType), zap.Error(updateErr), zap.String("integrationId", integrationID.String()))
 		}
 		_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 		return
 	}
 
 	var mode string
-	if integration.Type == enum.IntegrationTypeCrossTradeL2ToL1.String() {
+	if integrationType == enum.IntegrationTypeCrossTradeL2ToL1.String() {
 		mode = string(thanosConstants.CrossTradeDeployModeL2ToL1)
-	} else if integration.Type == enum.IntegrationTypeCrossTradeL2ToL2.String() {
+	} else if integrationType == enum.IntegrationTypeCrossTradeL2ToL2.String() {
 		mode = string(thanosConstants.CrossTradeDeployModeL2ToL2)
 	} else {
-		logger.Error("invalid cross trade mode", zap.String("mode", integration.Type))
+		logger.Error("invalid cross trade mode", zap.String("mode", integrationType))
 		return
 	}
 	if err = thanos.UninstallCrossTradeBridge(ctx, sdkClient, mode); err != nil {
@@ -514,13 +499,13 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, stack *
 		if err := b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed); err != nil {
 			logger.Error("failed to update deployment status", zap.String("plugin", integrationType), zap.Error(err), zap.String("deploymentId", uninstallDeployment.ID.String()))
 		}
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", integrationType), zap.Error(updateErr), zap.String("integrationId", integration.ID.String()))
+		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
+			logger.Error("failed to update integration status", zap.String("plugin", integrationType), zap.Error(updateErr), zap.String("integrationId", integrationID.String()))
 		}
 		return
 	}
 
-	if err = b.integrationRepo.UpdateIntegrationStatus(integration.ID.String(), entities.DeploymentStatusTerminated); err != nil {
+	if err = b.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusTerminated); err != nil {
 		logger.Error("failed to update integration", zap.String("plugin", integrationType), zap.Error(err))
 		return
 	}
