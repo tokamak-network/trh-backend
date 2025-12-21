@@ -100,6 +100,8 @@ func NewCrossTradeBridgeIntegration(
 
 // Install installs a cross trade for the given stack
 func (b *CrossTradeBridgeIntegration) Install(ctx context.Context, stackUUID uuid.UUID, request dtos.InstallCrossChainBridgeRequest) (*entities.Response, error) {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
 	stackId := stackUUID.String()
 	if err := request.Validate(); err != nil {
 		logger.Error("invalid cross trade bridge request", zap.Error(err))
@@ -191,9 +193,8 @@ func (b *CrossTradeBridgeIntegration) Install(ctx context.Context, stackUUID uui
 
 	taskId := fmt.Sprintf("install-%s-%s", integrationType, stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.installTask(ctx, stack, request, logPath, integrationType)
+		b.installTask(ctxWithTimeout, stack, request, logPath, integrationType)
 	})
-
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",
@@ -525,6 +526,8 @@ func (b *CrossTradeBridgeIntegration) RegisterTokens(
 	mode string,
 	request dtos.RegisterTokensAPIRequest,
 ) (*entities.Response, error) {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
 	stack, err := b.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
@@ -649,7 +652,7 @@ func (b *CrossTradeBridgeIntegration) RegisterTokens(
 	}
 
 	b.taskManager.AddTask(fmt.Sprintf("register-tokens-%s-%s", stackId.String(), mode), func(ctx context.Context) {
-		output, err := thanos.RegisterTokens(ctx, sdkClient, crossTradeMode, request.Tokens)
+		output, err := thanos.RegisterTokens(ctxWithTimeout, sdkClient, crossTradeMode, request.Tokens)
 		if err != nil {
 			logger.Error("failed to register tokens", zap.String("stackId", stackId.String()), zap.String("mode", mode), zap.Error(err))
 			_ = b.deploymentRepo.UpdateDeploymentStatus(registerTokensDeployment.ID.String(), entities.DeploymentRunStatusFailed)
