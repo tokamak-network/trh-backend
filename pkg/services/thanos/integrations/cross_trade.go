@@ -205,7 +205,7 @@ func (b *CrossTradeBridgeIntegration) Install(ctx context.Context, stackUUID uui
 }
 
 // Uninstall uninstalls the cross trade for the given stack
-func (b *CrossTradeBridgeIntegration) Uninstall(ctx context.Context, stackId string, integrationId string) (*entities.Response, error) {
+func (b *CrossTradeBridgeIntegration) Uninstall(ctx context.Context, stackId string, mode string) (*entities.Response, error) {
 	stack, err := b.stackRepo.GetStackByID(stackId)
 	if err != nil {
 		return &entities.Response{
@@ -235,11 +235,25 @@ func (b *CrossTradeBridgeIntegration) Uninstall(ctx context.Context, stackId str
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-cross-trade")
 
-	installedIntegration, _ := b.integrationRepo.GetIntegrationById(integrationId)
+	var integrationType string
+	if mode == "l2_to_l1" {
+		integrationType = enum.IntegrationTypeCrossTradeL2ToL1.String()
+	} else if mode == "l2_to_l2" {
+		integrationType = enum.IntegrationTypeCrossTradeL2ToL2.String()
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", mode))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid cross trade mode",
+			Data:    nil,
+		}, nil
+	}
+
+	installedIntegration, _ := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), integrationType)
 	if installedIntegration == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
-			Message: "cross trade integration not found",
+			Message: "Cross trade integration not found",
 			Data:    nil,
 		}, nil
 	}

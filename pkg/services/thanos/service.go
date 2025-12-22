@@ -344,8 +344,8 @@ func (s *ThanosStackDeploymentService) InstallCrossChainBridge(ctx context.Conte
 	return s.integrationMgr.InstallCrossChainBridge(ctx, stackId, request)
 }
 
-func (s *ThanosStackDeploymentService) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	return s.integrationMgr.UninstallCrossChainBridge(ctx, stackId, integrationId)
+func (s *ThanosStackDeploymentService) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, mode string) (*entities.Response, error) {
+	return s.integrationMgr.UninstallCrossChainBridge(ctx, stackId, mode)
 }
 
 func (s *ThanosStackDeploymentService) RegisterTokens(ctx context.Context, stackId uuid.UUID, mode string, request dtos.RegisterTokensAPIRequest) (*entities.Response, error) {

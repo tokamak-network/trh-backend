@@ -831,24 +831,6 @@ func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
 		return
 	}
 
-	integrationId := c.Param("integrationID")
-	if integrationId == "" {
-		c.JSON(http.StatusBadRequest, &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "integrationID is required",
-			Data:    nil,
-		})
-		return
-	}
-	integrationUUID, err := uuid.Parse(integrationId)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "invalid integration id format",
-			Data:    nil,
-		})
-		return
-	}
 	stackUUID, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, &entities.Response{
@@ -859,7 +841,17 @@ func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.UninstallCrossChainBridge(c.Request.Context(), stackUUID, integrationUUID)
+	mode := c.Query("mode")
+	if mode == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "mode is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UninstallCrossChainBridge(c.Request.Context(), stackUUID, mode)
 	if err != nil {
 		logger.Error("failed to uninstall cross chain bridge", zap.Error(err), zap.String("id", id))
 	}

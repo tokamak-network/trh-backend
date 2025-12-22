@@ -181,8 +181,8 @@ func (im *IntegrationManager) InstallCrossChainBridge(ctx context.Context, stack
 	return im.crossTrade.Install(ctx, stackId, request)
 }
 
-func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
-	return im.crossTrade.Uninstall(ctx, stackId.String(), integrationId.String())
+func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, mode string) (*entities.Response, error) {
+	return im.crossTrade.Uninstall(ctx, stackId.String(), mode)
 }
 
 func (im *IntegrationManager) RegisterTokens(ctx context.Context, stackId uuid.UUID, mode string, request dtos.RegisterTokensAPIRequest) (*entities.Response, error) {
