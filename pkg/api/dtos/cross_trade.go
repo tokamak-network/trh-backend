@@ -101,7 +101,6 @@ func (r *RegisterTokensAPIRequest) Validate() error {
 		return errors.New("tokens are required")
 	}
 
-	seenL2ChainIDs := make(map[uint64]bool)
 	for _, token := range r.Tokens {
 		if token.TokenName == "" {
 			return errors.New("token name is required")
@@ -112,6 +111,7 @@ func (r *RegisterTokensAPIRequest) Validate() error {
 		if len(token.L2TokenInputs) == 0 {
 			return errors.New("l2 token inputs are required")
 		}
+		seenL2ChainIDs := make(map[uint64]bool)
 		for _, l2TokenInput := range token.L2TokenInputs {
 			if l2TokenInput.ChainID == 0 {
 				return errors.New("chain id is required")
@@ -120,7 +120,7 @@ func (r *RegisterTokensAPIRequest) Validate() error {
 				return errors.New("token address is required")
 			}
 			if seenL2ChainIDs[l2TokenInput.ChainID] {
-				return errors.New("chain id already exists")
+				return errors.New("duplicate chain id for the same token")
 			}
 			seenL2ChainIDs[l2TokenInput.ChainID] = true
 		}
