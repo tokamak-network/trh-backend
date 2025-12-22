@@ -54,6 +54,7 @@ type CrossTradeBridgeIntegration struct {
 	}
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
 	}
 }
 
@@ -87,6 +88,7 @@ func NewCrossTradeBridgeIntegration(
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
 	},
 ) *CrossTradeBridgeIntegration {
 	return &CrossTradeBridgeIntegration{
@@ -855,6 +857,117 @@ func (b *CrossTradeBridgeIntegration) DeployNewL2Chain(
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Successfully",
+		Data:    nil,
+	}, nil
+}
+
+func (b *CrossTradeBridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	// 1 Fetch integration
+	integration, err := b.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	var mode string
+	if integration.Type == enum.IntegrationTypeCrossTradeL2ToL1.String() {
+		mode = string(thanosConstants.CrossTradeDeployModeL2ToL1)
+	} else if integration.Type == enum.IntegrationTypeCrossTradeL2ToL2.String() {
+		mode = string(thanosConstants.CrossTradeDeployModeL2ToL2)
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", integration.Type))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid cross trade mode",
+			Data:    nil,
+		}, errors.New("invalid cross trade mode")
+	}
+
+	// 2 validate status: can only cancel if inprogress or pending
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	// Set the integration status to cancelling
+	if err = b.integrationRepo.UpdateIntegrationStatusWithReason(
+		integration.ID.String(),
+		entities.DeploymentStatusCancelling,
+		"Stopping installation process. This may take several minutes to safely clean up AWS resources (RDS database, networking).",
+	); err != nil {
+		logger.Error("failed to request cancellation", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to request cancellation",
+			Data:    nil,
+		}, err
+	}
+
+	b.taskManager.AddTask(fmt.Sprintf("cancel-cross-trade-%s", stackId.String()), func(ctx context.Context) {
+		taskId := fmt.Sprintf("install-%s-%s", mode, stackId)
+		b.taskManager.StopTask(taskId)
+
+		stack, err := b.stackRepo.GetStackByID(stackId.String())
+		if err != nil {
+			logger.Error("failed to get stack", zap.Error(err), zap.String("stackId", stackId.String()))
+			return
+		}
+
+		stackConfig := dtos.DeployThanosRequest{}
+		if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+			logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+			return
+		}
+
+		sdkClient, err := thanos.NewThanosSDKClient(
+			ctx,
+			utils.GetLogPath(stack.ID, fmt.Sprintf("cancel-cross-trade-%s", mode)),
+			string(stack.Network),
+			stack.DeploymentPath,
+			stackConfig.RegisterCandidate,
+			stackConfig.AwsAccessKey,
+			stackConfig.AwsSecretAccessKey,
+			stackConfig.AwsRegion,
+		)
+
+		// Clean up any resources that were created
+		if cleanupErr := thanos.UninstallCrossTradeBridge(ctx, sdkClient, mode); cleanupErr != nil {
+			logger.Error("failed to cleanup resources during cancellation", zap.Error(cleanupErr))
+
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+				integration.ID.String(),
+				entities.DeploymentStatusFailed,
+				cleanupErr.Error(),
+			)
+			return
+		}
+
+		logger.Info("Cancellation requested successfully", zap.String("integrationId", integrationId.String()))
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+			integration.ID.String(),
+			entities.DeploymentStatusCancelled,
+			"Installation cancelled successfully. All AWS resources have been cleaned up.",
+		)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Cancellation in progress. Installation will be stopped and AWS resources will be cleaned up. This may take 5-10 minutes for safe cleanup.",
 		Data:    nil,
 	}, nil
 }

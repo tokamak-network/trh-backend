@@ -234,6 +234,10 @@ func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uui
 		return im.uptimeService.Cancel(ctx, stackId, integrationId)
 	case "register-candidate":
 		return im.registerCandidate.Cancel(ctx, stackId, integrationId)
+	case "cross-trade-l2-to-l1":
+		return im.crossTrade.Cancel(ctx, stackId, integrationId)
+	case "cross-trade-l2-to-l2":
+		return im.crossTrade.Cancel(ctx, stackId, integrationId)
 	default:
 		return &entities.Response{
 			Status:  400,
