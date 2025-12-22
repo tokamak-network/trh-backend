@@ -529,7 +529,14 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, integra
 		return
 	}
 
-	stack.Metadata.ExplorerUrl = ""
+	if integrationType == enum.IntegrationTypeCrossTradeL2ToL1.String() {
+		stack.Metadata.L2L1CrossTradeUrl = ""
+	} else if integrationType == enum.IntegrationTypeCrossTradeL2ToL2.String() {
+		stack.Metadata.L2L2CrossTradeUrl = ""
+	} else {
+		logger.Error("invalid cross trade mode", zap.String("mode", integrationType))
+		return
+	}
 	if err = b.stackRepo.UpdateMetadata(stackId, stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 		return
