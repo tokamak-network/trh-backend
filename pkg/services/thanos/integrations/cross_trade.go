@@ -100,8 +100,6 @@ func NewCrossTradeBridgeIntegration(
 
 // Install installs a cross trade for the given stack
 func (b *CrossTradeBridgeIntegration) Install(ctx context.Context, stackUUID uuid.UUID, request dtos.InstallCrossChainBridgeRequest) (*entities.Response, error) {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Minute)
-	defer cancel()
 	stackId := stackUUID.String()
 	if err := request.Validate(); err != nil {
 		logger.Error("invalid cross trade bridge request", zap.Error(err))
@@ -193,6 +191,8 @@ func (b *CrossTradeBridgeIntegration) Install(ctx context.Context, stackUUID uui
 
 	taskId := fmt.Sprintf("install-%s-%s", integrationType, stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Minute)
+		defer cancel()
 		b.installTask(ctxWithTimeout, stack, request, logPath, integrationType)
 	})
 	return &entities.Response{
@@ -253,7 +253,9 @@ func (b *CrossTradeBridgeIntegration) Uninstall(ctx context.Context, stackId str
 
 	taskId := fmt.Sprintf("uninstall-cross-trade-%s", stackId)
 	b.taskManager.AddTask(taskId, func(ctx context.Context) {
-		b.uninstallTask(ctx, installedIntegration.ID, stack, stackId, logPath, installedIntegration.Type)
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Minute)
+		defer cancel()
+		b.uninstallTask(ctxWithTimeout, installedIntegration.ID, stack, stackId, logPath, installedIntegration.Type)
 	})
 
 	return &entities.Response{
@@ -526,8 +528,6 @@ func (b *CrossTradeBridgeIntegration) RegisterTokens(
 	mode string,
 	request dtos.RegisterTokensAPIRequest,
 ) (*entities.Response, error) {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Minute)
-	defer cancel()
 	stack, err := b.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		logger.Error("failed to get stack", zap.String("stackId", stackId.String()), zap.Error(err))
@@ -588,24 +588,6 @@ func (b *CrossTradeBridgeIntegration) RegisterTokens(
 		}, nil
 	}
 	logPath := utils.GetLogPath(stack.ID, "register-tokens")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.String("stackId", stackId.String()), zap.Error(err))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Failed to create SDK client",
-			Data:    nil,
-		}, err
-	}
 
 	crossTradeMode := thanosConstants.CrossTradeDeployMode(mode)
 	// Create deployment record for uninstalling cross trade
@@ -652,6 +634,23 @@ func (b *CrossTradeBridgeIntegration) RegisterTokens(
 	}
 
 	b.taskManager.AddTask(fmt.Sprintf("register-tokens-%s-%s", stackId.String(), mode), func(ctx context.Context) {
+		sdkClient, err := thanos.NewThanosSDKClient(
+			ctx,
+			logPath,
+			string(stack.Network),
+			stack.DeploymentPath,
+			stackConfig.RegisterCandidate,
+			stackConfig.AwsAccessKey,
+			stackConfig.AwsSecretAccessKey,
+			stackConfig.AwsRegion,
+		)
+		if err != nil {
+			logger.Error("failed to create thanos sdk client", zap.String("stackId", stackId.String()), zap.Error(err))
+			_ = b.deploymentRepo.UpdateDeploymentStatus(registerTokensDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+			return
+		}
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Minute)
+		defer cancel()
 		output, err := thanos.RegisterTokens(ctxWithTimeout, sdkClient, crossTradeMode, request.Tokens)
 		if err != nil {
 			logger.Error("failed to register tokens", zap.String("stackId", stackId.String()), zap.String("mode", mode), zap.Error(err))
@@ -752,24 +751,7 @@ func (b *CrossTradeBridgeIntegration) DeployNewL2Chain(
 	}
 
 	logPath := utils.GetLogPath(stack.ID, "deploy-new-l2-chain")
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create thanos sdk client", zap.String("stackId", stackId.String()), zap.Error(err))
-		return &entities.Response{
-			Status:  http.StatusInternalServerError,
-			Message: "Failed to create SDK client",
-			Data:    nil,
-		}, err
-	}
+
 	var deployNewL2ChainDeployment *entities.DeploymentEntity
 	var integration *entities.IntegrationEntity
 	defer func() {
@@ -813,6 +795,21 @@ func (b *CrossTradeBridgeIntegration) DeployNewL2Chain(
 	}
 	crossTradeMode := thanosConstants.CrossTradeDeployMode(mode)
 	b.taskManager.AddTask(fmt.Sprintf("deploy-new-l2-chain-%s-%s", stackId.String(), mode), func(ctx context.Context) {
+		sdkClient, err := thanos.NewThanosSDKClient(
+			ctx,
+			logPath,
+			string(stack.Network),
+			stack.DeploymentPath,
+			stackConfig.RegisterCandidate,
+			stackConfig.AwsAccessKey,
+			stackConfig.AwsSecretAccessKey,
+			stackConfig.AwsRegion,
+		)
+		if err != nil {
+			logger.Error("failed to create thanos sdk client", zap.String("stackId", stackId.String()), zap.Error(err))
+			_ = b.deploymentRepo.UpdateDeploymentStatus(deployNewL2ChainDeployment.ID.String(), entities.DeploymentRunStatusFailed)
+			return
+		}
 		output, err := thanos.DeployNewL2Chain(ctx, sdkClient, crossTradeMode, request.L2ChainConfig)
 		if err != nil {
 			logger.Error("failed to deploy new L2 chain", zap.String("stackId", stackId.String()), zap.String("mode", mode), zap.Error(err))
