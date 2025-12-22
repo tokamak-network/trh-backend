@@ -163,7 +163,7 @@ func (b *CrossTradeBridgeIntegration) Install(ctx context.Context, stackUUID uui
 	}
 
 	if len(integrations) > 0 {
-		logger.Error("There is already an active %s", zap.String("plugin", integrationType))
+		logger.Error("There is already an active integration", zap.String("plugin", integrationType))
 		return &entities.Response{
 			Status:  http.StatusBadRequest,
 			Message: fmt.Sprintf("There is already an active %s", integrationType),

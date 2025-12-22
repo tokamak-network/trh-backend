@@ -580,7 +580,6 @@ func DeployNewL2Chain(ctx context.Context, s *thanosStack.ThanosStack, mode cons
 	l1ChainConfig := &thanosTypes.L1CrossTradeChainInput{
 		RPC:                    crossTradeInfo.L1ChainConfig.RPC,
 		ChainID:                crossTradeInfo.L1ChainConfig.ChainID,
-		ContractName:           DeployL1CrossTradeL2L2,
 		PrivateKey:             crossTradeInfo.L1ChainConfig.PrivateKey,
 		IsDeployedNew:          false,
 		CrossTradeProxyAddress: crossTradeInfo.L1ChainConfig.CrossTradeProxyAddress,

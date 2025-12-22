@@ -202,7 +202,7 @@ func (r *IntegrationRepository) GetActiveIntegrationsByStackID(
 			string(entities.DeploymentStatusPending),
 			string(entities.DeploymentStatusCompleted),
 			string(entities.DeploymentStatusInProgress),
-		})
+		}).Where("type NOT IN (?)", exceptTypes)
 	}
 	if err := query.Find(&integrations).Error; err != nil {
 		return nil, err
