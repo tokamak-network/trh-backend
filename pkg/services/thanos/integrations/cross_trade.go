@@ -369,7 +369,7 @@ func (b *CrossTradeBridgeIntegration) installTask(ctx context.Context, stack *en
 			logger.Error("failed to update integration status", zap.String("plugin", integrationType), zap.Error(updateErr), zap.String("integrationId", pendingIntegration.ID.String()))
 		}
 		deploymentStatus := entities.DeploymentRunStatusFailed
-		if errors.Is(err, context.Canceled) {
+		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped
 		}
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
@@ -940,7 +940,7 @@ func (b *CrossTradeBridgeIntegration) Cancel(ctx context.Context, stackId uuid.U
 	}
 
 	b.taskManager.AddTask(fmt.Sprintf("cancel-cross-trade-%s", stackId.String()), func(ctx context.Context) {
-		taskId := fmt.Sprintf("install-%s-%s", mode, stackId)
+		taskId := fmt.Sprintf("install-%s-%s", integration.Type, stackId)
 		b.taskManager.StopTask(taskId)
 
 		stack, err := b.stackRepo.GetStackByID(stackId.String())
