@@ -215,7 +215,6 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 
 		// Cross trade management
 		adminRoutes.POST("/:id/integrations/cross-trade", handler.InstallCrossChainBridge)
-		adminRoutes.DELETE("/:id/integrations/cross-trade", handler.UninstallCrossChainBridge)
 		adminRoutes.DELETE("/:id/integrations/cross-trade/:integrationID", handler.UninstallCrossChainBridge)
 		adminRoutes.DELETE("/:id/integrations/cross-trade/:integrationID", handler.UninstallCrossChainBridge)
 		adminRoutes.POST("/:id/cross-trade/deploy-l2-chain", handler.DeployNewL2Chain)
