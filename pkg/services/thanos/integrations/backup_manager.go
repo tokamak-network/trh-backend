@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -85,7 +86,10 @@ func (b *BackupManager) GetBackupStatus(ctx context.Context, stackId uuid.UUID) 
 			Data:    nil,
 		}, err
 	}
-	backupStatus, err := thanos.GetBackupStatus(ctx, thanosSDK)
+	opCtx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+
+	backupStatus, err := thanos.GetBackupStatus(opCtx, thanosSDK)
 	if err != nil {
 		logger.Error("failed to get backup status", zap.String("stackId", stackId.String()), zap.Error(err))
 		return &entities.Response{
@@ -130,7 +134,10 @@ func (b *BackupManager) GetCheckpoints(ctx context.Context, stackId uuid.UUID, r
 			Data:    nil,
 		}, err
 	}
-	backupCheckpoints, err := thanos.GetListBackup(ctx, thanosSDK, &dtos.BackupRequest{
+	opCtx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+
+	backupCheckpoints, err := thanos.GetListBackup(opCtx, thanosSDK, &dtos.BackupRequest{
 		Limit: "20",
 	})
 	if err != nil {
@@ -354,8 +361,11 @@ func (b *BackupManager) getThanosClient(ctx context.Context, stack *entities.Sta
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
 		return nil, err
 	}
+
+	opCtx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
 	return thanos.NewThanosSDKClient(
-		ctx,
+		opCtx,
 		logPath,
 		string(stack.Network),
 		stack.DeploymentPath,

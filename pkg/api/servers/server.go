@@ -25,12 +25,13 @@ func (s *Server) Start(port string) error {
 	gin.SetMode(gin.ReleaseMode)
 
 	// Create HTTP server with optimized settings
+	// Increase timeouts to allow long-running operations (e.g., AWS/EKS kubeconfig updates)
 	s.server = &http.Server{
 		Addr:         ":" + port,
 		Handler:      s.Router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  120 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  180 * time.Second,
 	}
 
 	return s.server.ListenAndServe()

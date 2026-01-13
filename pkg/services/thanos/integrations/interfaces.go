@@ -60,6 +60,7 @@ func NewIntegrationManager(
 		monitoring:          NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerCandidate:   NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerMetadataDAO: NewRegisterMetadataDAOIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		backupManager:       NewBackupManager(stackRepo, deploymentRepo, integrationRepo, taskManager),
 		crossTrade:          NewCrossTradeBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		uptimeService:       NewUptimeServiceIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 	}
