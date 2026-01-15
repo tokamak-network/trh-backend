@@ -639,13 +639,18 @@ func (b *CrossTradeBridgeIntegration) RegisterTokens(
 			Data:    nil,
 		}, errors.New("invalid cross trade mode")
 	}
+	registerConfigBytes, err := json.Marshal(request)
+	if err != nil {
+		logger.Error("failed to marshal register tokens config", zap.Error(err))
+		registerConfigBytes = []byte("{}")
+	}
 	registerTokensDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    step,
 		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
-		Config:  []byte("{}"),
+		Config:  registerConfigBytes,
 	}
 	if err := b.deploymentRepo.CreateDeployment(registerTokensDeployment); err != nil {
 		logger.Error("failed to create register tokens deployment record", zap.String("mode", mode), zap.Error(err))
@@ -805,13 +810,18 @@ func (b *CrossTradeBridgeIntegration) DeployNewL2Chain(
 			Data:    nil,
 		}, errors.New("invalid cross trade mode")
 	}
+	deployConfigBytes, err := json.Marshal(request)
+	if err != nil {
+		logger.Error("failed to marshal deploy new L2 chain config", zap.Error(err))
+		deployConfigBytes = []byte("{}")
+	}
 	deployNewL2ChainDeployment = &entities.DeploymentEntity{
 		ID:      uuid.New(),
 		StackID: &stack.ID,
 		Step:    step,
 		Status:  entities.DeploymentRunStatusInProgress,
 		LogPath: logPath,
-		Config:  []byte("{}"),
+		Config:  deployConfigBytes,
 	}
 	if err := b.deploymentRepo.CreateDeployment(deployNewL2ChainDeployment); err != nil {
 		logger.Error("failed to create deploy new L2 chain deployment record", zap.String("mode", mode), zap.Error(err))
