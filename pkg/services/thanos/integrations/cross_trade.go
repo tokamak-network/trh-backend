@@ -657,6 +657,11 @@ func (b *CrossTradeBridgeIntegration) RegisterTokens(
 	}
 
 	b.taskManager.AddTask(fmt.Sprintf("register-tokens-%s-%s", stackId.String(), mode), func(ctx context.Context) {
+		// Start log ingestion
+		ingestCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go b.tailAndIngestLogs(ingestCtx, stack.ID, registerTokensDeployment.ID, logPath)
+
 		sdkClient, err := thanos.NewThanosSDKClient(
 			ctx,
 			logPath,
@@ -818,6 +823,11 @@ func (b *CrossTradeBridgeIntegration) DeployNewL2Chain(
 	}
 	crossTradeMode := thanosConstants.CrossTradeDeployMode(mode)
 	b.taskManager.AddTask(fmt.Sprintf("deploy-new-l2-chain-%s-%s", stackId.String(), mode), func(ctx context.Context) {
+		// Start log ingestion
+		ingestCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go b.tailAndIngestLogs(ingestCtx, stack.ID, deployNewL2ChainDeployment.ID, logPath)
+
 		sdkClient, err := thanos.NewThanosSDKClient(
 			ctx,
 			logPath,
