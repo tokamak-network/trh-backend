@@ -59,6 +59,9 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 	deployInfraInput := thanosStack.DeployInfraInput{
 		ChainName:   req.ChainName,
 		L1BeaconURL: req.L1BeaconUrl,
+		BackupConfig: &thanosStack.BackupConfig{
+			Enabled: req.BackupConfig.Enabled,
+		},
 	}
 
 	err := sdkClient.Deploy(ctx, consts.AWS, &deployInfraInput)
@@ -305,7 +308,7 @@ func GetBackupStatus(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTy
 }
 
 func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos.BackupRestoreRequest) (*thanosTypes.BackupRestoreInfo, error) {
-	backupRestoreInfo, err := s.BackupRestore(ctx, request.RecoveryPointID)
+	backupRestoreInfo, err := s.BackupRestore(ctx, request.RecoveryPointID, request.AttachWorkloads)
 	if err != nil {
 		return nil, err
 	}
