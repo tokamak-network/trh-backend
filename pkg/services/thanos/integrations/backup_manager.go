@@ -86,7 +86,7 @@ func (b *BackupManager) GetBackupStatus(ctx context.Context, stackId uuid.UUID) 
 			Data:    nil,
 		}, err
 	}
-	opCtx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	opCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
 	backupStatus, err := thanos.GetBackupStatus(opCtx, thanosSDK)
@@ -134,7 +134,7 @@ func (b *BackupManager) GetCheckpoints(ctx context.Context, stackId uuid.UUID, r
 			Data:    nil,
 		}, err
 	}
-	opCtx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	opCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
 	backupCheckpoints, err := thanos.GetListBackup(opCtx, thanosSDK, &dtos.BackupRequest{
@@ -362,7 +362,7 @@ func (b *BackupManager) getThanosClient(ctx context.Context, stack *entities.Sta
 		return nil, err
 	}
 
-	opCtx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	opCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 	return thanos.NewThanosSDKClient(
 		opCtx,

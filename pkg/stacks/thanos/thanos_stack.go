@@ -59,9 +59,15 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 	deployInfraInput := thanosStack.DeployInfraInput{
 		ChainName:   req.ChainName,
 		L1BeaconURL: req.L1BeaconUrl,
-		BackupConfig: &thanosStack.BackupConfig{
+	}
+	if req.BackupConfig != nil {
+		deployInfraInput.BackupConfig = &thanosStack.BackupConfig{
 			Enabled: req.BackupConfig.Enabled,
-		},
+		}
+	} else {
+		deployInfraInput.BackupConfig = &thanosStack.BackupConfig{
+			Enabled: false,
+		}
 	}
 
 	err := sdkClient.Deploy(ctx, consts.AWS, &deployInfraInput)
