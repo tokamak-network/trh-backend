@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -322,6 +323,10 @@ func (b *BackupManager) BackupAttach(ctx context.Context, stackId uuid.UUID, req
 			return
 		}
 		updateProgress("Thanos client ready", 15)
+		if request.BackupPvPvc == nil {
+			defaultBackup := true
+			request.BackupPvPvc = &defaultBackup
+		}
 		backupAttachInfo, err := BackupAttach(ctx, thanosSDK, &request)
 		if err != nil {
 			logger.Error("failed to backup attach", zap.String("stackId", stackId.String()), zap.Error(err))
@@ -338,6 +343,48 @@ func (b *BackupManager) BackupAttach(ctx context.Context, stackId uuid.UUID, req
 		Message: "Successfully",
 		Data:    gin.H{"task_id": taskId},
 	}, nil
+}
+
+// BackupPvPvcExport generates PV/PVC backup artifacts and returns a zip file path and filename.
+func (b *BackupManager) BackupPvPvcExport(ctx context.Context, stackId uuid.UUID) (string, string, error) {
+	stack, err := b.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return "", "", err
+	}
+	if stack == nil {
+		return "", "", fmt.Errorf("stack not found")
+	}
+	if stack.Status != entities.StackStatusDeployed {
+		return "", "", fmt.Errorf("stack is not deployed")
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "backup-pv-pvc-export")
+	thanosSDK, err := b.getThanosClient(ctx, stack, logPath)
+	if err != nil {
+		return "", "", err
+	}
+
+	backupDir, err := thanosSDK.BackupPvPvcExport(ctx)
+	if err != nil {
+		return "", "", err
+	}
+
+	tmpFile, err := os.CreateTemp("", fmt.Sprintf("trh-pvpvc-%s-*.zip", stackId.String()[:8]))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp zip file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	if err := tmpFile.Close(); err != nil {
+		return "", "", fmt.Errorf("failed to close temp zip file: %w", err)
+	}
+
+	if err := utils.ZipDirectory(backupDir, tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", "", fmt.Errorf("failed to zip backup directory: %w", err)
+	}
+
+	filename := fmt.Sprintf("pvpvc-backup-%s.zip", stackId.String()[:8])
+	return tmpPath, filename, nil
 }
 
 func (b *BackupManager) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
@@ -425,7 +472,7 @@ func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack, progressRep
 }
 
 func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest) (*thanosTypes.BackupAttachInfo, error) {
-	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss)
+	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss, req.BackupPvPvc)
 	if err != nil {
 		return nil, err
 	}

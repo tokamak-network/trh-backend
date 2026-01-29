@@ -256,6 +256,10 @@ func (s *ThanosStackDeploymentService) BackupAttach(ctx context.Context, stackId
 	return s.integrationMgr.BackupAttach(ctx, stackId, request)
 }
 
+func (s *ThanosStackDeploymentService) BackupPvPvcExport(ctx context.Context, stackId uuid.UUID) (string, string, error) {
+	return s.integrationMgr.BackupPvPvcExport(ctx, stackId)
+}
+
 func (s *ThanosStackDeploymentService) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.BackupCleanup(ctx, stackId)
 }

@@ -322,7 +322,7 @@ func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos
 }
 
 func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest) (*thanosTypes.BackupAttachInfo, error) {
-	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss)
+	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss, req.BackupPvPvc)
 	if err != nil {
 		return nil, err
 	}

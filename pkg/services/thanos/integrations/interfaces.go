@@ -155,6 +155,10 @@ func (im *IntegrationManager) BackupAttach(ctx context.Context, stackId uuid.UUI
 	return im.backupManager.BackupAttach(ctx, stackId, request)
 }
 
+func (im *IntegrationManager) BackupPvPvcExport(ctx context.Context, stackId uuid.UUID) (string, string, error) {
+	return im.backupManager.BackupPvPvcExport(ctx, stackId)
+}
+
 func (im *IntegrationManager) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return im.backupManager.BackupCleanup(ctx, stackId)
 }
