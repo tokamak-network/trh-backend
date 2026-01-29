@@ -21,6 +21,7 @@ type DeploymentRepository interface {
 }
 
 type StackRepository interface {
+	CreateStack(stack *entities.StackEntity) error
 	CreateStackByTx(
 		stack *entities.StackEntity,
 		deployments []*entities.DeploymentEntity,

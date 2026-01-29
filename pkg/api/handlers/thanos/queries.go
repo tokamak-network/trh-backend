@@ -174,3 +174,20 @@ func (h *ThanosDeploymentHandler) DownloadRollupConfig(c *gin.Context) {
 		return
 	}
 }
+
+// @Summary		Get Thanos Sepolia System Stack
+// @Description	Get or create the Thanos Sepolia system stack for standalone DRB deployment (Alpha)
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{object}	entities.Response
+// @Failure		500	{object}	entities.Response
+// @Router			/stacks/thanos/system/thanos-sepolia [get]
+func (h *ThanosDeploymentHandler) GetThanosSepolia(c *gin.Context) {
+	response, err := h.ThanosDeploymentService.GetOrCreateThanosSepolia()
+	if err != nil {
+		logger.Error("failed to get/create Thanos Sepolia stack", zap.Error(err))
+	}
+	c.JSON(int(response.Status), response)
+}

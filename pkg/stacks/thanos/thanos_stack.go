@@ -440,3 +440,28 @@ func UninstallUptimeService(
 ) error {
 	return sdkClient.UninstallUptimeService(ctx)
 }
+
+func InstallDRB(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallDRBRequest) (*thanosTypes.DeployDRBOutput, error) {
+	input := &thanosTypes.DeployDRBInput{
+		RPC:             req.RPC,
+		ChainID:         req.ChainID,
+		PrivateKey:      req.PrivateKey,
+		LeaderNodeInput: &thanosTypes.LeaderNodeInput{PrivateKey: req.PrivateKey},
+		DatabaseConfig: &thanosTypes.DRBDatabaseConfig{
+			Type:         req.DatabaseConfig.Type,
+			Username:     req.DatabaseConfig.Username,
+			Password:     req.DatabaseConfig.Password,
+			DatabaseName: "drb",
+		},
+	}
+
+	output, err := s.DeployDRB(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return output, nil
+}
+
+func UninstallDRB(ctx context.Context, s *thanosStack.ThanosStack) error {
+	return s.UninstallDRB(ctx)
+}

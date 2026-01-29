@@ -725,6 +725,88 @@ func (h *ThanosDeploymentHandler) UninstallUptimeService(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+// @Summary		Install DRB
+// @Description	Install DRB (Distributed Randomness Beacon) for the given stack
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id		path		string					true	"Thanos Stack ID"
+// @Param			request	body		dtos.InstallDRBRequest	true	"Install DRB Request"
+// @Success		200		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/drb [post]
+func (h *ThanosDeploymentHandler) InstallDRB(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	var request dtos.InstallDRBRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid request body: " + err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	if err := request.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.InstallDRB(c.Request.Context(), stackUUID, request)
+	if err != nil {
+		logger.Error("failed to install DRB", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Uninstall DRB
+// @Description	Uninstall DRB (Distributed Randomness Beacon) for the given stack
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/drb [delete]
+func (h *ThanosDeploymentHandler) UninstallDRB(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UninstallDRB(c.Request.Context(), id)
+	if err != nil {
+		logger.Error("failed to uninstall DRB", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 func (h *ThanosDeploymentHandler) CancelIntegration(c *gin.Context) {
 	stackUUID, integrationUUID, handled := parseAndValidateIntegrationIDs(c)
 	if handled {

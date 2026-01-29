@@ -1,6 +1,7 @@
 package thanos
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -297,5 +298,77 @@ func (s *ThanosStackDeploymentService) GetIntegration(
 		Status:  http.StatusOK,
 		Message: "Successfully",
 		Data:    map[string]interface{}{"integration": integration},
+	}, nil
+}
+
+// Thanos Sepolia system stack configuration (Alpha release)
+const (
+	ThanosSepolia_ChainID     = 111551119090
+	ThanosSepolia_Name        = "Thanos Sepolia (System)"
+	ThanosSepolia_RpcUrl      = "https://rpc.thanos-sepolia.tokamak.network"
+	ThanosSepolia_ExplorerUrl = "https://explorer.thanos-sepolia.tokamak.network"
+)
+
+// GetOrCreateThanosSepolia returns the Thanos Sepolia system stack, creating it if it doesn't exist
+func (s *ThanosStackDeploymentService) GetOrCreateThanosSepolia() (*entities.Response, error) {
+	// Try to find existing Thanos Sepolia stack by name
+	stacks, err := s.stackRepo.GetAllStacks()
+	if err != nil {
+		logger.Error("failed to get stacks", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	// Look for existing Thanos Sepolia stack
+	for _, stack := range stacks {
+		if stack.Name == ThanosSepolia_Name {
+			return &entities.Response{
+				Status:  http.StatusOK,
+				Message: "Successfully",
+				Data:    map[string]interface{}{"stack": stack},
+			}, nil
+		}
+	}
+
+	// Create new Thanos Sepolia system stack
+	stackId := uuid.New()
+	metadata := &entities.StackMetadata{
+		Layer1:      "Ethereum Sepolia",
+		Layer2:      "Thanos Sepolia",
+		L2RpcUrl:    ThanosSepolia_RpcUrl,
+		L1ChainId:   11155111, // Sepolia
+		L2ChainId:   int(ThanosSepolia_ChainID),
+		ExplorerUrl: ThanosSepolia_ExplorerUrl,
+	}
+
+	stack := &entities.StackEntity{
+		ID:       stackId,
+		Name:     ThanosSepolia_Name,
+		Type:     "thanos",
+		Network:  entities.DeploymentNetworkTestnet,
+		Config:   json.RawMessage(`{}`), // Empty config for system stack
+		Metadata: metadata,
+		Status:   entities.StackStatusDeployed, // Pre-deployed system stack
+	}
+
+	// Create system stack (no deployments or integrations needed)
+	if err := s.stackRepo.CreateStack(stack); err != nil {
+		logger.Error("failed to create Thanos Sepolia stack", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create system stack",
+			Data:    nil,
+		}, err
+	}
+
+	logger.Info("Created Thanos Sepolia system stack", zap.String("stackId", stackId.String()))
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully created Thanos Sepolia stack",
+		Data:    map[string]interface{}{"stack": stack},
 	}, nil
 }

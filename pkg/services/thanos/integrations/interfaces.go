@@ -12,6 +12,58 @@ import (
 	"go.uber.org/zap"
 )
 
+// Repository interfaces - shared across all integrations
+
+type StackRepo interface {
+	GetStackByID(id string) (*entities.StackEntity, error)
+	UpdateMetadata(id string, metadata *entities.StackMetadata) error
+}
+
+type DeploymentRepo interface {
+	CreateDeployment(deployment *entities.DeploymentEntity) error
+	UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
+	GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
+}
+
+type IntegrationRepo interface {
+	GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
+	CreateIntegration(integration *entities.IntegrationEntity) error
+	UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
+	UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
+	GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+	UpdateConfig(id string, config json.RawMessage) error
+	UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+	GetIntegrationById(id string) (*entities.IntegrationEntity, error)
+}
+
+type LogRepo interface {
+	CreateLog(log *entities.LogEntity) error
+}
+
+type TaskMgr interface {
+	AddTask(id string, task func(ctx context.Context))
+	StopTask(id string)
+	IsTaskRunning(id string) bool
+}
+
+// Response helpers
+
+func errInternal(err error) (*entities.Response, error) {
+	return &entities.Response{Status: http.StatusInternalServerError, Message: "Internal server error"}, err
+}
+
+func errNotFound(msg string) (*entities.Response, error) {
+	return &entities.Response{Status: http.StatusNotFound, Message: msg}, nil
+}
+
+func errBadRequest(msg string) (*entities.Response, error) {
+	return &entities.Response{Status: http.StatusBadRequest, Message: msg}, nil
+}
+
+func okResponse(msg string) (*entities.Response, error) {
+	return &entities.Response{Status: http.StatusOK, Message: msg}, nil
+}
+
 // IntegrationManager provides a unified interface for managing all integrations
 type IntegrationManager struct {
 	blockExplorer       *BlockExplorerIntegration
@@ -22,37 +74,16 @@ type IntegrationManager struct {
 	backupManager       *BackupManager
 	crossTrade          *CrossTradeBridgeIntegration
 	uptimeService       *UptimeServiceIntegration
+	drb                 *DRBIntegration
 }
 
 // NewIntegrationManager creates a new integration manager with all integration handlers
 func NewIntegrationManager(
-	stackRepo interface {
-		GetStackByID(id string) (*entities.StackEntity, error)
-		UpdateMetadata(id string, metadata *entities.StackMetadata) error
-	},
-	deploymentRepo interface {
-		CreateDeployment(deployment *entities.DeploymentEntity) error
-		UpdateDeploymentStatus(deploymentId string, status entities.DeploymentRunStatus) error
-		GetDeploymentByStepAndStatus(stackID string, step string, status entities.DeploymentStatus) (*entities.DeploymentEntity, error)
-	},
-	integrationRepo interface {
-		GetActiveIntegrations(stackId, integrationType string) ([]*entities.IntegrationEntity, error)
-		CreateIntegration(integration *entities.IntegrationEntity) error
-		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
-		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
-		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
-		UpdateConfig(id string, config json.RawMessage) error
-		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
-		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
-	},
-	logRepo interface {
-		CreateLog(log *entities.LogEntity) error
-	},
-	taskManager interface {
-		AddTask(id string, task func(ctx context.Context))
-		StopTask(id string)
-		IsTaskRunning(id string) bool
-	},
+	stackRepo StackRepo,
+	deploymentRepo DeploymentRepo,
+	integrationRepo IntegrationRepo,
+	logRepo LogRepo,
+	taskManager TaskMgr,
 ) *IntegrationManager {
 	return &IntegrationManager{
 		blockExplorer:       NewBlockExplorerIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
@@ -62,6 +93,7 @@ func NewIntegrationManager(
 		registerMetadataDAO: NewRegisterMetadataDAOIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		crossTrade:          NewCrossTradeBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		uptimeService:       NewUptimeServiceIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		drb:                 NewDRBIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 	}
 }
 
@@ -194,6 +226,16 @@ func (im *IntegrationManager) UninstallUptimeService(ctx context.Context, stackI
 	return im.uptimeService.Uninstall(ctx, stackId)
 }
 
+// InstallDRB installs DRB for the given stack
+func (im *IntegrationManager) InstallDRB(ctx context.Context, stackId uuid.UUID, req dtos.InstallDRBRequest) (*entities.Response, error) {
+	return im.drb.Install(ctx, stackId, req)
+}
+
+// UninstallDRB uninstalls DRB for the given stack
+func (im *IntegrationManager) UninstallDRB(ctx context.Context, stackId string) (*entities.Response, error) {
+	return im.drb.Uninstall(ctx, stackId)
+}
+
 func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
 	// fetch integration to see what type it is
 	integration, err := im.blockExplorer.integrationRepo.GetIntegrationById(integrationId.String())
@@ -225,6 +267,8 @@ func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uui
 		return im.uptimeService.Cancel(ctx, stackId, integrationId)
 	case "register-candidate":
 		return im.registerCandidate.Cancel(ctx, stackId, integrationId)
+	case "drb":
+		return im.drb.Cancel(ctx, stackId, integrationId)
 	default:
 		return &entities.Response{
 			Status:  400,
@@ -263,6 +307,8 @@ func (im *IntegrationManager) RetryIntegration(ctx context.Context, stackId uuid
 		return im.monitoring.Retry(ctx, stackId, integrationId)
 	case "system-pulse":
 		return im.uptimeService.Retry(ctx, stackId, integrationId)
+	case "drb":
+		return im.drb.Retry(ctx, stackId, integrationId)
 	case "register-candidate":
 		return &entities.Response{
 			Status:  400,

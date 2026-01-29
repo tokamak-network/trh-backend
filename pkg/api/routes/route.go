@@ -217,6 +217,10 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.POST("/:id/integrations/cross-trade", handler.InstallCrossChainBridge)
 		adminRoutes.DELETE("/:id/integrations/cross-trade", handler.UninstallCrossChainBridge)
 
+		// DRB (Distributed Randomness Beacon) management
+		adminRoutes.POST("/:id/integrations/drb", handler.InstallDRB)
+		adminRoutes.DELETE("/:id/integrations/drb", handler.UninstallDRB)
+
 		adminRoutes.POST("/:id/integrations/:integrationId/cancel", handler.CancelIntegration)
 		adminRoutes.POST("/:id/integrations/:integrationId/retry", handler.RetryIntegration)
 	}
@@ -225,6 +229,9 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 	authenticatedRoutes := router.Group("")
 	authenticatedRoutes.Use(jwtMiddleware.AuthMiddleware())
 	{
+		// System stacks (for standalone services like DRB)
+		authenticatedRoutes.GET("/system/thanos-sepolia", handler.GetThanosSepolia)
+
 		// Read-only operations
 		authenticatedRoutes.GET("", handler.GetAllStacks)
 		authenticatedRoutes.GET("/:id", handler.GetStackByID)
