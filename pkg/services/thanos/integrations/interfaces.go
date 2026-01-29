@@ -50,6 +50,8 @@ func NewIntegrationManager(
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		AddTaskWithProgress(id string, task func(ctx context.Context, updateProgress func(string, float64)))
+		SetTaskResult(id string, result any)
 		StopTask(id string)
 		IsTaskRunning(id string) bool
 	},

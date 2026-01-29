@@ -7,6 +7,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/tokamak-network/trh-backend/pkg/api/handlers"
 	configurationHandlers "github.com/tokamak-network/trh-backend/pkg/api/handlers/configuration"
+	"github.com/tokamak-network/trh-backend/pkg/api/handlers/task"
 	"github.com/tokamak-network/trh-backend/pkg/api/handlers/thanos"
 	"github.com/tokamak-network/trh-backend/pkg/api/middleware"
 	"github.com/tokamak-network/trh-backend/pkg/api/servers"
@@ -71,6 +72,10 @@ func setupV1Routes(router *gin.RouterGroup, server *servers.Server) {
 	// Stack routes (protected)
 	stacks := router.Group("/stacks")
 	setupThanosRoutes(stacks.Group("/thanos"), server, jwtMiddleware)
+
+	// Task routes (protected)
+	tasks := router.Group("/tasks")
+	setupTaskRoutes(tasks, server, jwtMiddleware)
 }
 
 func setupHealthRoutes(router *gin.RouterGroup) {
@@ -170,7 +175,7 @@ func setupAPIKeySubRoutes(router *gin.RouterGroup, apiKeyHandler *configurationH
 }
 
 func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddleware *middleware.JWTMiddleware) {
-	handler := thanos.NewThanosHandler(server)
+	handler := thanos.NewThanosHandler(server, server.TaskManager)
 
 	// Admin-only routes (require admin role)
 	adminRoutes := router.Group("")
@@ -238,5 +243,16 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		authenticatedRoutes.GET("/:id/deployments/:deploymentId/logs", handler.GetDeploymentLogs)
 		authenticatedRoutes.GET("/:id/deployments/:deploymentId/logs/download", handler.DownloadDeploymentLogFile)
 		authenticatedRoutes.GET("/:id/logs", handler.GetStackLogs)
+	}
+}
+
+func setupTaskRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddleware *middleware.JWTMiddleware) {
+	handler := task.NewTaskHandler(server.TaskManager)
+
+	// Authenticated routes
+	authenticatedRoutes := router.Group("")
+	authenticatedRoutes.Use(jwtMiddleware.AuthMiddleware())
+	{
+		authenticatedRoutes.GET("/:id", handler.GetTaskProgress)
 	}
 }
