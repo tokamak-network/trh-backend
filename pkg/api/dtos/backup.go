@@ -17,6 +17,11 @@ type BackupConfigureRequest struct {
 }
 
 type BackupRestoreRequest struct {
-	RecoveryPointID string `json:"recoveryPointID"`
-	AttachWorkloads bool   `json:"attachWorkloads"`
+	RecoveryPointID string  `json:"recoveryPointID"`
+	Attach          *bool   `json:"attach,omitempty"`
+	Pvcs            *string `json:"pvcs,omitempty"`
+	Stss            *string `json:"stss,omitempty"`
+	AwsAccessKey    *string `json:"awsAccessKey,omitempty"`
+	AwsSecretKey    *string `json:"awsSecretAccessKey,omitempty"`
+	AwsRegion       *string `json:"awsRegion,omitempty"`
 }

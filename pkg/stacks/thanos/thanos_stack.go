@@ -290,7 +290,7 @@ func RegisterMetadataDAO(ctx context.Context, s *thanosStack.ThanosStack, regist
 }
 
 func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTypes.BackupSnapshotInfo, error) {
-	snapshotInfo, err := s.BackupSnapshot(ctx)
+	snapshotInfo, err := s.BackupSnapshot(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +314,7 @@ func GetBackupStatus(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTy
 }
 
 func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos.BackupRestoreRequest) (*thanosTypes.BackupRestoreInfo, error) {
-	backupRestoreInfo, err := s.BackupRestore(ctx, request.RecoveryPointID, request.AttachWorkloads)
+	backupRestoreInfo, err := s.BackupRestore(ctx, request.RecoveryPointID, request.Attach, request.Pvcs, request.Stss, nil)
 	if err != nil {
 		return nil, err
 	}
