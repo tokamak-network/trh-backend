@@ -127,8 +127,17 @@ func (r *InstallDRBRequest) Validate() error {
 		if strings.TrimSpace(r.ContractAddress) == "" {
 			return errors.New("contractAddress is required for regular nodes")
 		}
+		// if r.NodePort == 0 {
+		// 	r.NodePort = 61281
+		// }
 		if r.NodePort == 0 {
-			r.NodePort = 61281
+			r.NodePort = 61280 // match SDK default
+		}
+		if r.NodePort < 1 || r.NodePort > 65535 {
+			return errors.New("nodePort must be between 1 and 65535")
+		}
+		if r.LeaderPort < 1 || r.LeaderPort > 65535 {
+			return errors.New("leaderPort must be between 1 and 65535")
 		}
 		if len(strings.TrimPrefix(r.EOAPrivateKey, "0x")) != 64 {
 			return errors.New("invalid eoaPrivateKey format")
