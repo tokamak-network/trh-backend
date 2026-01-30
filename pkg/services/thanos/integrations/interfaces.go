@@ -18,6 +18,7 @@ type StackRepo interface {
 	GetStackByID(id string) (*entities.StackEntity, error)
 	UpdateMetadata(id string, metadata *entities.StackMetadata) error
 	UpdateConfig(id string, config []byte) error
+	CreateStack(stack *entities.StackEntity) error
 }
 
 type DeploymentRepo interface {
@@ -32,6 +33,7 @@ type IntegrationRepo interface {
 	UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 	UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 	GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+	GetIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 	UpdateConfig(id string, config json.RawMessage) error
 	UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 	GetIntegrationById(id string) (*entities.IntegrationEntity, error)

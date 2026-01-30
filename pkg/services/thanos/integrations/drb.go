@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	installTimeout   = 30 * time.Minute
+	installTimeout   = 60 * time.Minute
 	uninstallTimeout = 20 * time.Minute
 	cancelWaitTime   = 30 * time.Second
 	maxLogFailures   = 10
@@ -78,37 +78,88 @@ func (d *DRBIntegration) Install(ctx context.Context, stackId uuid.UUID, req dto
 	// Log request without sensitive data
 	logger.Info("DRB installation requested",
 		zap.String("stackId", stackId.String()),
+		zap.String("nodeType", req.NodeType),
 		zap.Bool("useCurrentChain", req.UseCurrentChain),
 		zap.String("awsRegion", req.AWSConfig.Region),
 	)
 
-	stack, err := d.stackRepo.GetStackByID(stackId.String())
+	// Get the source stack (leader's stack for regular nodes, or the target stack for leaders)
+	sourceStack, err := d.stackRepo.GetStackByID(stackId.String())
 	if err != nil {
 		return errInternal(err)
 	}
-	if stack == nil {
+	if sourceStack == nil {
 		return errNotFound("Stack not found")
 	}
-	if stack.Status != entities.StackStatusDeployed {
+	if sourceStack.Status != entities.StackStatusDeployed {
 		return errBadRequest("Stack is not deployed yet. Please wait for it to finish")
 	}
 
-	// Check for existing active DRB integration
-	integrations, err := d.integrationRepo.GetActiveIntegrations(stackId.String(), enum.IntegrationTypeDRB.String())
-	if err != nil {
-		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeDRB.String()), zap.Error(err))
-		return errInternal(err)
-	}
-	if len(integrations) > 0 {
-		return errBadRequest("There is already an active DRB integration")
+	// For regular nodes, create a new system stack
+	var stack *entities.StackEntity
+	if req.NodeType == "regular" {
+		newStackId := uuid.New()
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return errInternal(fmt.Errorf("failed to get home directory: %w", err))
+		}
+		deploymentPath := fmt.Sprintf("%s/.trh/integrations/%s/drb-regular", homeDir, newStackId.String())
+		if err := os.MkdirAll(deploymentPath, 0755); err != nil {
+			return errInternal(fmt.Errorf("failed to create deployment directory: %w", err))
+		}
+
+		// Store AWS credentials in stack config
+		stackConfig := dtos.DeployThanosRequest{
+			AwsAccessKey:       req.AWSConfig.AccessKeyId,
+			AwsSecretAccessKey: req.AWSConfig.SecretAccessKey,
+			AwsRegion:          req.AWSConfig.Region,
+		}
+		configBytes, _ := json.Marshal(stackConfig)
+
+		stack = &entities.StackEntity{
+			ID:             newStackId,
+			Name:           "DRB Regular Node (System)",
+			Network:        sourceStack.Network,
+			Type:           enum.StackTypeOptimisticRollup.String(),
+			Config:         configBytes,
+			DeploymentPath: deploymentPath,
+			Status:         entities.StackStatusDeployed,
+		}
+
+		if err := d.stackRepo.CreateStack(stack); err != nil {
+			logger.Error("failed to create stack for regular node", zap.Error(err))
+			return errInternal(err)
+		}
+		logger.Info("Created new stack for DRB regular node", zap.String("stackId", stack.ID.String()))
+	} else {
+		stack = sourceStack
+		// Check for existing active leader DRB integration
+		integrations, err := d.integrationRepo.GetActiveIntegrations(stackId.String(), enum.IntegrationTypeDRB.String())
+		if err != nil {
+			logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeDRB.String()), zap.Error(err))
+			return errInternal(err)
+		}
+		for _, existing := range integrations {
+			var existingConfig DRBStoredConfig
+			if existing.Config != nil {
+				_ = json.Unmarshal(existing.Config, &existingConfig)
+			}
+			existingNodeType := existingConfig.NodeType
+			if existingNodeType == "" {
+				existingNodeType = "leader"
+			}
+			if existingNodeType == "leader" {
+				return errBadRequest("There is already an active DRB leader node")
+			}
+		}
 	}
 
 	// If using current chain, get RPC and ChainID from stack metadata or use defaults for system stacks
 	if req.UseCurrentChain {
-		if stack.Metadata != nil && stack.Metadata.L2RpcUrl != "" {
-			req.RPC = stack.Metadata.L2RpcUrl
-			req.ChainID = uint64(stack.Metadata.L2ChainId)
-		} else if stack.DeploymentPath == "" {
+		if sourceStack.Metadata != nil && sourceStack.Metadata.L2RpcUrl != "" {
+			req.RPC = sourceStack.Metadata.L2RpcUrl
+			req.ChainID = uint64(sourceStack.Metadata.L2ChainId)
+		} else if sourceStack.DeploymentPath == "" {
 			// System stack (e.g., Thanos Sepolia) - use known defaults
 			req.RPC = "https://rpc.thanos-sepolia.tokamak.network"
 			req.ChainID = 111551119090
@@ -118,15 +169,15 @@ func (d *DRBIntegration) Install(ctx context.Context, stackId uuid.UUID, req dto
 	}
 
 	logPath := utils.GetLogPath(stack.ID, "drb")
-
-	// For system stacks (no deployment path), create a dedicated path for DRB
 	deploymentPath := stack.DeploymentPath
-	if deploymentPath == "" {
+
+	// For leader nodes on system stacks, create deployment path if needed
+	if req.NodeType != "regular" && deploymentPath == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return errInternal(fmt.Errorf("failed to get home directory: %w", err))
 		}
-		deploymentPath = fmt.Sprintf("%s/.trh/integrations/%s/drb", homeDir, stackId.String())
+		deploymentPath = fmt.Sprintf("%s/.trh/integrations/%s/drb", homeDir, stack.ID.String())
 		if err := os.MkdirAll(deploymentPath, 0755); err != nil {
 			return errInternal(fmt.Errorf("failed to create deployment directory: %w", err))
 		}
@@ -174,11 +225,15 @@ func (d *DRBIntegration) Install(ctx context.Context, stackId uuid.UUID, req dto
 		return errInternal(err)
 	}
 
-	d.taskManager.AddTask(fmt.Sprintf("install-drb-%s", stackId.String()), func(ctx context.Context) {
+	d.taskManager.AddTask(fmt.Sprintf("install-drb-%s", stack.ID.String()), func(ctx context.Context) {
 		d.installTask(ctx, integration.ID, stack, req, logPath)
 	})
 
-	return okResponse("DRB installation started successfully")
+	return &entities.Response{
+		Status:  200,
+		Message: "DRB installation started successfully",
+		Data:    map[string]string{"stackId": stack.ID.String()},
+	}, nil
 }
 
 // Uninstall uninstalls DRB for the given stack
@@ -193,7 +248,8 @@ func (d *DRBIntegration) Uninstall(ctx context.Context, stackId string) (*entiti
 		return errNotFound("Stack not found")
 	}
 
-	integration, err := d.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeDRB.String())
+	// Use GetIntegration instead of GetInstalledIntegration to allow uninstalling failed integrations
+	integration, err := d.integrationRepo.GetIntegration(stack.ID.String(), enum.IntegrationTypeDRB.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeDRB.String()), zap.Error(err))
 		return errInternal(err)

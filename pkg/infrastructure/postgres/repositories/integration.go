@@ -140,7 +140,8 @@ func (r *IntegrationRepository) GetIntegration(
 	integrationType string,
 ) (*entities.IntegrationEntity, error) {
 	var integration schemas.Integration
-	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).First(&integration).Error; err != nil {
+	// Get the most recent integration (by created_at desc) to handle multiple deployment attempts
+	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Order("created_at DESC").First(&integration).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil // No integration found
 		}

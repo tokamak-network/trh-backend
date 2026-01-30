@@ -3,7 +3,7 @@ module github.com/tokamak-network/trh-backend
 go 1.24.11
 
 // Use local SDK with DRB support (feat/integrate-drb branch)
-replace github.com/tokamak-network/trh-sdk => ../trh-sdk
+replace github.com/tokamak-network/trh-sdk => ./trh-sdk
 
 require (
 	github.com/ethereum/go-ethereum v1.15.2
