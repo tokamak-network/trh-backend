@@ -22,55 +22,137 @@ type DRBAWSConfig struct {
 }
 
 // InstallDRBRequest represents the request body for installing DRB
-// Note: Only leader node deployment is currently supported
 type InstallDRBRequest struct {
-	// Network Configuration
-	UseCurrentChain bool   `json:"useCurrentChain"`   // if true, use the deployed chain RPC and chain ID
-	RPC             string `json:"rpc,omitempty"`     // custom RPC URL (required if useCurrentChain is false)
-	ChainID         uint64 `json:"chainId,omitempty"` // custom chain ID (required if useCurrentChain is false)
+	NodeType string `json:"nodeType" binding:"required"`
 
-	// Deployer Configuration
-	PrivateKey string `json:"privateKey" binding:"required"` // deployer private key
+	// Network Configuration
+	UseCurrentChain bool   `json:"useCurrentChain"`
+	RPC             string `json:"rpc,omitempty"`     // comma separated for fallback support
+	ChainID         uint64 `json:"chainId,omitempty"`
+
+	// Deployer Configuration (for leader node)
+	PrivateKey string `json:"privateKey,omitempty"` // deployer private key
+
+	// Leader Connection (for regular nodes)
+	LeaderIP       string `json:"leaderIp,omitempty"`
+	LeaderPort     int    `json:"leaderPort,omitempty"`
+	LeaderPeerID   string `json:"leaderPeerId,omitempty"`
+	LeaderEOA      string `json:"leaderEoa,omitempty"`
+	ContractAddress string `json:"contractAddress,omitempty"`
+
+	// Regular Node Configuration
+	NodePort      int    `json:"nodePort,omitempty"`
+	EOAPrivateKey string `json:"eoaPrivateKey,omitempty"` // regular node's private key
 
 	// AWS Configuration
 	AWSConfig *DRBAWSConfig `json:"awsConfig" binding:"required"`
+
+	// EC2 Configuration for regular nodes)
+	EC2Config *DRBEC2Config `json:"ec2Config,omitempty"`
 
 	// Database Configuration
 	DatabaseConfig *DRBDatabaseConfig `json:"databaseConfig" binding:"required"`
 }
 
-// Validate validates the InstallDRBRequest
-// Note: Required field checks are handled by binding tags. This validates business logic only.
-func (r *InstallDRBRequest) Validate() error {
-	// Custom network requires RPC and ChainID
-	if !r.UseCurrentChain {
-		if r.RPC == "" {
-			return errors.New("rpc is required when useCurrentChain is false")
+// this represents the EC2 configuration for regular nodes
+type DRBEC2Config struct {
+	InstanceType string `json:"instanceType,omitempty"` // e.g. "t3.medium"
+	KeyPairName  string `json:"keyPairName"`            // SSH key pair name
+	SubnetID     string `json:"subnetId,omitempty"`     // optional subnet ID
+	InstanceName string `json:"instanceName,omitempty"` // optional instance name
+}
+
+func validateRPCUrls(rpcUrls string) error {
+	urls := strings.Split(rpcUrls, ",")
+	validCount := 0
+	for _, url := range urls {
+		url = strings.TrimSpace(url)
+		if url == "" {
+			continue
 		}
-		if !trhSdkUtils.IsValidL1RPC(r.RPC) {
-			return errors.New("invalid RPC URL")
+		if !trhSdkUtils.IsValidL1RPC(url) {
+			return errors.New("invalid RPC URL: " + url)
+		}
+		validCount++
+	}
+	if validCount == 0 {
+		return errors.New("at least one valid RPC URL is required")
+	}
+	return nil
+}
+
+func (r *InstallDRBRequest) Validate() error {
+	if r.NodeType != "leader" && r.NodeType != "regular" {
+		return errors.New("nodeType must be 'leader' or 'regular'")
+	}
+
+	if r.NodeType == "leader" {
+		if !r.UseCurrentChain {
+			if r.RPC == "" {
+				return errors.New("rpc is required when useCurrentChain is false")
+			}
+			if err := validateRPCUrls(r.RPC); err != nil {
+				return err
+			}
+			if r.ChainID == 0 {
+				return errors.New("chainId is required when useCurrentChain is false")
+			}
+		}
+
+		if len(strings.TrimPrefix(r.PrivateKey, "0x")) != 64 {
+			return errors.New("invalid private key format")
+		}
+	} else {
+		if r.RPC == "" {
+			return errors.New("rpc is required for regular nodes")
+		}
+		if err := validateRPCUrls(r.RPC); err != nil {
+			return err
 		}
 		if r.ChainID == 0 {
-			return errors.New("chainId is required when useCurrentChain is false")
+			return errors.New("chainId is required for regular nodes")
+		}
+		if strings.TrimSpace(r.LeaderIP) == "" {
+			return errors.New("leaderIp is required for regular nodes")
+		}
+		if r.LeaderPort == 0 {
+			return errors.New("leaderPort is required for regular nodes")
+		}
+		if strings.TrimSpace(r.LeaderPeerID) == "" {
+			return errors.New("leaderPeerId is required for regular nodes")
+		}
+		if strings.TrimSpace(r.LeaderEOA) == "" {
+			return errors.New("leaderEoa is required for regular nodes")
+		}
+		if strings.TrimSpace(r.ContractAddress) == "" {
+			return errors.New("contractAddress is required for regular nodes")
+		}
+		if r.NodePort == 0 {
+			r.NodePort = 61281
+		}
+		if len(strings.TrimPrefix(r.EOAPrivateKey, "0x")) != 64 {
+			return errors.New("invalid eoaPrivateKey format")
+		}
+		if r.EC2Config == nil {
+			return errors.New("ec2Config is required for regular nodes")
+		}
+		if strings.TrimSpace(r.EC2Config.KeyPairName) == "" {
+			return errors.New("ec2Config.keyPairName is required for regular nodes")
 		}
 	}
 
-	// Private key format (64 hex chars, with optional 0x prefix)
-	if len(strings.TrimPrefix(r.PrivateKey, "0x")) != 64 {
-		return errors.New("invalid private key format")
+	// DB validation
+	if r.DatabaseConfig.Type != "rds" && r.DatabaseConfig.Type != "local" {
+		return errors.New("databaseConfig.type must be 'rds' or 'local'")
 	}
 
-	// Database type must be "rds"
-	if r.DatabaseConfig.Type != "rds" {
-		return errors.New("databaseConfig.type must be 'rds'")
-	}
-
-	// Domain-specific format validations
-	if !trhSdkUtils.IsValidRDSUsername(r.DatabaseConfig.Username) {
-		return errors.New("invalid RDS username")
-	}
-	if !trhSdkUtils.IsValidRDSPassword(r.DatabaseConfig.Password) {
-		return errors.New("invalid RDS password")
+	if r.DatabaseConfig.Type == "rds" {
+		if !trhSdkUtils.IsValidRDSUsername(r.DatabaseConfig.Username) {
+			return errors.New("invalid RDS username")
+		}
+		if !trhSdkUtils.IsValidRDSPassword(r.DatabaseConfig.Password) {
+			return errors.New("invalid RDS password")
+		}
 	}
 
 	return nil
@@ -105,10 +187,41 @@ type DRBLeaderInfo struct {
 	Namespace                string `json:"namespace"`
 }
 
+// this will represents the deployed regular node information
+type DRBRegularNodeInfo struct {
+	NodeURL       string `json:"nodeUrl"`
+	NodeIP        string `json:"nodeIp"`
+	NodePort      int    `json:"nodePort"`
+	NodePeerID    string `json:"nodePeerId,omitempty"`
+	NodeEOA       string `json:"nodeEoa"`
+	InstanceID    string `json:"instanceId,omitempty"`    // ec2 instance id
+	InstanceType  string `json:"instanceType,omitempty"`  // ec2 instance type
+	Region        string `json:"region"`
+	ChainID       uint64 `json:"chainId"`
+	RPCURL        string `json:"rpcUrl"`
+	LeaderIP      string `json:"leaderIp"`
+	LeaderPort    int    `json:"leaderPort"`
+	LeaderPeerID  string `json:"leaderPeerId"`
+	LeaderEOA     string `json:"leaderEoa"`
+	ContractAddress string `json:"contractAddress"`
+	DeploymentTimestamp string `json:"deploymentTimestamp"`
+}
+
 // DRBDeploymentInfo represents the full DRB deployment information
 type DRBDeploymentInfo struct {
-	Contract     *DRBContractInfo    `json:"contract"`
-	Application  *DRBApplicationInfo `json:"application"`
-	LeaderInfo   *DRBLeaderInfo      `json:"leaderInfo,omitempty"`
-	DatabaseType string              `json:"databaseType"`
+	NodeType        string              `json:"nodeType"`                  // "leader" or "regular"
+	Contract        *DRBContractInfo    `json:"contract,omitempty"`        // only for leader nodes
+	Application     *DRBApplicationInfo `json:"application,omitempty"`     // only for leader nodes
+	LeaderInfo      *DRBLeaderInfo      `json:"leaderInfo,omitempty"`      // only for leader nodes
+	RegularNodeInfo *DRBRegularNodeInfo `json:"regularNodeInfo,omitempty"` // only for regular nodes
+	DatabaseType    string              `json:"databaseType"`
+}
+
+// this represents the response for GET DRB info endpoint
+type GetDRBInfoResponse struct {
+	Status       string            `json:"status"`       // "pending", "in_progress", "installed", "failed", "not_installed"
+	Message      string            `json:"message,omitempty"`
+	NodeType     string            `json:"nodeType,omitempty"`     // "leader" or "regular"
+	Deployment   *DRBDeploymentInfo `json:"deployment,omitempty"`
+	FailureReason string           `json:"failureReason,omitempty"`
 }

@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/tokamak-network/trh-backend/internal/consts"
@@ -441,7 +442,7 @@ func UninstallUptimeService(
 	return sdkClient.UninstallUptimeService(ctx)
 }
 
-func InstallDRB(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallDRBRequest) (*thanosTypes.DeployDRBOutput, error) {
+func InstallDRBLeader(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallDRBRequest) (*thanosTypes.DeployDRBOutput, error) {
 	input := &thanosTypes.DeployDRBInput{
 		RPC:             req.RPC,
 		ChainID:         req.ChainID,
@@ -462,6 +463,55 @@ func InstallDRB(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.Insta
 	return output, nil
 }
 
-func UninstallDRB(ctx context.Context, s *thanosStack.ThanosStack) error {
+func InstallDRBRegular(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallDRBRequest) error {
+	if req.EC2Config == nil {
+		return fmt.Errorf("ec2Config is required")
+	}
+
+	instanceType := "t3.medium"
+	if req.EC2Config.InstanceType != "" {
+		instanceType = req.EC2Config.InstanceType
+	}
+	instanceName := "drb-regular-node"
+	if req.EC2Config.InstanceName != "" {
+		instanceName = req.EC2Config.InstanceName
+	}
+
+	input := &thanosTypes.DRBRegularNodeInput{
+		LeaderIP:        req.LeaderIP,
+		LeaderPort:      req.LeaderPort,
+		LeaderPeerID:    req.LeaderPeerID,
+		LeaderEOA:       req.LeaderEOA,
+		NodePort:        req.NodePort,
+		EOAPrivateKey:   req.EOAPrivateKey,
+		NodeType:        "regular",
+		ChainID:         fmt.Sprintf("%d", req.ChainID),
+		EthRpcUrls:      req.RPC,
+		ContractAddress: req.ContractAddress,
+		Region:          req.AWSConfig.Region,
+		InstanceType:    instanceType,
+		KeyPairName:     req.EC2Config.KeyPairName,
+		InstanceName:    instanceName,
+		DrbNodeImage:    "tokamaknetwork/drb-node:latest",
+		DatabaseConfig: &thanosTypes.DRBDatabaseConfig{
+			Type:         req.DatabaseConfig.Type,
+			Username:     req.DatabaseConfig.Username,
+			Password:     req.DatabaseConfig.Password,
+			DatabaseName: "drb",
+		},
+	}
+
+	if req.EC2Config.SubnetID != "" {
+		input.SubnetID = req.EC2Config.SubnetID
+	}
+
+	return s.InstallDRBRegularNode(ctx, input)
+}
+
+func UninstallDRBLeader(ctx context.Context, s *thanosStack.ThanosStack) error {
 	return s.UninstallDRB(ctx)
+}
+
+func UninstallDRBRegular(ctx context.Context, s *thanosStack.ThanosStack) error {
+	return s.UninstallDRBRegularNode(ctx)
 }

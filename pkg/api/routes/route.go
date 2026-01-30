@@ -218,6 +218,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.DELETE("/:id/integrations/cross-trade", handler.UninstallCrossChainBridge)
 
 		// DRB (Distributed Randomness Beacon) management
+		adminRoutes.GET("/:id/integrations/drb", handler.GetDRBInfo)
 		adminRoutes.POST("/:id/integrations/drb", handler.InstallDRB)
 		adminRoutes.DELETE("/:id/integrations/drb", handler.UninstallDRB)
 

@@ -236,6 +236,11 @@ func (im *IntegrationManager) UninstallDRB(ctx context.Context, stackId string) 
 	return im.drb.Uninstall(ctx, stackId)
 }
 
+// GetDRBInfo returns drb deployment information and status
+func (im *IntegrationManager) GetDRBInfo(ctx context.Context, stackId string) (*entities.Response, error) {
+	return im.drb.GetInfo(ctx, stackId)
+}
+
 func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
 	// fetch integration to see what type it is
 	integration, err := im.blockExplorer.integrationRepo.GetIntegrationById(integrationId.String())

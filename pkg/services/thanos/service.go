@@ -258,6 +258,11 @@ func (s *ThanosStackDeploymentService) UninstallDRB(ctx context.Context, stackId
 	return s.integrationMgr.UninstallDRB(ctx, stackId)
 }
 
+// GetDRBInfo returns drb deployment information and status
+func (s *ThanosStackDeploymentService) GetDRBInfo(ctx context.Context, stackId string) (*entities.Response, error) {
+	return s.integrationMgr.GetDRBInfo(ctx, stackId)
+}
+
 func (s *ThanosStackDeploymentService) CancelIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.CancelIntegration(ctx, stackId, integrationId)
 }

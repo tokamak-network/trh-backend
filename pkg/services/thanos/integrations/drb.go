@@ -20,6 +20,8 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
+	thanosTypes "github.com/tokamak-network/trh-sdk/pkg/types"
+	sdkUtils "github.com/tokamak-network/trh-sdk/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -33,6 +35,7 @@ const (
 
 // DRBStoredConfig is the config stored in the integration entity (no secrets)
 type DRBStoredConfig struct {
+	NodeType        string `json:"nodeType"`        // "leader" or "regular"
 	UseCurrentChain bool   `json:"useCurrentChain"`
 	RPC             string `json:"rpc,omitempty"`
 	ChainID         uint64 `json:"chainId,omitempty"`
@@ -132,6 +135,7 @@ func (d *DRBIntegration) Install(ctx context.Context, stackId uuid.UUID, req dto
 
 	// Store config (without secrets)
 	storedConfig := DRBStoredConfig{
+		NodeType:        req.NodeType,
 		UseCurrentChain: req.UseCurrentChain,
 		RPC:             req.RPC,
 		ChainID:         req.ChainID,
@@ -195,6 +199,98 @@ func (d *DRBIntegration) Uninstall(ctx context.Context, stackId string) (*entiti
 	})
 
 	return okResponse("DRB uninstallation started successfully")
+}
+
+// GetInfo returns DRB deployment information and status
+func (d *DRBIntegration) GetInfo(ctx context.Context, stackId string) (*entities.Response, error) {
+	logger.Info("DRB info requested", zap.String("stackId", stackId))
+
+	stack, err := d.stackRepo.GetStackByID(stackId)
+	if err != nil {
+		return errInternal(err)
+	}
+	if stack == nil {
+		return errNotFound("Stack not found")
+	}
+
+	// Get the DRB integration for this stack
+	integrations, err := d.integrationRepo.GetActiveIntegrations(stack.ID.String(), enum.IntegrationTypeDRB.String())
+	if err != nil {
+		logger.Error("failed to get integrations", zap.Error(err))
+		return errInternal(err)
+	}
+
+	// No DRB integration found
+	if len(integrations) == 0 {
+		return &entities.Response{
+			Status:  200,
+			Message: "DRB not installed",
+			Data: &dtos.GetDRBInfoResponse{
+				Status:  "not_installed",
+				Message: "DRB has not been installed on this stack",
+			},
+		}, nil
+	}
+
+	integration := integrations[0]
+	response := &dtos.GetDRBInfoResponse{}
+
+	// Map integration status to response status
+	switch integration.Status {
+	case string(entities.DeploymentStatusPending):
+		response.Status = "pending"
+		response.Message = "DRB installation is pending"
+	case string(entities.DeploymentStatusInProgress):
+		response.Status = "in_progress"
+		response.Message = "DRB installation is in progress"
+	case string(entities.DeploymentStatusCompleted):
+		response.Status = "installed"
+		response.Message = "DRB is installed and running"
+	case string(entities.DeploymentStatusFailed):
+		response.Status = "failed"
+		response.Message = "DRB installation failed"
+		response.FailureReason = integration.Reason
+	case string(entities.DeploymentStatusTerminating):
+		response.Status = "terminating"
+		response.Message = "DRB is being uninstalled"
+	case string(entities.DeploymentStatusCancelling):
+		response.Status = "cancelling"
+		response.Message = "DRB installation is being cancelled"
+	case string(entities.DeploymentStatusCancelled):
+		response.Status = "cancelled"
+		response.Message = "DRB installation was cancelled"
+	default:
+		response.Status = integration.Status
+	}
+
+	// Get stored config for node type
+	if integration.Config != nil {
+		var storedConfig DRBStoredConfig
+		if err := json.Unmarshal(integration.Config, &storedConfig); err == nil {
+			response.NodeType = storedConfig.NodeType
+			if response.NodeType == "" {
+				response.NodeType = "leader" // default for older installations
+			}
+		}
+	}
+
+	// Get deployment metadata if installed
+	if integration.Status == string(entities.DeploymentStatusCompleted) && integration.Info != nil {
+		var deploymentInfo dtos.DRBDeploymentInfo
+		if err := json.Unmarshal(integration.Info, &deploymentInfo); err == nil {
+			response.Deployment = &deploymentInfo
+			// Ensure node type is set on deployment info too
+			if response.Deployment.NodeType == "" {
+				response.Deployment.NodeType = response.NodeType
+			}
+		}
+	}
+
+	return &entities.Response{
+		Status:  200,
+		Message: "DRB info retrieved successfully",
+		Data:    response,
+	}, nil
 }
 
 // Cancel cancels an in-progress DRB installation
@@ -288,9 +384,17 @@ func (d *DRBIntegration) installTask(ctx context.Context, integrationID uuid.UUI
 		return
 	}
 
-	drbOutput, err := thanos.InstallDRB(taskCtx, sdkClient, &req)
+	// Install DRB based on node type
+	var drbOutput *thanosTypes.DeployDRBOutput
+	if req.NodeType == "regular" {
+		// Regular node installation
+		err = thanos.InstallDRBRegular(taskCtx, sdkClient, &req)
+	} else {
+		// Leader node installation (default)
+		drbOutput, err = thanos.InstallDRBLeader(taskCtx, sdkClient, &req)
+	}
 	if err != nil {
-		logger.Error("failed to install DRB", zap.String("plugin", enum.IntegrationTypeDRB.String()), zap.Error(err))
+		logger.Error("failed to install DRB", zap.String("plugin", enum.IntegrationTypeDRB.String()), zap.String("nodeType", req.NodeType), zap.Error(err))
 		status := entities.DeploymentRunStatusFailed
 		reason := sanitizeErrorMessage(err.Error())
 		if errors.Is(err, context.Canceled) {
@@ -310,7 +414,10 @@ func (d *DRBIntegration) installTask(ctx context.Context, integrationID uuid.UUI
 	)
 
 	// Build metadata
-	drbMetadata := &dtos.DRBDeploymentInfo{DatabaseType: req.DatabaseConfig.Type}
+	drbMetadata := &dtos.DRBDeploymentInfo{
+		NodeType:     req.NodeType,
+		DatabaseType: req.DatabaseConfig.Type,
+	}
 	if drbOutput != nil {
 		if drbOutput.DeployDRBContractsOutput != nil {
 			drbMetadata.Contract = &dtos.DRBContractInfo{
@@ -327,21 +434,51 @@ func (d *DRBIntegration) installTask(ctx context.Context, integrationID uuid.UUI
 		}
 	}
 
-	// Read the leader info file for additional connection details
-	leaderInfoPath := fmt.Sprintf("%s/drb-leader-info.json", deploymentPath)
-	if leaderInfoData, err := os.ReadFile(leaderInfoPath); err == nil {
-		var leaderInfo dtos.DRBLeaderInfo
-		if err := json.Unmarshal(leaderInfoData, &leaderInfo); err == nil {
-			drbMetadata.LeaderInfo = &leaderInfo
-			logger.Info("DRB leader info loaded",
-				zap.String("leaderUrl", leaderInfo.LeaderURL),
-				zap.String("leaderPeerId", leaderInfo.LeaderPeerID),
-			)
-		} else {
-			logger.Warn("failed to parse DRB leader info", zap.Error(err))
+	// Read additional deployment info based on node type
+	if req.NodeType == "regular" {
+		nodeEOA := ""
+		if addr, err := sdkUtils.GetAddressFromPrivateKey(req.EOAPrivateKey); err == nil {
+			nodeEOA = addr.Hex()
 		}
+
+		drbMetadata.RegularNodeInfo = &dtos.DRBRegularNodeInfo{
+			NodePort:            req.NodePort,
+			NodeEOA:             nodeEOA,
+			Region:              req.AWSConfig.Region,
+			ChainID:             req.ChainID,
+			RPCURL:              req.RPC,
+			LeaderIP:            req.LeaderIP,
+			LeaderPort:          req.LeaderPort,
+			LeaderPeerID:        req.LeaderPeerID,
+			LeaderEOA:           req.LeaderEOA,
+			ContractAddress:     req.ContractAddress,
+			DeploymentTimestamp: time.Now().UTC().Format(time.RFC3339),
+		}
+		if req.EC2Config != nil {
+			drbMetadata.RegularNodeInfo.InstanceType = req.EC2Config.InstanceType
+		}
+		logger.Info("DRB regular node info saved",
+			zap.String("region", req.AWSConfig.Region),
+			zap.Int("nodePort", req.NodePort),
+			zap.String("nodeEOA", nodeEOA),
+		)
 	} else {
-		logger.Warn("failed to read DRB leader info file", zap.Error(err), zap.String("path", leaderInfoPath))
+		// Read the leader info file for additional connection details
+		leaderInfoPath := fmt.Sprintf("%s/drb-leader-info.json", deploymentPath)
+		if leaderInfoData, err := os.ReadFile(leaderInfoPath); err == nil {
+			var leaderInfo dtos.DRBLeaderInfo
+			if err := json.Unmarshal(leaderInfoData, &leaderInfo); err == nil {
+				drbMetadata.LeaderInfo = &leaderInfo
+				logger.Info("DRB leader info loaded",
+					zap.String("leaderUrl", leaderInfo.LeaderURL),
+					zap.String("leaderPeerId", leaderInfo.LeaderPeerID),
+				)
+			} else {
+				logger.Warn("failed to parse DRB leader info", zap.Error(err))
+			}
+		} else {
+			logger.Warn("failed to read DRB leader info file", zap.Error(err), zap.String("path", leaderInfoPath))
+		}
 	}
 
 	metadataBytes, err := json.Marshal(drbMetadata)
@@ -416,6 +553,15 @@ func (d *DRBIntegration) uninstallTask(ctx context.Context, integrationID uuid.U
 	awsCreds := d.resolveAWSCredentials(stackConfig, nil, &integrationID)
 	deploymentPath := d.resolveDeploymentPath(stack, &integrationID)
 
+	// Get stored config to determine node type
+	nodeType := "leader" // default to leader
+	if integration, err := d.integrationRepo.GetIntegrationById(integrationID.String()); err == nil && integration != nil && integration.Config != nil {
+		var storedConfig DRBStoredConfig
+		if err := json.Unmarshal(integration.Config, &storedConfig); err == nil && storedConfig.NodeType != "" {
+			nodeType = storedConfig.NodeType
+		}
+	}
+
 	sdkClient, err := thanos.NewThanosSDKClient(
 		taskCtx, logPath, string(stack.Network), deploymentPath,
 		stackConfig.RegisterCandidate, awsCreds.AccessKey, awsCreds.SecretKey, awsCreds.Region,
@@ -426,8 +572,14 @@ func (d *DRBIntegration) uninstallTask(ctx context.Context, integrationID uuid.U
 		return
 	}
 
-	if err = thanos.UninstallDRB(taskCtx, sdkClient); err != nil {
-		logger.Error("failed to uninstall DRB", zap.String("plugin", enum.IntegrationTypeDRB.String()), zap.Error(err))
+	// Uninstall based on node type
+	if nodeType == "regular" {
+		err = thanos.UninstallDRBRegular(taskCtx, sdkClient)
+	} else {
+		err = thanos.UninstallDRBLeader(taskCtx, sdkClient)
+	}
+	if err != nil {
+		logger.Error("failed to uninstall DRB", zap.String("plugin", enum.IntegrationTypeDRB.String()), zap.String("nodeType", nodeType), zap.Error(err))
 		reason := sanitizeErrorMessage(err.Error())
 		if errors.Is(err, context.DeadlineExceeded) {
 			reason = "Uninstall timed out after 20 minutes. AWS resources may require manual cleanup."
@@ -477,6 +629,15 @@ func (d *DRBIntegration) cancelTask(ctx context.Context, stackId uuid.UUID, inte
 	awsCreds := d.resolveAWSCredentials(stackConfig, nil, &integration.ID)
 	deploymentPath := d.resolveDeploymentPath(stack, &integration.ID)
 
+	// Get node type from stored config
+	nodeType := "leader" // default to leader
+	if integration.Config != nil {
+		var storedConfig DRBStoredConfig
+		if err := json.Unmarshal(integration.Config, &storedConfig); err == nil && storedConfig.NodeType != "" {
+			nodeType = storedConfig.NodeType
+		}
+	}
+
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx, utils.GetLogPath(stack.ID, "cancel-drb"), string(stack.Network), deploymentPath,
 		stackConfig.RegisterCandidate, awsCreds.AccessKey, awsCreds.SecretKey, awsCreds.Region,
@@ -487,8 +648,14 @@ func (d *DRBIntegration) cancelTask(ctx context.Context, stackId uuid.UUID, inte
 		return
 	}
 
-	if err = thanos.UninstallDRB(ctx, sdkClient); err != nil {
-		logger.Error("failed to uninstall DRB during cancel", zap.Error(err))
+	// Uninstall based on node type
+	if nodeType == "regular" {
+		err = thanos.UninstallDRBRegular(ctx, sdkClient)
+	} else {
+		err = thanos.UninstallDRBLeader(ctx, sdkClient)
+	}
+	if err != nil {
+		logger.Error("failed to uninstall DRB during cancel", zap.String("nodeType", nodeType), zap.Error(err))
 		_ = d.integrationRepo.UpdateIntegrationStatusWithReason(integration.ID.String(), entities.DeploymentStatusFailed, sanitizeErrorMessage(err.Error()))
 		return
 	}

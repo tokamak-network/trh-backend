@@ -807,6 +807,32 @@ func (h *ThanosDeploymentHandler) UninstallDRB(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+// @Summary		Get DRB Info
+// @Description	Get DRB deployment information and status for the given stack
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response{data=dtos.GetDRBInfoResponse}
+// @Router			/stacks/thanos/{id}/integrations/drb [get]
+func (h *ThanosDeploymentHandler) GetDRBInfo(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.GetDRBInfo(c.Request.Context(), id)
+	if err != nil {
+		logger.Error("failed to get DRB info", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 func (h *ThanosDeploymentHandler) CancelIntegration(c *gin.Context) {
 	stackUUID, integrationUUID, handled := parseAndValidateIntegrationIDs(c)
 	if handled {
