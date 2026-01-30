@@ -327,7 +327,7 @@ func (b *BackupManager) BackupAttach(ctx context.Context, stackId uuid.UUID, req
 			defaultBackup := true
 			request.BackupPvPvc = &defaultBackup
 		}
-		backupAttachInfo, err := BackupAttach(ctx, thanosSDK, &request)
+		backupAttachInfo, err := BackupAttach(ctx, thanosSDK, &request, updateProgress)
 		if err != nil {
 			logger.Error("failed to backup attach", zap.String("stackId", stackId.String()), zap.Error(err))
 			updateProgress(fmt.Sprintf("Attach failed: %v", err), 0)
@@ -471,8 +471,8 @@ func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack, progressRep
 	return snapshotInfo, nil
 }
 
-func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest) (*thanosTypes.BackupAttachInfo, error) {
-	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss, req.BackupPvPvc)
+func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest, progressReporter func(string, float64)) (*thanosTypes.BackupAttachInfo, error) {
+	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss, req.BackupPvPvc, progressReporter)
 	if err != nil {
 		return nil, err
 	}

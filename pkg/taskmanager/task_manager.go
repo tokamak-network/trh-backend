@@ -21,6 +21,7 @@ type TaskProgress struct {
 	Error      string  `json:"error,omitempty"`
 	Result     any     `json:"result,omitempty"`
 	UpdatedAt  string  `json:"updatedAt"`
+	StartedAt  string  `json:"startedAt"`
 }
 
 type managedTask struct {
@@ -169,6 +170,8 @@ func (tm *TaskManager) AddTaskWithProgress(id string, task func(ctx context.Cont
 
 	ctx, cancel := context.WithCancel(context.Background()) // Use a new context for each task
 
+	now := time.Now().Format(time.RFC3339)
+
 	// Initialize progress
 	tm.progressMu.Lock()
 	tm.progress[id] = &TaskProgress{
@@ -176,7 +179,8 @@ func (tm *TaskManager) AddTaskWithProgress(id string, task func(ctx context.Cont
 		Status:     "pending",
 		Percentage: 0.0,
 		Message:    "Queued",
-		UpdatedAt:  time.Now().Format(time.RFC3339),
+		UpdatedAt:  now,
+		StartedAt:  now,
 	}
 	tm.progressMu.Unlock()
 
