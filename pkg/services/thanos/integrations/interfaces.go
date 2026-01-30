@@ -17,6 +17,7 @@ import (
 type StackRepo interface {
 	GetStackByID(id string) (*entities.StackEntity, error)
 	UpdateMetadata(id string, metadata *entities.StackMetadata) error
+	UpdateConfig(id string, config []byte) error
 }
 
 type DeploymentRepo interface {

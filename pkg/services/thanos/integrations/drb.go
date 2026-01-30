@@ -33,14 +33,14 @@ const (
 	maxLogLength     = 10000
 )
 
-// DRBStoredConfig is the config stored in the integration entity (no secrets)
+// DRBStoredConfig is the config stored in the integration entity
 type DRBStoredConfig struct {
-	NodeType        string `json:"nodeType"`        // "leader" or "regular"
+	NodeType        string `json:"nodeType"` // "leader" or "regular"
 	UseCurrentChain bool   `json:"useCurrentChain"`
 	RPC             string `json:"rpc,omitempty"`
 	ChainID         uint64 `json:"chainId,omitempty"`
+	DeploymentPath  string `json:"deploymentPath,omitempty"`
 	AWSRegion       string `json:"awsRegion"`
-	DeploymentPath  string `json:"deploymentPath,omitempty"` // Used for system stacks without a deployment path
 	DatabaseConfig  struct {
 		Type     string `json:"type"`
 		Username string `json:"username"`
@@ -133,7 +133,21 @@ func (d *DRBIntegration) Install(ctx context.Context, stackId uuid.UUID, req dto
 		logger.Info("Created deployment path for system stack DRB", zap.String("path", deploymentPath))
 	}
 
-	// Store config (without secrets)
+	// Check if stack has AWS credentials, if not update stack config with provided credentials
+	var stackConfig dtos.DeployThanosRequest
+	_ = json.Unmarshal(stack.Config, &stackConfig)
+	if stackConfig.AwsAccessKey == "" || stackConfig.AwsSecretAccessKey == "" {
+		stackConfig.AwsAccessKey = req.AWSConfig.AccessKeyId
+		stackConfig.AwsSecretAccessKey = req.AWSConfig.SecretAccessKey
+		stackConfig.AwsRegion = req.AWSConfig.Region
+		updatedStackConfig, _ := json.Marshal(stackConfig)
+		if err := d.stackRepo.UpdateConfig(stack.ID.String(), updatedStackConfig); err != nil {
+			logger.Error("failed to update stack config with AWS credentials", zap.Error(err))
+			return errInternal(err)
+		}
+	}
+
+	// Store integration config
 	storedConfig := DRBStoredConfig{
 		NodeType:        req.NodeType,
 		UseCurrentChain: req.UseCurrentChain,
@@ -371,8 +385,8 @@ func (d *DRBIntegration) installTask(ctx context.Context, integrationID uuid.UUI
 	defer cancel()
 	go d.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
-	// Resolve AWS credentials (prefer request config for system stacks)
-	awsCreds := d.resolveAWSCredentials(stackConfig, req.AWSConfig, nil)
+	// Resolve AWS credentials
+	awsCreds := d.resolveAWSCredentials(stackConfig, req.AWSConfig)
 
 	sdkClient, err := thanos.NewThanosSDKClient(
 		taskCtx, logPath, string(stack.Network), deploymentPath,
@@ -563,7 +577,7 @@ func (d *DRBIntegration) uninstallTask(ctx context.Context, integrationID uuid.U
 	defer cancel()
 	go d.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
-	awsCreds := d.resolveAWSCredentials(stackConfig, nil, &integrationID)
+	awsCreds := d.resolveAWSCredentials(stackConfig, nil)
 	deploymentPath := d.resolveDeploymentPath(stack, &integrationID)
 
 	// Get stored config to determine node type
@@ -639,7 +653,7 @@ func (d *DRBIntegration) cancelTask(ctx context.Context, stackId uuid.UUID, inte
 		return
 	}
 
-	awsCreds := d.resolveAWSCredentials(stackConfig, nil, &integration.ID)
+	awsCreds := d.resolveAWSCredentials(stackConfig, nil)
 	deploymentPath := d.resolveDeploymentPath(stack, &integration.ID)
 
 	// Get node type from stored config
@@ -710,28 +724,19 @@ func (d *DRBIntegration) resolveDeploymentPath(stack *entities.StackEntity, inte
 	return fmt.Sprintf("%s/.trh/integrations/%s/drb", homeDir, stack.ID.String())
 }
 
-func (d *DRBIntegration) resolveAWSCredentials(stackConfig *dtos.DeployThanosRequest, reqConfig *dtos.DRBAWSConfig, integrationID *uuid.UUID) awsCredentials {
+func (d *DRBIntegration) resolveAWSCredentials(stackConfig *dtos.DeployThanosRequest, reqConfig *dtos.DRBAWSConfig) awsCredentials {
+	// Use stack config credentials (same as other integrations)
 	creds := awsCredentials{
 		AccessKey: stackConfig.AwsAccessKey,
 		SecretKey: stackConfig.AwsSecretAccessKey,
 		Region:    stackConfig.AwsRegion,
 	}
 
-	// Use request config if stack doesn't have credentials (e.g., system stack)
+	// Use request config during install if provided
 	if reqConfig != nil && creds.AccessKey == "" {
 		creds.AccessKey = reqConfig.AccessKeyId
 		creds.SecretKey = reqConfig.SecretAccessKey
 		creds.Region = reqConfig.Region
-	}
-
-	// Fallback to stored integration config for region
-	if integrationID != nil && creds.Region == "" {
-		if integration, err := d.integrationRepo.GetIntegrationById(integrationID.String()); err == nil && integration != nil {
-			var config DRBStoredConfig
-			if err := json.Unmarshal(integration.Config, &config); err == nil && config.AWSRegion != "" {
-				creds.Region = config.AWSRegion
-			}
-		}
 	}
 
 	return creds
