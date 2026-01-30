@@ -463,15 +463,28 @@ func (d *DRBIntegration) installTask(ctx context.Context, integrationID uuid.UUI
 			zap.String("nodeEOA", nodeEOA),
 		)
 	} else {
-		// Read the leader info file for additional connection details
+		// Read the leader info file (SDK uses snake_case JSON)
 		leaderInfoPath := fmt.Sprintf("%s/drb-leader-info.json", deploymentPath)
 		if leaderInfoData, err := os.ReadFile(leaderInfoPath); err == nil {
-			var leaderInfo dtos.DRBLeaderInfo
-			if err := json.Unmarshal(leaderInfoData, &leaderInfo); err == nil {
-				drbMetadata.LeaderInfo = &leaderInfo
+			var sdkLeaderInfo thanosTypes.DRBLeaderInfo
+			if err := json.Unmarshal(leaderInfoData, &sdkLeaderInfo); err == nil {
+				drbMetadata.LeaderInfo = &dtos.DRBLeaderInfo{
+					LeaderURL:                sdkLeaderInfo.LeaderURL,
+					LeaderIP:                 sdkLeaderInfo.LeaderIP,
+					LeaderPort:               sdkLeaderInfo.LeaderPort,
+					LeaderPeerID:             sdkLeaderInfo.LeaderPeerID,
+					LeaderEOA:                sdkLeaderInfo.LeaderEOA,
+					CommitReveal2L2Address:   sdkLeaderInfo.CommitReveal2L2Address,
+					ConsumerExampleV2Address: sdkLeaderInfo.ConsumerExampleV2Address,
+					ChainID:                  sdkLeaderInfo.ChainID,
+					RPCURL:                   sdkLeaderInfo.RPCURL,
+					DeploymentTimestamp:      sdkLeaderInfo.DeploymentTimestamp,
+					ClusterName:              sdkLeaderInfo.ClusterName,
+					Namespace:                sdkLeaderInfo.Namespace,
+				}
 				logger.Info("DRB leader info loaded",
-					zap.String("leaderUrl", leaderInfo.LeaderURL),
-					zap.String("leaderPeerId", leaderInfo.LeaderPeerID),
+					zap.String("leaderUrl", sdkLeaderInfo.LeaderURL),
+					zap.String("leaderPeerId", sdkLeaderInfo.LeaderPeerID),
 				)
 			} else {
 				logger.Warn("failed to parse DRB leader info", zap.Error(err))
