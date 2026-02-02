@@ -43,6 +43,7 @@ func NewIntegrationManager(
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationByStatus(stackId string, integrationType string, status entities.DeploymentStatus) (*entities.IntegrationEntity, error)
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
@@ -180,8 +181,16 @@ func (im *IntegrationManager) InstallCrossChainBridge(ctx context.Context, stack
 	return im.crossTrade.Install(ctx, stackId, request)
 }
 
-func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	return im.crossTrade.Uninstall(ctx, stackId.String())
+func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, mode string) (*entities.Response, error) {
+	return im.crossTrade.Uninstall(ctx, stackId.String(), mode)
+}
+
+func (im *IntegrationManager) RegisterTokens(ctx context.Context, stackId uuid.UUID, mode string, request dtos.RegisterTokensAPIRequest) (*entities.Response, error) {
+	return im.crossTrade.RegisterTokens(ctx, stackId, mode, request)
+}
+
+func (im *IntegrationManager) DeployNewL2Chain(ctx context.Context, stackId uuid.UUID, mode string, request dtos.DeployNewL2ChainRequest) (*entities.Response, error) {
+	return im.crossTrade.DeployNewL2Chain(ctx, stackId, mode, request)
 }
 
 // InstallUptimeService installs an uptime service for the given stack
@@ -225,6 +234,10 @@ func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uui
 		return im.uptimeService.Cancel(ctx, stackId, integrationId)
 	case "register-candidate":
 		return im.registerCandidate.Cancel(ctx, stackId, integrationId)
+	case "cross-trade-l2-to-l1":
+		return im.crossTrade.Cancel(ctx, stackId, integrationId)
+	case "cross-trade-l2-to-l2":
+		return im.crossTrade.Cancel(ctx, stackId, integrationId)
 	default:
 		return &entities.Response{
 			Status:  400,

@@ -2,9 +2,11 @@ package thanos
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
@@ -182,6 +184,114 @@ func (s *ThanosStackDeploymentService) GetRollupConfigFilePath(stackId uuid.UUID
 	return stack.Metadata.RollupConfigUrl, nil
 }
 
+// GetContractsFilePath returns the contracts file path from stack metadata and validates it exists
+func (s *ThanosStackDeploymentService) GetContractsFilePath(stackId uuid.UUID) (string, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return "", err
+	}
+	if stack == nil {
+		return "", errors.New("stack not found")
+	}
+
+	// Check if metadata exists
+	if stack.Metadata == nil {
+		return "", errors.New("stack metadata not found")
+	}
+
+	contractsPath := stack.Metadata.ContractsPath
+
+	// Check if contracts path exists
+	if contractsPath == "" {
+		contractsPath = filepath.Join(stack.DeploymentPath, "tokamak-thanos", "packages", "tokamak", "contracts-bedrock", "deployments", fmt.Sprintf("%d-deploy.json", stack.Metadata.L1ChainId))
+	}
+
+	// Verify file exists on filesystem
+	if _, err := os.Stat(contractsPath); err != nil {
+		if os.IsNotExist(err) {
+			return "", errors.New("contracts file not found on filesystem")
+		}
+		return "", err
+	}
+
+	return contractsPath, nil
+}
+
+// GetContractsFileContent returns the file bytes stored at the contracts path for the stack
+func (s *ThanosStackDeploymentService) GetContractsFileContent(stackId uuid.UUID) (map[string]string, error) {
+	filePath, err := s.GetContractsFilePath(stackId)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errors.New("contracts file not found on filesystem")
+		}
+		return nil, err
+	}
+
+	var contracts map[string]string
+	if err := json.Unmarshal(content, &contracts); err != nil {
+		return nil, errors.New("failed to convert the contracts")
+	}
+
+	contracts["L2CrossDomainMessengerProxy"] = "0x4200000000000000000000000000000000000007"
+	return contracts, nil
+}
+
+// GetDeployConfigFilePath returns the deploy config file path from stack metadata and validates it exists
+func (s *ThanosStackDeploymentService) GetDeployConfigFilePath(stackId uuid.UUID) (string, error) {
+	stack, err := s.stackRepo.GetStackByID(stackId.String())
+	if err != nil {
+		return "", err
+	}
+	if stack == nil {
+		return "", errors.New("stack not found")
+	}
+
+	// Check if metadata exists
+	if stack.Metadata == nil {
+		return "", errors.New("stack metadata not found")
+	}
+
+	deployConfigPath := stack.Metadata.DeployConfigPath
+
+	// Check if deploy config path exists, set default if not
+	if deployConfigPath == "" {
+		deployConfigPath = filepath.Join(stack.DeploymentPath, "tokamak-thanos", "packages", "tokamak", "contracts-bedrock", "scripts", "deploy-config.json")
+	}
+
+	// Verify file exists on filesystem
+	if _, err := os.Stat(deployConfigPath); err != nil {
+		if os.IsNotExist(err) {
+			return "", errors.New("deploy config file not found on filesystem")
+		}
+		return "", err
+	}
+
+	return deployConfigPath, nil
+}
+
+// GetDeployConfigFileContent returns the file bytes stored at the deploy config path for the stack
+func (s *ThanosStackDeploymentService) GetDeployConfigFileContent(stackId uuid.UUID) ([]byte, error) {
+	filePath, err := s.GetDeployConfigFilePath(stackId)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errors.New("deploy config file not found on filesystem")
+		}
+		return nil, err
+	}
+
+	return content, nil
+}
+
 func (s *ThanosStackDeploymentService) BackupStatus(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.BackupStatus(ctx, stackId)
 }
@@ -234,8 +344,16 @@ func (s *ThanosStackDeploymentService) InstallCrossChainBridge(ctx context.Conte
 	return s.integrationMgr.InstallCrossChainBridge(ctx, stackId, request)
 }
 
-func (s *ThanosStackDeploymentService) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	return s.integrationMgr.UninstallCrossChainBridge(ctx, stackId)
+func (s *ThanosStackDeploymentService) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, mode string) (*entities.Response, error) {
+	return s.integrationMgr.UninstallCrossChainBridge(ctx, stackId, mode)
+}
+
+func (s *ThanosStackDeploymentService) RegisterTokens(ctx context.Context, stackId uuid.UUID, mode string, request dtos.RegisterTokensAPIRequest) (*entities.Response, error) {
+	return s.integrationMgr.RegisterTokens(ctx, stackId, mode, request)
+}
+
+func (s *ThanosStackDeploymentService) DeployNewL2Chain(ctx context.Context, stackId uuid.UUID, mode string, request dtos.DeployNewL2ChainRequest) (*entities.Response, error) {
+	return s.integrationMgr.DeployNewL2Chain(ctx, stackId, mode, request)
 }
 
 // InstallUptimeService installs an uptime service for the given stack

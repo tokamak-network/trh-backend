@@ -3,7 +3,6 @@ package thanos
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -21,7 +20,7 @@ import (
 func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.UUID) {
 	err := s.executeDeployments(ctx, stackId)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
+		if utils.IsContextCanceled(err) {
 			logger.Info("deployment cancelled", zap.String("stackId", stackId.String()))
 			return
 		}
@@ -109,15 +108,17 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 	}
 
 	err = s.stackRepo.UpdateMetadata(stackId.String(), &entities.StackMetadata{
-		Layer1:          layer1Name,
-		Layer2:          "Thanos Stack",
-		L1ChainId:       chainInformation.L1ChainID,
-		L2RpcUrl:        chainInformation.L2RpcUrl,
-		L2ChainId:       chainInformation.L2ChainID,
-		BridgeUrl:       chainInformation.BridgeUrl,
-		ExplorerUrl:     chainInformation.BlockExplorer,
-		RollupConfigUrl: chainInformation.RollupFilePath,
-		MonitoringUrl:   chainInformation.MonitoringUrl,
+		Layer1:           layer1Name,
+		Layer2:           "Thanos Stack",
+		L1ChainId:        chainInformation.L1ChainID,
+		L2RpcUrl:         chainInformation.L2RpcUrl,
+		L2ChainId:        chainInformation.L2ChainID,
+		BridgeUrl:        chainInformation.BridgeUrl,
+		ExplorerUrl:      chainInformation.BlockExplorer,
+		RollupConfigUrl:  chainInformation.RollupFilePath,
+		ContractsPath:    chainInformation.ContractsPath,
+		MonitoringUrl:    chainInformation.MonitoringUrl,
+		DeployConfigPath: chainInformation.DeployConfigPath,
 	})
 	if err != nil {
 		logger.Error("failed to update stack metadata", zap.Error(err))
@@ -368,7 +369,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
 
 			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
-				if errors.Is(err, context.Canceled) {
+				if utils.IsContextCanceled(err) {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
 						zap.String("step", deployment.Step))

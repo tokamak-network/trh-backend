@@ -7,10 +7,36 @@ import (
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-sdk/pkg/constants"
+	thanosConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
 	trhSDKLogging "github.com/tokamak-network/trh-sdk/pkg/logging"
 	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	thanosTypes "github.com/tokamak-network/trh-sdk/pkg/types"
 	"go.uber.org/zap"
+)
+
+const (
+	DeployL1CrossTradeL2L1 = "DeployL1CrossTrade_L2L1.s.sol"
+	DeployL2CrossTradeL2L1 = "DeployL2CrossTrade_L2L1.s.sol"
+	DeployL1CrossTradeL2L2 = "DeployL1CrossTrade_L2L2.s.sol"
+	DeployL2CrossTradeL2L2 = "DeployL2CrossTrade_L2L2.s.sol"
+)
+
+const (
+	L2L2CrossTradeProxyL1ContractName = "L2toL2CrossTradeProxyL1"
+	L2L2CrossTradeL1ContractName      = "L2toL2CrossTradeL1"
+	L1L2CrossTradeProxyL1ContractName = "L1CrossTradeProxy"
+	L1L2CrossTradeL1ContractName      = "L1CrossTrade"
+
+	L2L2CrossTradeProxyL2ContractName = "L2toL2CrossTradeProxy"
+	L2L2CrossTradeL2ContractName      = "L2toL2CrossTradeL2"
+	L1L2CrossTradeProxyL2ContractName = "L2CrossTradeProxy"
+	L1L2CrossTradeL2ContractName      = "L2CrossTrade"
+)
+
+const (
+	L2L2ScriptPath = "scripts/foundry_scripts"
+	L1L2ScriptPath = "scripts/foundry_scripts/L2L1"
 )
 
 func NewThanosSDKClient(
@@ -379,51 +405,90 @@ func UpdateTelegramConfig(ctx context.Context, s *thanosStack.ThanosStack, teleg
 	return alertCustomization.UpdateTelegramConfig(ctx, telegramConfig.ApiToken, receiversStr)
 }
 
-func InstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallCrossChainBridgeRequest) (*thanosStack.DeployCrossTradeOutput, error) {
-	l2ChainConfigs := make([]*thanosStack.L2CrossTradeChainInput, len(req.L2ChainConfig))
-	for i, chainConfig := range req.L2ChainConfig {
-		l2ChainConfigs[i] = &thanosStack.L2CrossTradeChainInput{
-			RPC:                  chainConfig.RPC,
-			ChainID:              chainConfig.ChainID,
-			PrivateKey:           chainConfig.PrivateKey,
-			IsDeployedNew:        chainConfig.IsDeployedNew,
-			DeploymentScriptPath: chainConfig.DeploymentScriptPath,
-			ContractName:         chainConfig.ContractName,
-			BlockExplorerConfig: &thanosStack.BlockExplorerConfig{
-				APIKey: chainConfig.BlockExplorerConfig.APIKey,
-				URL:    chainConfig.BlockExplorerConfig.URL,
-				Type:   chainConfig.BlockExplorerConfig.Type,
-			},
-			CrossDomainMessenger:   chainConfig.CrossDomainMessenger,
-			CrossTradeProxyAddress: chainConfig.CrossTradeProxyAddress,
-			CrossTradeAddress:      chainConfig.CrossTradeAddress,
-			USDTAddress:            chainConfig.USDTAddress,
-			USDCAddress:            chainConfig.USDCAddress,
-			TONAddress:             chainConfig.TONAddress,
+func InstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallCrossChainBridgeRequest) (*thanosTypes.DeployCrossTradeOutput, error) {
+	var blockExplorerConfig *thanosTypes.BlockExplorerConfig
+	if req.L1ChainConfig.BlockExplorerConfig != nil {
+		blockExplorerConfig = &thanosTypes.BlockExplorerConfig{
+			APIKey: req.L1ChainConfig.BlockExplorerConfig.APIKey,
+			URL:    req.L1ChainConfig.BlockExplorerConfig.URL,
+			Type:   req.L1ChainConfig.BlockExplorerConfig.Type,
 		}
 	}
-	l1ChainConfig := &thanosStack.L1CrossTradeChainInput{
-		RPC:                  req.L1ChainConfig.RPC,
-		ChainID:              req.L1ChainConfig.ChainID,
-		PrivateKey:           req.L1ChainConfig.PrivateKey,
-		IsDeployedNew:        req.L1ChainConfig.IsDeployedNew,
-		DeploymentScriptPath: req.L1ChainConfig.DeploymentScriptPath,
-		ContractName:         req.L1ChainConfig.ContractName,
+
+	if !strings.HasPrefix(req.L1ChainConfig.PrivateKey, "0x") {
+		req.L1ChainConfig.PrivateKey = "0x" + req.L1ChainConfig.PrivateKey
+	}
+
+	l1ChainConfig := &thanosTypes.L1CrossTradeChainInput{
+		RPC:                    req.L1ChainConfig.RPC,
+		ChainID:                req.L1ChainConfig.ChainID,
+		PrivateKey:             req.L1ChainConfig.PrivateKey,
+		IsDeployedNew:          req.L1ChainConfig.IsDeployedNew,
+		BlockExplorerConfig:    blockExplorerConfig,
+		CrossTradeProxyAddress: req.L1ChainConfig.CrossTradeProxyAddress,
+		CrossTradeAddress:      req.L1ChainConfig.CrossTradeAddress,
+		ChainName:              req.L1ChainConfig.ChainName,
+	}
+
+	l2ChainConfigs := make([]*thanosTypes.L2CrossTradeChainInput, len(req.L2ChainConfig))
+	for i, chainConfig := range req.L2ChainConfig {
+		var blockExplorerAPIKey, blockExplorerURL string
+		var blockExplorerType constants.BlockExplorerType
+		if chainConfig.BlockExplorerConfig != nil {
+			blockExplorerAPIKey = chainConfig.BlockExplorerConfig.APIKey
+			blockExplorerURL = chainConfig.BlockExplorerConfig.URL
+			blockExplorerType = chainConfig.BlockExplorerConfig.Type
+		}
+
+		crossDomainMessenger := chainConfig.CrossDomainMessenger
+		if crossDomainMessenger == "" {
+			crossDomainMessenger = "0x4200000000000000000000000000000000000007"
+		}
+
+		if !strings.HasPrefix(chainConfig.PrivateKey, "0x") {
+			chainConfig.PrivateKey = "0x" + chainConfig.PrivateKey
+		}
+
+		l2ChainConfigs[i] = &thanosTypes.L2CrossTradeChainInput{
+			RPC:           chainConfig.RPC,
+			ChainID:       chainConfig.ChainID,
+			PrivateKey:    chainConfig.PrivateKey,
+			IsDeployedNew: chainConfig.IsDeployedNew,
+			ChainName:     chainConfig.ChainName,
+			BlockExplorerConfig: &thanosTypes.BlockExplorerConfig{
+				APIKey: blockExplorerAPIKey,
+				URL:    blockExplorerURL,
+				Type:   blockExplorerType,
+			},
+			CrossDomainMessenger:    crossDomainMessenger,
+			CrossTradeProxyAddress:  chainConfig.CrossTradeProxyAddress,
+			CrossTradeAddress:       chainConfig.CrossTradeAddress,
+			NativeTokenAddressOnL1:  chainConfig.NativeTokenAddress,
+			L1StandardBridgeAddress: chainConfig.L1StandardBridgeAddress,
+			L1USDCBridgeAddress:     chainConfig.L1USDCBridgeAddress,
+			L1CrossDomainMessenger:  chainConfig.L1CrossDomainMessenger,
+		}
 	}
 
 	logger.Info("l1 chain config", zap.Any("l1 chain config", l1ChainConfig))
 	logger.Info("l2 chain configs", zap.Any("l2 chain configs", l2ChainConfigs))
 
-	return s.DeployCrossTrade(ctx, &thanosStack.DeployCrossTradeInputs{
+	output, err := s.DeployCrossTradeContracts(ctx, &thanosTypes.CrossTrade{
 		ProjectID:     req.ProjectID,
 		Mode:          req.Mode,
 		L1ChainConfig: l1ChainConfig,
 		L2ChainConfig: l2ChainConfigs,
-	})
+	}, true)
+	if err != nil {
+		logger.Error("failed to deploy cross trade", zap.Error(err))
+		return nil, err
+	}
+
+	return output, nil
 }
 
-func UninstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack) error {
-	return s.UninstallCrossTrade(ctx)
+func UninstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack, mode string) error {
+	return s.UninstallCrossTrade(ctx, constants.CrossTradeDeployMode(mode))
 }
 
 func InstallUptimeService(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallUptimeServiceRequest) (string, error) {
@@ -439,4 +504,101 @@ func UninstallUptimeService(
 	sdkClient *thanosStack.ThanosStack,
 ) error {
 	return sdkClient.UninstallUptimeService(ctx)
+}
+
+func GetDefaultContractAddresses() map[uint64]thanosConstants.DefaultContractAddress {
+	return thanosConstants.DefaultContractAddresses
+}
+
+func GetDeployedL2ChainConfigurationForCrossTrade(ctx context.Context, s *thanosStack.ThanosStack, mode constants.CrossTradeDeployMode) ([]*thanosTypes.L2CrossTradeChainInput, error) {
+	crossTradeInfo, err := s.GetCrossTradeConfiguration(ctx, mode)
+	if err != nil {
+		return nil, err
+	}
+	return crossTradeInfo.L2ChainConfig, nil
+}
+
+func RegisterTokens(ctx context.Context, s *thanosStack.ThanosStack, mode constants.CrossTradeDeployMode, req []*dtos.RegisterTokensRequest) (*thanosTypes.DeployCrossTradeOutput, error) {
+	tokenConfigs := make([]*thanosTypes.RegisterTokenInput, 0)
+	for _, tokenConfig := range req {
+		l2TokenInputs := make([]*thanosTypes.L2TokenInput, 0)
+		for _, l2TokenInput := range tokenConfig.L2TokenInputs {
+			l2TokenInputs = append(l2TokenInputs, &thanosTypes.L2TokenInput{
+				ChainID:      l2TokenInput.ChainID,
+				TokenAddress: l2TokenInput.TokenAddress,
+			})
+		}
+		tokenConfigs = append(tokenConfigs, &thanosTypes.RegisterTokenInput{
+			TokenName:      tokenConfig.TokenName,
+			L1TokenAddress: tokenConfig.L1TokenAddress,
+			L2TokenInputs:  l2TokenInputs,
+		})
+	}
+	output, err := s.RegisterNewTokensOnExistingCrossTrade(ctx, mode, tokenConfigs)
+	if err != nil {
+		logger.Error("failed to register tokens", zap.Error(err))
+		return nil, err
+	}
+	return output, nil
+}
+
+func DeployNewL2Chain(ctx context.Context, s *thanosStack.ThanosStack, mode constants.CrossTradeDeployMode, req *dtos.L2CrossTradeChainInput) (*thanosTypes.DeployCrossTradeOutput, error) {
+	crossTradeInfo, err := s.GetCrossTradeConfiguration(ctx, mode)
+	if err != nil {
+		logger.Error("failed to get deployed l2 chain configuration for cross trade", zap.Error(err))
+		return nil, err
+	}
+
+	// Reset the current l2 chains on the config and add the new l2 chain
+	var blockExplorerConfig *thanosTypes.BlockExplorerConfig
+	if req.BlockExplorerConfig != nil {
+		blockExplorerConfig = &thanosTypes.BlockExplorerConfig{
+			APIKey: req.BlockExplorerConfig.APIKey,
+			URL:    req.BlockExplorerConfig.URL,
+			Type:   req.BlockExplorerConfig.Type,
+		}
+	}
+	l2ChainConfigs := []*thanosTypes.L2CrossTradeChainInput{
+		{
+			RPC:                     req.RPC,
+			ChainID:                 req.ChainID,
+			PrivateKey:              req.PrivateKey,
+			IsDeployedNew:           req.IsDeployedNew,
+			ChainName:               req.ChainName,
+			BlockExplorerConfig:     blockExplorerConfig,
+			CrossDomainMessenger:    req.CrossDomainMessenger,
+			CrossTradeProxyAddress:  req.CrossTradeProxyAddress,
+			CrossTradeAddress:       req.CrossTradeAddress,
+			NativeTokenAddressOnL1:  req.NativeTokenAddress,
+			L1StandardBridgeAddress: req.L1StandardBridgeAddress,
+			L1USDCBridgeAddress:     req.L1USDCBridgeAddress,
+			L1CrossDomainMessenger:  req.L1CrossDomainMessenger,
+		},
+	}
+
+	// Read for the deployment file
+	l1ChainConfig := &thanosTypes.L1CrossTradeChainInput{
+		RPC:                    crossTradeInfo.L1ChainConfig.RPC,
+		ChainID:                crossTradeInfo.L1ChainConfig.ChainID,
+		PrivateKey:             crossTradeInfo.L1ChainConfig.PrivateKey,
+		IsDeployedNew:          false,
+		CrossTradeProxyAddress: crossTradeInfo.L1ChainConfig.CrossTradeProxyAddress,
+		CrossTradeAddress:      crossTradeInfo.L1ChainConfig.CrossTradeAddress,
+		DeploymentScriptPath:   crossTradeInfo.L1ChainConfig.DeploymentScriptPath,
+		BlockExplorerConfig:    crossTradeInfo.L1ChainConfig.BlockExplorerConfig,
+		ChainName:              crossTradeInfo.L1ChainConfig.ChainName,
+	}
+
+	params := &thanosTypes.CrossTrade{
+		ProjectID:     crossTradeInfo.ProjectID,
+		Mode:          constants.CrossTradeDeployMode(mode),
+		L1ChainConfig: l1ChainConfig,
+		L2ChainConfig: l2ChainConfigs,
+	}
+	output, err := s.DeployCrossTradeContracts(ctx, params, false)
+	if err != nil {
+		logger.Error("failed to deploy new l2 chain", zap.Error(err))
+		return nil, err
+	}
+	return output, nil
 }
