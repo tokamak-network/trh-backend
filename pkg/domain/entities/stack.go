@@ -43,15 +43,17 @@ func FromJSONToStackMetadata(data json.RawMessage) (*StackMetadata, error) {
 }
 
 type StackEntity struct {
-	ID             uuid.UUID         `json:"id"`
-	Name           string            `json:"name"`
-	Type           string            `json:"type"`
-	Network        DeploymentNetwork `json:"network"`
-	Config         json.RawMessage   `json:"config"`
-	DeploymentPath string            `json:"deployment_path"`
-	Metadata       *StackMetadata    `json:"metadata"`
-	Status         StackStatus       `json:"status"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt    `json:"deleted_at"`
+	ID                  uuid.UUID         `json:"id"`
+	Name                string            `json:"name"`
+	Type                string            `json:"type"`
+	Network             DeploymentNetwork `json:"network"`
+	Config              json.RawMessage   `json:"config"`
+	DeploymentPath      string            `json:"deployment_path"`
+	Metadata            *StackMetadata    `json:"metadata"`
+	Status              StackStatus       `json:"status"`
+	ImmutableConfig     json.RawMessage   `json:"immutable_config"`
+	MainnetConfirmation json.RawMessage   `json:"mainnet_confirmation"`
+	CreatedAt           time.Time         `json:"created_at"`
+	UpdatedAt           time.Time         `json:"updated_at"`
+	DeletedAt           gorm.DeletedAt    `json:"deleted_at"`
 }

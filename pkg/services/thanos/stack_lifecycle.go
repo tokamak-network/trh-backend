@@ -31,14 +31,46 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 			Data:    nil,
 		}, err
 	}
+	var mainnetConfirmation json.RawMessage
+	var immutableConfig json.RawMessage
+
+	if request.Network == entities.DeploymentNetworkMainnet {
+		if request.MainnetConfirmation != nil {
+			bytes, err := json.Marshal(request.MainnetConfirmation)
+			if err != nil {
+				return nil, err
+			}
+			mainnetConfirmation = bytes
+		}
+
+		immConfig := map[string]interface{}{
+			"l2BlockTime":              request.L2BlockTime,
+			"challengePeriod":          request.ChallengePeriod,
+			"batchSubmissionFrequency": request.BatchSubmissionFrequency,
+			"outputRootFrequency":      request.OutputRootFrequency,
+			"chainName":                request.ChainName,
+			"adminAccount":             request.AdminAccount,
+			"sequencerAccount":         request.SequencerAccount,
+			"batcherAccount":           request.BatcherAccount,
+			"proposerAccount":          request.ProposerAccount,
+		}
+		bytes, err := json.Marshal(immConfig)
+		if err != nil {
+			return nil, err
+		}
+		immutableConfig = bytes
+	}
+
 	stack := &entities.StackEntity{
-		ID:             stackId,
-		Name:           s.name,
-		Network:        request.Network,
-		Type:           enum.StackTypeOptimisticRollup.String(),
-		Config:         config,
-		DeploymentPath: deploymentPath,
-		Status:         entities.StackStatusPending,
+		ID:                  stackId,
+		Name:                s.name,
+		Network:             request.Network,
+		Type:                enum.StackTypeOptimisticRollup.String(),
+		Config:              config,
+		DeploymentPath:      deploymentPath,
+		Status:              entities.StackStatusPending,
+		ImmutableConfig:     immutableConfig,
+		MainnetConfirmation: mainnetConfirmation,
 	}
 
 	// We install the bridge by default

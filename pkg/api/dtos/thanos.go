@@ -40,6 +40,13 @@ func (r *RegisterCandidateRequest) Validate(ctx context.Context) error {
 	return nil
 }
 
+type MainnetConfirmation struct {
+	AcknowledgedIrreversibility bool   `json:"acknowledgedIrreversibility"`
+	AcknowledgedCosts           bool   `json:"acknowledgedCosts"`
+	AcknowledgedRisks           bool   `json:"acknowledgedRisks"`
+	ConfirmationTimestamp       string `json:"confirmationTimestamp"`
+}
+
 type DeployThanosRequest struct {
 	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
 	L1RpcUrl                 string                     `json:"l1RpcUrl"                 binding:"required" validate:"url"`
@@ -59,11 +66,38 @@ type DeployThanosRequest struct {
 	DeploymentPath           string                     `json:"deploymentPath"`
 	RegisterCandidate        bool                       `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest  `json:"registerCandidateParams,omitempty"`
+	ReuseDeployment          bool                       `json:"reuseDeployment"`
+	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
 }
 
 func (request *DeployThanosRequest) Validate() error {
 	if request.Network == entities.DeploymentNetworkLocalDevnet {
 		return errors.New("local devnet is not supported yet")
+	}
+
+	// Mainnet Validation
+	if request.Network == entities.DeploymentNetworkMainnet {
+		if request.MainnetConfirmation == nil {
+			return errors.New("mainnet deployment requires explicit confirmation")
+		}
+		if !request.MainnetConfirmation.AcknowledgedIrreversibility {
+			return errors.New("must acknowledge irreversibility for mainnet deployment")
+		}
+		if !request.MainnetConfirmation.AcknowledgedCosts {
+			return errors.New("must acknowledge costs for mainnet deployment")
+		}
+		if !request.MainnetConfirmation.AcknowledgedRisks {
+			return errors.New("must acknowledge risks for mainnet deployment")
+		}
+
+		// Challenge Period must be at least 7 days (604800 seconds)
+		if request.ChallengePeriod < 604800 {
+			return errors.New("challenge period must be at least 7 days (604800 seconds) for mainnet")
+		}
+		// L2 Block Time must be at least 2 seconds
+		if request.L2BlockTime < 2 {
+			return errors.New("l2 block time must be at least 2 seconds for mainnet")
+		}
 	}
 
 	// Validate Chain Name
@@ -146,6 +180,8 @@ type DeployL1ContractsRequest struct {
 	ProposerAccount          string                    `json:"proposerAccount"          binding:"required" validate:"eth_address"`
 	RegisterCandidate        bool                      `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
+	ReuseDeployment          bool                      `json:"reuseDeployment"`
+	MainnetConfirmation      *MainnetConfirmation      `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
 }
 
 type DeployThanosAWSInfraRequest struct {
