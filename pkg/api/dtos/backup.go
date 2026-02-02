@@ -5,13 +5,10 @@ type BackupRequest struct {
 }
 
 type BackupAttachRequest struct {
-	EfsId        *string `json:"efsId"`
-	Pvcs         *string `json:"pvcs"`
-	Stss         *string `json:"stss"`
-	BackupPvPvc  *bool   `json:"backupPvPvc,omitempty"`
-	AwsAccessKey *string `json:"awsAccessKey,omitempty"`
-	AwsSecretKey *string `json:"awsSecretAccessKey,omitempty"`
-	AwsRegion    *string `json:"awsRegion,omitempty"`
+	EfsId       *string `json:"efsId"`
+	Pvcs        *string `json:"pvcs"`
+	Stss        *string `json:"stss"`
+	BackupPvPvc *bool   `json:"backupPvPvc,omitempty"`
 }
 
 type BackupConfigureRequest struct {
@@ -25,7 +22,4 @@ type BackupRestoreRequest struct {
 	Attach          *bool   `json:"attach,omitempty"`
 	Pvcs            *string `json:"pvcs,omitempty"`
 	Stss            *string `json:"stss,omitempty"`
-	AwsAccessKey    *string `json:"awsAccessKey,omitempty"`
-	AwsSecretKey    *string `json:"awsSecretAccessKey,omitempty"`
-	AwsRegion       *string `json:"awsRegion,omitempty"`
 }
