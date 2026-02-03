@@ -492,7 +492,7 @@ func InstallDRBRegular(ctx context.Context, s *thanosStack.ThanosStack, req *dto
 		InstanceType:    instanceType,
 		KeyPairName:     req.EC2Config.KeyPairName,
 		InstanceName:    instanceName,
-		DrbNodeImage:    "tokamaknetwork/drb-node:latest",
+		DrbNodeImage:    "maniis/drb-node:alpha",
 		DatabaseConfig: &thanosTypes.DRBDatabaseConfig{
 			Type:         req.DatabaseConfig.Type,
 			Username:     req.DatabaseConfig.Username,
