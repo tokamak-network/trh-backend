@@ -485,7 +485,7 @@ func InstallDRBRegular(ctx context.Context, s *thanosStack.ThanosStack, req *dto
 		NodePort:        req.NodePort,
 		EOAPrivateKey:   req.EOAPrivateKey,
 		NodeType:        "regular",
-		ChainID:         fmt.Sprintf("%d", req.ChainID),
+		ChainID:         req.ChainID,
 		EthRpcUrls:      req.RPC,
 		ContractAddress: req.ContractAddress,
 		Region:          req.AWSConfig.Region,
