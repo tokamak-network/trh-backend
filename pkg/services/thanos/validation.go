@@ -3,10 +3,13 @@ package thanos
 import (
 	"context"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	trhSdkAws "github.com/tokamak-network/trh-sdk/pkg/cloud-provider/aws"
 )
 
@@ -29,8 +32,8 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 			rpcCheck.Error = "Failed to get ChainID: " + err.Error()
 		} else {
 			// Validate Network Match
-			isMainnet := chainId.Uint64() == 1
-			if string(req.Network) == "Mainnet" && !isMainnet {
+			isMainnet := chainId.Uint64() == consts.EthereumMainnetChainID
+			if req.Network == entities.DeploymentNetworkMainnet && !isMainnet {
 				rpcCheck.Valid = false
 				rpcCheck.Error = "Selected Mainnet but RPC is not Ethereum Mainnet (ChainID 1)"
 			}
@@ -54,23 +57,22 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 		balanceCheck := dtos.ValidationCheckResult{Valid: true, Details: make(map[string]interface{})}
 		details := make(map[string]interface{})
 
-		// Minimum requirements (Wei)
-		// Default (Testnet/Devnet): Admin 0.5 ETH, others 0.01 ETH
+		// Minimum balance requirements based on network
 		minBalances := map[string]*big.Int{
-			"admin":     big.NewInt(500000000000000000), // 0.5 ETH
-			"sequencer": big.NewInt(10000000000000000),  // 0.01 ETH
-			"batcher":   big.NewInt(10000000000000000),  // 0.01 ETH
-			"proposer":  big.NewInt(10000000000000000),  // 0.01 ETH
+			"admin":     consts.MinBalanceAdminTestnet,
+			"sequencer": consts.MinBalanceSequencerTestnet,
+			"batcher":   consts.MinBalanceBatcherTestnet,
+			"proposer":  consts.MinBalanceProposerTestnet,
 		}
 
-		// Mainnet requirements: Admin 1 ETH, Proposer 1 ETH, Batcher 1 ETH, Sequencer 0 ETH
-		if string(req.Network) == "Mainnet" {
-			minBalances["admin"] = big.NewInt(1000000000000000000)    // 1 ETH
-			minBalances["sequencer"] = big.NewInt(0)                  // 0 ETH
-			minBalances["batcher"] = big.NewInt(1000000000000000000)  // 1 ETH
-			minBalances["proposer"] = big.NewInt(1000000000000000000) // 1 ETH
+		if req.Network == entities.DeploymentNetworkMainnet {
+			minBalances["admin"] = consts.MinBalanceAdminMainnet
+			minBalances["sequencer"] = consts.MinBalanceSequencerMainnet
+			minBalances["batcher"] = consts.MinBalanceBatcherMainnet
+			minBalances["proposer"] = consts.MinBalanceProposerMainnet
 		}
 
+		var insufficientRoles []string
 		for role, addrStr := range accounts {
 			if !common.IsHexAddress(addrStr) {
 				balanceCheck.Valid = false
@@ -93,14 +95,12 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 				}
 				if !isSufficient {
 					balanceCheck.Valid = false
-					// Accumulate errors?
-					if balanceCheck.Error == "" {
-						balanceCheck.Error = "Insufficient balance for " + role
-					} else {
-						balanceCheck.Error += ", " + role
-					}
+					insufficientRoles = append(insufficientRoles, role)
 				}
 			}
+		}
+		if len(insufficientRoles) > 0 {
+			balanceCheck.Error = "Insufficient balance for role(s): " + strings.Join(insufficientRoles, ", ")
 		}
 		balanceCheck.Details = details
 		response.Checks["accountBalances"] = balanceCheck
@@ -121,18 +121,23 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 	}
 
 	// 4. Mainnet Logic
-	if string(req.Network) == "Mainnet" {
+	if req.Network == entities.DeploymentNetworkMainnet {
 		// Parameter Sanity
 		paramCheck := dtos.ValidationCheckResult{Valid: true}
-		// Challenge Period must be exactly 7 days (604800 seconds)
-		if req.ChallengePeriod != 604800 {
+		var paramErrors []string
+
+		// Challenge Period must be at least 7 days (604800 seconds)
+		if req.ChallengePeriod < consts.MainnetChallengePeriodSeconds {
 			paramCheck.Valid = false
-			paramCheck.Error = "Challenge Period must be exactly 7 days (604800s)"
+			paramErrors = append(paramErrors, "Challenge Period must be at least 7 days (604800s)")
 		}
 		// L2 Block Time must be at least 2 seconds (Optimism standard)
-		if req.L2BlockTime < 2 {
+		if req.L2BlockTime < consts.MainnetMinL2BlockTimeSeconds {
 			paramCheck.Valid = false
-			paramCheck.Error = "L2 Block Time < 2s"
+			paramErrors = append(paramErrors, "L2 Block Time must be at least 2s")
+		}
+		if len(paramErrors) > 0 {
+			paramCheck.Error = strings.Join(paramErrors, "; ")
 		}
 		response.Checks["parameterSanity"] = paramCheck
 		if !paramCheck.Valid {
@@ -154,11 +159,29 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 		}
 	}
 
-	// Dummy Cost
+	// Calculate deployment gas cost
+	var deploymentGasEth string
+	if rpcCheck.Valid {
+		gasPriceWei, err := client.SuggestGasPrice(ctx)
+		if err == nil {
+			// Estimate deployment cost: estimatedDeployContracts * gasPriceWei * 1.5 (margin)
+			estimatedDeployContracts := new(big.Int).SetInt64(80_000_000)
+			estimatedCost := new(big.Int).Mul(gasPriceWei, estimatedDeployContracts)
+			// Apply 1.5x margin (multiply by 3, then divide by 2)
+			estimatedCost.Mul(estimatedCost, big.NewInt(3))
+			estimatedCost.Div(estimatedCost, big.NewInt(2))
+			// Convert Wei to ETH (divide by 10^18)
+			weiPerEth := new(big.Float).SetInt(big.NewInt(1e18))
+			costEth := new(big.Float).Quo(new(big.Float).SetInt(estimatedCost), weiPerEth)
+			deploymentGasEth = costEth.String()
+		} else {
+			deploymentGasEth = "error: failed to get gas price"
+		}
+	} else {
+		deploymentGasEth = "error: invalid RPC connection"
+	}
 	response.EstimatedCost = &dtos.EstimatedCost{
-		DeploymentGasEth:   "0.05",
-		MonthlyAwsEth:      "0.10",
-		TotalFirstMonthEth: "0.15",
+		DeploymentGasEth: deploymentGasEth,
 	}
 
 	return response, nil

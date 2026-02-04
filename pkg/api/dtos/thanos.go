@@ -90,12 +90,12 @@ func (request *DeployThanosRequest) Validate() error {
 			return errors.New("must acknowledge risks for mainnet deployment")
 		}
 
-		// Challenge Period must be at least 7 days (604800 seconds)
-		if request.ChallengePeriod < 604800 {
+		// Challenge Period must be at least 7 days
+		if request.ChallengePeriod < consts.MainnetChallengePeriodSeconds {
 			return errors.New("challenge period must be at least 7 days (604800 seconds) for mainnet")
 		}
 		// L2 Block Time must be at least 2 seconds
-		if request.L2BlockTime < 2 {
+		if request.L2BlockTime < consts.MainnetMinL2BlockTimeSeconds {
 			return errors.New("l2 block time must be at least 2 seconds for mainnet")
 		}
 	}
@@ -537,9 +537,7 @@ type ValidationCheckResult struct {
 }
 
 type EstimatedCost struct {
-	DeploymentGasEth   string `json:"deploymentGasEth"`
-	MonthlyAwsEth      string `json:"monthlyAwsEth"`
-	TotalFirstMonthEth string `json:"totalFirstMonthEth"`
+	DeploymentGasEth string `json:"deploymentGasEth"`
 }
 
 type ValidateDeploymentResponse struct {
