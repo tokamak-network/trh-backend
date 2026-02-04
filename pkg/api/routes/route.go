@@ -177,6 +177,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 	adminRoutes.Use(jwtMiddleware.AuthMiddleware(entities.UserRoleAdmin))
 	{
 		// Stack management operations
+		adminRoutes.POST("/validate-deployment", handler.Validate)
 		adminRoutes.POST("", handler.Deploy)
 		adminRoutes.DELETE("/:id", handler.Terminate)
 		adminRoutes.PUT("/:id", handler.UpdateNetwork)

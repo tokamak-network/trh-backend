@@ -332,3 +332,40 @@ func (h *ThanosDeploymentHandler) DownloadDeploymentLogFile(c *gin.Context) {
 		return
 	}
 }
+
+// @Summary		Validate Deployment
+// @Description	Validate deployment parameters and check pre-requisites
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			request	body		dtos.ValidateDeploymentRequest	true	"Validate Deployment Request"
+// @Success		200		{object}	entities.Response
+// @Failure		400		{object}	entities.Response
+// @Router			/stacks/thanos/validate-deployment [post]
+func (h *ThanosDeploymentHandler) Validate(c *gin.Context) {
+	var request dtos.ValidateDeploymentRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.ValidateDeployment(c.Request.Context(), &request)
+	if err != nil {
+		logger.Error("failed to validate deployment", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Validation completed",
+		Data:    response,
+	})
+}

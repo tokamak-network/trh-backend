@@ -509,3 +509,41 @@ func (r *UpdateTelegramConfigRequest) Validate() error {
 type InstallUptimeServiceRequest struct {
 	// Empty request - config is retrieved from SDK
 }
+
+type ValidateDeploymentRequest struct {
+	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
+	L1RpcUrl                 string                     `json:"l1RpcUrl"                 binding:"required" validate:"url"`
+	L1BeaconUrl              string                     `json:"l1BeaconUrl"              binding:"required" validate:"url"`
+	L2BlockTime              int                        `json:"l2BlockTime"              binding:"required" validate:"min=1"`
+	BatchSubmissionFrequency int                        `json:"batchSubmissionFrequency" binding:"required" validate:"min=1"`
+	OutputRootFrequency      int                        `json:"outputRootFrequency"      binding:"required" validate:"min=1"`
+	ChallengePeriod          int                        `json:"challengePeriod"          binding:"required" validate:"min=1"`
+	AdminAddress             string                     `json:"adminAddress"             binding:"required" validate:"eth_address"`
+	SequencerAddress         string                     `json:"sequencerAddress"         binding:"required" validate:"eth_address"`
+	BatcherAddress           string                     `json:"batcherAddress"           binding:"required" validate:"eth_address"`
+	ProposerAddress          string                     `json:"proposerAddress"          binding:"required" validate:"eth_address"`
+	AwsAccessKey             string                     `json:"awsAccessKey"             binding:"required"`
+	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey"       binding:"required"`
+	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
+	ChainName                string                     `json:"chainName"                binding:"required"`
+	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // For validation context
+}
+
+type ValidationCheckResult struct {
+	Valid   bool        `json:"valid"`
+	Error   string      `json:"error,omitempty"`
+	Message string      `json:"message,omitempty"`
+	Details interface{} `json:"details,omitempty"`
+}
+
+type EstimatedCost struct {
+	DeploymentGasEth   string `json:"deploymentGasEth"`
+	MonthlyAwsEth      string `json:"monthlyAwsEth"`
+	TotalFirstMonthEth string `json:"totalFirstMonthEth"`
+}
+
+type ValidateDeploymentResponse struct {
+	AllValid      bool                             `json:"allValid"`
+	Checks        map[string]ValidationCheckResult `json:"checks"`
+	EstimatedCost *EstimatedCost                   `json:"estimatedCost,omitempty"`
+}
