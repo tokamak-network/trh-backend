@@ -1,6 +1,7 @@
 package thanos
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
@@ -104,6 +105,8 @@ type LogRepository interface {
 type TaskManager interface {
 	Start()
 	AddTask(id string, task entities.Task)
+	AddTaskWithProgress(id string, task func(context.Context, func(string, float64)))
+	SetTaskResult(id string, result any)
 	StopTask(id string)
 	IsTaskRunning(id string) bool
 	Stop()

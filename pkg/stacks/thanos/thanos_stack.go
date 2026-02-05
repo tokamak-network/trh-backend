@@ -60,6 +60,15 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 		ChainName:   req.ChainName,
 		L1BeaconURL: req.L1BeaconUrl,
 	}
+	if req.BackupConfig != nil {
+		deployInfraInput.BackupConfig = &thanosStack.BackupConfig{
+			Enabled: req.BackupConfig.Enabled,
+		}
+	} else {
+		deployInfraInput.BackupConfig = &thanosStack.BackupConfig{
+			Enabled: false,
+		}
+	}
 
 	err := sdkClient.Deploy(ctx, consts.AWS, &deployInfraInput)
 	if err != nil {
@@ -281,7 +290,7 @@ func RegisterMetadataDAO(ctx context.Context, s *thanosStack.ThanosStack, regist
 }
 
 func BackupSnapshot(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTypes.BackupSnapshotInfo, error) {
-	snapshotInfo, err := s.BackupSnapshot(ctx)
+	snapshotInfo, err := s.BackupSnapshot(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -304,16 +313,16 @@ func GetBackupStatus(ctx context.Context, s *thanosStack.ThanosStack) (*thanosTy
 	return backupRestoreInfo, nil
 }
 
-func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos.BackupRestoreRequest) (*thanosTypes.BackupRestoreInfo, error) {
-	backupRestoreInfo, err := s.BackupRestore(ctx, request.RecoveryPointID)
+func BackupRestore(ctx context.Context, s *thanosStack.ThanosStack, request dtos.BackupRestoreRequest, progressReporter func(string, float64)) (*thanosTypes.BackupRestoreInfo, error) {
+	backupRestoreInfo, err := s.BackupRestore(ctx, request.RecoveryPointID, request.Attach, request.Pvcs, request.Stss, progressReporter)
 	if err != nil {
 		return nil, err
 	}
 	return backupRestoreInfo, nil
 }
 
-func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest) (*thanosTypes.BackupAttachInfo, error) {
-	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss)
+func BackupAttach(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.BackupAttachRequest, progressReporter func(string, float64)) (*thanosTypes.BackupAttachInfo, error) {
+	backupAttachInfo, err := s.BackupAttach(ctx, req.EfsId, req.Pvcs, req.Stss, req.BackupPvPvc, progressReporter)
 	if err != nil {
 		return nil, err
 	}

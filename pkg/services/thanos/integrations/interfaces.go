@@ -50,6 +50,8 @@ func NewIntegrationManager(
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		AddTaskWithProgress(id string, task func(ctx context.Context, updateProgress func(string, float64)))
+		SetTaskResult(id string, result any)
 		StopTask(id string)
 		IsTaskRunning(id string) bool
 	},
@@ -60,6 +62,7 @@ func NewIntegrationManager(
 		monitoring:          NewMonitoringIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerCandidate:   NewRegisterCandidateIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		registerMetadataDAO: NewRegisterMetadataDAOIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		backupManager:       NewBackupManager(stackRepo, deploymentRepo, integrationRepo, taskManager),
 		crossTrade:          NewCrossTradeBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		uptimeService:       NewUptimeServiceIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 	}
@@ -150,6 +153,10 @@ func (im *IntegrationManager) BackupConfigure(ctx context.Context, stackId uuid.
 
 func (im *IntegrationManager) BackupAttach(ctx context.Context, stackId uuid.UUID, request dtos.BackupAttachRequest) (*entities.Response, error) {
 	return im.backupManager.BackupAttach(ctx, stackId, request)
+}
+
+func (im *IntegrationManager) BackupPvPvcExport(ctx context.Context, stackId uuid.UUID) (string, string, error) {
+	return im.backupManager.BackupPvPvcExport(ctx, stackId)
 }
 
 func (im *IntegrationManager) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {

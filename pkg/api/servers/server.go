@@ -15,9 +15,10 @@ import (
 )
 
 type Server struct {
-	Router     *gin.Engine
-	PostgresDB *gorm.DB
-	server     *http.Server
+	Router      *gin.Engine
+	PostgresDB  *gorm.DB
+	TaskManager *taskmanager.TaskManager
+	server      *http.Server
 }
 
 func (s *Server) Start(port string) error {
@@ -25,18 +26,23 @@ func (s *Server) Start(port string) error {
 	gin.SetMode(gin.ReleaseMode)
 
 	// Create HTTP server with optimized settings
+	// Increase timeouts to allow long-running operations (e.g., AWS/EKS kubeconfig updates)
 	s.server = &http.Server{
 		Addr:         ":" + port,
 		Handler:      s.Router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  120 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  180 * time.Second,
 	}
 
 	return s.server.ListenAndServe()
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	// Stop TaskManager first
+	if s.TaskManager != nil {
+		s.TaskManager.Stop()
+	}
 	if s.server != nil {
 		return s.server.Shutdown(ctx)
 	}
@@ -57,9 +63,13 @@ func NewServer(db *gorm.DB) *Server {
 	app.Use(gin.Recovery())
 	app.Use(middleware.RequestLoggerMiddleware())
 
+	// Create common task manager
+	tm := taskmanager.NewTaskManager(5)
+
 	return &Server{
-		Router:     app,
-		PostgresDB: db,
+		Router:      app,
+		PostgresDB:  db,
+		TaskManager: tm,
 	}
 }
 
@@ -69,9 +79,7 @@ func (s *Server) Stop() error {
 	integrationRepo := postgresRepositories.NewIntegrationRepository(s.PostgresDB)
 	logRepo := postgresRepositories.NewLogRepository(s.PostgresDB)
 
-	taskManager := taskmanager.NewTaskManager(5, 20)
-
-	thanosService := thanos.NewThanosService(deploymentRepo, stackRepo, integrationRepo, taskManager, logRepo)
+	thanosService := thanos.NewThanosService(deploymentRepo, stackRepo, integrationRepo, s.TaskManager, logRepo)
 
 	stacks, err := stackRepo.GetAllStacks()
 	if err != nil {
