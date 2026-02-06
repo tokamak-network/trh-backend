@@ -39,6 +39,10 @@ This is the backend service for the TRH application. It is built using Go and ut
 
 3. The server will start on the port specified in the `.env` file (default is 8000).
 
+### EFS Cleanup Settings
+
+- `TRH_EFS_CLEANUP_RETENTION_DAYS`: retention window for unused EFS cleanup (default: 14)
+
 ### Contributing
 
 1. Fork the repository.

@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/services/thanos/integrations"
+	"go.uber.org/zap"
 )
 
 type ThanosStackDeploymentService struct {
@@ -39,6 +43,14 @@ func (tmw *taskManagerWrapper) IsTaskRunning(id string) bool {
 	return tmw.taskManager.IsTaskRunning(id)
 }
 
+func (tmw *taskManagerWrapper) AddTaskWithProgress(id string, task func(ctx context.Context, updateProgress func(string, float64))) {
+	tmw.taskManager.AddTaskWithProgress(id, task)
+}
+
+func (tmw *taskManagerWrapper) SetTaskResult(id string, result any) {
+	tmw.taskManager.SetTaskResult(id, result)
+}
+
 func NewThanosService(
 	deploymentRepo DeploymentRepository,
 	stackRepo StackRepository,
@@ -59,8 +71,46 @@ func NewThanosService(
 	}
 
 	thanosDeploymentSrv.taskManager.Start()
+	thanosDeploymentSrv.startBackupCleanupScheduler()
 
 	return thanosDeploymentSrv
+}
+
+func (s *ThanosStackDeploymentService) startBackupCleanupScheduler() {
+	retentionDays := 14
+	if v := os.Getenv("TRH_EFS_CLEANUP_RETENTION_DAYS"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			retentionDays = parsed
+		}
+	}
+
+	go func() {
+		for {
+			now := time.Now().UTC()
+			next := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, time.UTC)
+			if !next.After(now) {
+				next = next.Add(24 * time.Hour)
+			}
+			time.Sleep(time.Until(next))
+
+			logger.Info("Starting daily backup cleanup", zap.Int("retention_days", retentionDays))
+			stacks, err := s.stackRepo.GetAllStacks()
+			if err != nil {
+				logger.Error("Failed to list stacks for cleanup", zap.Error(err))
+				continue
+			}
+			os.Setenv("TRH_EFS_CLEANUP_RETENTION_DAYS", strconv.Itoa(retentionDays))
+			for _, stack := range stacks {
+				if stack == nil || stack.Status != entities.StackStatusDeployed {
+					continue
+				}
+				_, err := s.integrationMgr.BackupCleanup(context.Background(), stack.ID)
+				if err != nil {
+					logger.Error("Backup cleanup failed", zap.String("stackId", stack.ID.String()), zap.Error(err))
+				}
+			}
+		}
+	}()
 }
 
 // InstallBridge installs a bridge for the given stack
@@ -204,6 +254,10 @@ func (s *ThanosStackDeploymentService) BackupConfigure(ctx context.Context, stac
 
 func (s *ThanosStackDeploymentService) BackupAttach(ctx context.Context, stackId uuid.UUID, request dtos.BackupAttachRequest) (*entities.Response, error) {
 	return s.integrationMgr.BackupAttach(ctx, stackId, request)
+}
+
+func (s *ThanosStackDeploymentService) BackupPvPvcExport(ctx context.Context, stackId uuid.UUID) (string, string, error) {
+	return s.integrationMgr.BackupPvPvcExport(ctx, stackId)
 }
 
 func (s *ThanosStackDeploymentService) BackupCleanup(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {

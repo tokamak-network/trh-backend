@@ -1,9 +1,13 @@
 package thanos
 
 import (
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 
 	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/internal/utils"
 	"go.uber.org/zap"
 
 	"github.com/gin-gonic/gin"
@@ -456,6 +460,74 @@ func (h *ThanosDeploymentHandler) BackupAttach(c *gin.Context) {
 		logger.Error("failed to backup attach", zap.Error(err), zap.String("id", id))
 	}
 	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Backup PV/PVC Export
+// @Description	Generate PV/PVC backup artifacts and download as zip
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		application/zip
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{file}		file
+// @Router			/stacks/thanos/{id}/integrations/backup/pv-pvc/export [post]
+func (h *ThanosDeploymentHandler) BackupPvPvcExport(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	zipPath, filename, err := h.ThanosDeploymentService.BackupPvPvcExport(c.Request.Context(), uuid.MustParse(id))
+	if err != nil {
+		logger.Error("failed to export pv/pvc backup", zap.Error(err), zap.String("id", id))
+		statusCode := http.StatusInternalServerError
+		message := "failed to export pv/pvc backup"
+		if err.Error() == "stack is not deployed" {
+			statusCode = http.StatusBadRequest
+			message = err.Error()
+		} else if err.Error() == "stack not found" {
+			statusCode = http.StatusNotFound
+			message = err.Error()
+		}
+		c.JSON(statusCode, &entities.Response{
+			Status:  uint64(statusCode),
+			Message: message,
+			Data:    nil,
+		})
+		return
+	}
+	defer os.Remove(zipPath)
+
+	result, err := utils.PrepareFileDownload(c.Request.Context(), utils.FileDownloadConfig{
+		FilePath:    zipPath,
+		Filename:    filename,
+		ContentType: "application/zip",
+	})
+	if err != nil {
+		logger.Error("failed to prepare pv/pvc backup download", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "failed to prepare pv/pvc backup for download",
+			Data:    nil,
+		})
+		return
+	}
+	defer result.File.Close()
+
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", result.Filename))
+	c.Header("Content-Type", result.ContentType)
+	c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
+
+	if _, err := io.Copy(c.Writer, result.File); err != nil {
+		logger.Error("failed to stream pv/pvc backup zip", zap.Error(err))
+		return
+	}
 }
 
 // @Summary		Backup Cleanup

@@ -5,9 +5,10 @@ type BackupRequest struct {
 }
 
 type BackupAttachRequest struct {
-	EfsId *string `json:"efsId"`
-	Pvcs  *string `json:"pvcs"`
-	Stss  *string `json:"stss"`
+	EfsId       *string `json:"efsId"`
+	Pvcs        *string `json:"pvcs"`
+	Stss        *string `json:"stss"`
+	BackupPvPvc *bool   `json:"backupPvPvc,omitempty"`
 }
 
 type BackupConfigureRequest struct {
@@ -17,5 +18,8 @@ type BackupConfigureRequest struct {
 }
 
 type BackupRestoreRequest struct {
-	RecoveryPointID string `json:"recoveryPointID"`
+	RecoveryPointID string  `json:"recoveryPointID"`
+	Attach          *bool   `json:"attach,omitempty"`
+	Pvcs            *string `json:"pvcs,omitempty"`
+	Stss            *string `json:"stss,omitempty"`
 }

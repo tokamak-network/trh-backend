@@ -47,6 +47,11 @@ type MainnetConfirmation struct {
 	ConfirmationTimestamp       string `json:"confirmationTimestamp"`
 }
 
+// BackupConfig defines the backup configuration for chain deployment
+type BackupConfig struct {
+	Enabled bool `json:"enabled"` // Enable automatic backup initialization
+}
+
 type DeployThanosRequest struct {
 	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
 	L1RpcUrl                 string                     `json:"l1RpcUrl"                 binding:"required" validate:"url"`
@@ -68,6 +73,7 @@ type DeployThanosRequest struct {
 	RegisterCandidateParams  *RegisterCandidateRequest  `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                       `json:"reuseDeployment"`
 	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
+	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`         // Backup configuration
 }
 
 func (request *DeployThanosRequest) Validate() error {
@@ -185,8 +191,9 @@ type DeployL1ContractsRequest struct {
 }
 
 type DeployThanosAWSInfraRequest struct {
-	ChainName   string `json:"chainName"          binding:"required"`
-	L1BeaconUrl string `json:"l1BeaconUrl"        binding:"required" validate:"url"`
+	ChainName    string        `json:"chainName"          binding:"required"`
+	L1BeaconUrl  string        `json:"l1BeaconUrl"        binding:"required" validate:"url"`
+	BackupConfig *BackupConfig `json:"backupConfig,omitempty"` // Backup configuration
 }
 
 type InstallBlockExplorerRequest struct {

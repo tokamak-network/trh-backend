@@ -68,8 +68,9 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 		constants.DeployInfraStep,
 	)
 	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
-		ChainName:   config.ChainName,
-		L1BeaconUrl: config.L1BeaconUrl,
+		ChainName:    config.ChainName,
+		L1BeaconUrl:  config.L1BeaconUrl,
+		BackupConfig: config.BackupConfig,
 	})
 	if err != nil {
 		return nil, err
