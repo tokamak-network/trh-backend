@@ -35,13 +35,18 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 	var immutableConfig json.RawMessage
 
 	if request.Network == entities.DeploymentNetworkMainnet {
-		if request.MainnetConfirmation != nil {
-			bytes, err := json.Marshal(request.MainnetConfirmation)
-			if err != nil {
-				return nil, err
-			}
-			mainnetConfirmation = bytes
+		if request.MainnetConfirmation == nil {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "Mainnet confirmation is required for mainnet deployments",
+				Data:    nil,
+			}, nil
 		}
+		bytes, err := json.Marshal(request.MainnetConfirmation)
+		if err != nil {
+			return nil, err
+		}
+		mainnetConfirmation = bytes
 
 		immConfig := map[string]interface{}{
 			"l2BlockTime":              request.L2BlockTime,
@@ -54,7 +59,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 			"batcherAccount":           request.BatcherAccount,
 			"proposerAccount":          request.ProposerAccount,
 		}
-		bytes, err := json.Marshal(immConfig)
+		bytes, err = json.Marshal(immConfig)
 		if err != nil {
 			return nil, err
 		}

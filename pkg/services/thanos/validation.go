@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
@@ -36,6 +35,9 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 			if req.Network == entities.DeploymentNetworkMainnet && !isMainnet {
 				rpcCheck.Valid = false
 				rpcCheck.Error = "Selected Mainnet but RPC is not Ethereum Mainnet (ChainID 1)"
+			} else if req.Network != entities.DeploymentNetworkMainnet && isMainnet {
+				rpcCheck.Valid = false
+				rpcCheck.Error = "Selected Testnet but RPC is Ethereum Mainnet (ChainID 1)"
 			}
 			rpcCheck.Details = map[string]interface{}{"chainId": chainId.Uint64()}
 		}
@@ -45,71 +47,7 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 		response.AllValid = false
 	}
 
-	// 2. Check Account Balances (if RPC is valid)
-	if rpcCheck.Valid {
-		accounts := map[string]string{
-			"admin":     req.AdminAddress,
-			"sequencer": req.SequencerAddress,
-			"batcher":   req.BatcherAddress,
-			"proposer":  req.ProposerAddress,
-		}
-
-		balanceCheck := dtos.ValidationCheckResult{Valid: true, Details: make(map[string]interface{})}
-		details := make(map[string]interface{})
-
-		// Minimum balance requirements based on network
-		minBalances := map[string]*big.Int{
-			"admin":     consts.MinBalanceAdminTestnet,
-			"sequencer": consts.MinBalanceSequencerTestnet,
-			"batcher":   consts.MinBalanceBatcherTestnet,
-			"proposer":  consts.MinBalanceProposerTestnet,
-		}
-
-		if req.Network == entities.DeploymentNetworkMainnet {
-			minBalances["admin"] = consts.MinBalanceAdminMainnet
-			minBalances["sequencer"] = consts.MinBalanceSequencerMainnet
-			minBalances["batcher"] = consts.MinBalanceBatcherMainnet
-			minBalances["proposer"] = consts.MinBalanceProposerMainnet
-		}
-
-		var insufficientRoles []string
-		for role, addrStr := range accounts {
-			if !common.IsHexAddress(addrStr) {
-				balanceCheck.Valid = false
-				balanceCheck.Error = "Invalid address format"
-				details[role] = map[string]interface{}{"error": "invalid address"}
-				continue
-			}
-			addr := common.HexToAddress(addrStr)
-			bal, err := client.BalanceAt(ctx, addr, nil)
-			if err != nil {
-				balanceCheck.Valid = false
-				balanceCheck.Error = "Failed to fetch balance"
-				details[role] = map[string]interface{}{"error": err.Error()}
-			} else {
-				isSufficient := bal.Cmp(minBalances[role]) >= 0
-				details[role] = map[string]interface{}{
-					"balance":    bal.String(),
-					"required":   minBalances[role].String(),
-					"sufficient": isSufficient,
-				}
-				if !isSufficient {
-					balanceCheck.Valid = false
-					insufficientRoles = append(insufficientRoles, role)
-				}
-			}
-		}
-		if len(insufficientRoles) > 0 {
-			balanceCheck.Error = "Insufficient balance for role(s): " + strings.Join(insufficientRoles, ", ")
-		}
-		balanceCheck.Details = details
-		response.Checks["accountBalances"] = balanceCheck
-		if !balanceCheck.Valid {
-			response.AllValid = false
-		}
-	}
-
-	// 3. AWS Credentials check
+	// 2. AWS Credentials check
 	awsCheck := dtos.ValidationCheckResult{Valid: true}
 	if !trhSdkAws.IsAvailableRegion(req.AwsAccessKey, req.AwsSecretAccessKey, req.AwsRegion) {
 		awsCheck.Valid = false
@@ -120,7 +58,7 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 		response.AllValid = false
 	}
 
-	// 4. Mainnet Logic
+	// 3. Mainnet Logic
 	if req.Network == entities.DeploymentNetworkMainnet {
 		// Parameter Sanity
 		paramCheck := dtos.ValidationCheckResult{Valid: true}
