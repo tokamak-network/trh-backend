@@ -25,21 +25,23 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 		rpcCheck.Valid = false
 		rpcCheck.Error = "Failed to connect to RPC: " + err.Error()
 	} else {
+		defer client.Close()
+
 		chainId, err := client.ChainID(ctx)
 		if err != nil {
 			rpcCheck.Valid = false
 			rpcCheck.Error = "Failed to get ChainID: " + err.Error()
 		} else {
 			// Validate Network Match
-			isMainnet := chainId.Uint64() == consts.EthereumMainnetChainID
-			if req.Network == entities.DeploymentNetworkMainnet && !isMainnet {
+			chainIdVal := chainId.Uint64()
+			if req.Network == entities.DeploymentNetworkMainnet && chainIdVal != consts.EthereumMainnetChainID {
 				rpcCheck.Valid = false
 				rpcCheck.Error = "Selected Mainnet but RPC is not Ethereum Mainnet (ChainID 1)"
-			} else if req.Network != entities.DeploymentNetworkMainnet && isMainnet {
+			} else if req.Network == entities.DeploymentNetworkTestnet && chainIdVal != consts.SepoliaChainID {
 				rpcCheck.Valid = false
-				rpcCheck.Error = "Selected Testnet but RPC is Ethereum Mainnet (ChainID 1)"
+				rpcCheck.Error = "Selected Testnet but RPC is not Sepolia (ChainID 11155111)"
 			}
-			rpcCheck.Details = map[string]interface{}{"chainId": chainId.Uint64()}
+			rpcCheck.Details = map[string]interface{}{"chainId": chainIdVal}
 		}
 	}
 	response.Checks["rpcConnectivity"] = rpcCheck

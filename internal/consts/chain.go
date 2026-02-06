@@ -12,4 +12,7 @@ const (
 
 	// EthereumMainnetChainID is the chain ID for Ethereum mainnet
 	EthereumMainnetChainID = 1
+
+	// SepoliaChainID is the chain ID for Sepolia testnet
+	SepoliaChainID = 11155111
 )
