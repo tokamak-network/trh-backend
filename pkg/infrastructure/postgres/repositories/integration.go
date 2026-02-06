@@ -113,7 +113,23 @@ func (r *IntegrationRepository) GetInstalledIntegration(
 	integrationType string,
 ) (*entities.IntegrationEntity, error) {
 	var integration schemas.Integration
-	//this include Failed status to allow cleanup/uninstall of partial installations
+	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status IN (?)", []string{
+		string(entities.DeploymentStatusCompleted),
+	}).First(&integration).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // No integration found
+		}
+		return nil, err
+	}
+	return ToIntegrationEntity(&integration), nil
+}
+
+// GetUninstallableIntegration returns integrations that can be uninstalled (Completed or Failed)
+func (r *IntegrationRepository) GetUninstallableIntegration(
+	stackId string,
+	integrationType string,
+) (*entities.IntegrationEntity, error) {
+	var integration schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status IN (?)", []string{
 		string(entities.DeploymentStatusCompleted),
 		string(entities.DeploymentStatusFailed),
@@ -252,4 +268,9 @@ func ToIntegrationEntity(
 		LogPath: integration.LogPath,
 		Reason:  integration.Reason,
 	}
+}
+
+// DeleteIntegration removes an integration record from the database
+func (r *IntegrationRepository) DeleteIntegration(id string) error {
+	return r.db.Delete(&schemas.Integration{}, "id = ?", id).Error
 }

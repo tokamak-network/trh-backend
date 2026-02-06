@@ -40,6 +40,8 @@ type MonitoringIntegration struct {
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -71,6 +73,8 @@ func NewMonitoringIntegration(
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -234,7 +238,7 @@ func (m *MonitoringIntegration) Uninstall(ctx context.Context, stackId uuid.UUID
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-monitoring")
 
-	monitoringIntegration, _ := m.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeMonitoring.String())
+	monitoringIntegration, _ := m.integrationRepo.GetUninstallableIntegration(stack.ID.String(), enum.IntegrationTypeMonitoring.String())
 	if monitoringIntegration == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
@@ -335,9 +339,21 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, newIntegrationI
 	if err != nil {
 		logger.Error("failed to install monitoring", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
 
-		if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
+		// Auto cleanup: attempt to remove any partially created resources
+		logger.Info("attempting automatic cleanup of failed monitoring installation", zap.String("integrationId", newIntegrationID.String()))
+		if cleanupErr := thanos.UninstallMonitoring(taskCtx, sdkClient); cleanupErr != nil {
+			logger.Warn("automatic cleanup failed", zap.String("integrationId", newIntegrationID.String()), zap.Error(cleanupErr))
+			reason := fmt.Sprintf("installation failed: %s; cleanup failed: %s", err.Error(), cleanupErr.Error())
+			if updateErr := m.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, reason); updateErr != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
+			}
+		} else {
+			logger.Info("automatic cleanup successful, removing integration record", zap.String("integrationId", newIntegrationID.String()))
+			if deleteErr := m.integrationRepo.DeleteIntegration(newIntegrationID.String()); deleteErr != nil {
+				logger.Error("failed to delete integration after cleanup", zap.String("integrationId", newIntegrationID.String()), zap.Error(deleteErr))
+			}
 		}
+
 		deploymentStatus := entities.DeploymentRunStatusFailed
 		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped

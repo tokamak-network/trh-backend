@@ -40,6 +40,8 @@ type CrossTradeBridgeIntegration struct {
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationByStatus(
@@ -79,6 +81,8 @@ func NewCrossTradeBridgeIntegration(
 			integrationType string,
 			status entities.DeploymentStatus,
 		) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -355,10 +359,23 @@ func (b *CrossTradeBridgeIntegration) installTask(ctx context.Context, stack *en
 	}
 	output, err := thanos.InstallCrossTradeBridge(ctx, sdkClient, &request)
 	if err != nil {
-		logger.Error("failed to install cross trade", zap.String("plugin", integrationType), zap.Error(err))
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(pendingIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", integrationType), zap.Error(updateErr), zap.String("integrationId", pendingIntegration.ID.String()))
+		logger.Error("failed to install cross trade", zap.String("plugin", enum.IntegrationTypeCrossTrade.String()), zap.Error(err))
+
+		// Auto cleanup: attempt to remove any partially created resources
+		logger.Info("attempting automatic cleanup of failed cross trade installation", zap.String("integrationId", pendingIntegration.ID.String()))
+		if cleanupErr := thanos.UninstallCrossTradeBridge(ctx, sdkClient, string(request.Mode)); cleanupErr != nil {
+			logger.Warn("automatic cleanup failed", zap.String("integrationId", pendingIntegration.ID.String()), zap.Error(cleanupErr))
+			reason := fmt.Sprintf("installation failed: %s; cleanup failed: %s", err.Error(), cleanupErr.Error())
+			if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(pendingIntegration.ID.String(), entities.DeploymentStatusFailed, reason); updateErr != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeCrossTrade.String()), zap.Error(updateErr), zap.String("integrationId", pendingIntegration.ID.String()))
+			}
+		} else {
+			logger.Info("automatic cleanup successful, removing integration record", zap.String("integrationId", pendingIntegration.ID.String()))
+			if deleteErr := b.integrationRepo.DeleteIntegration(pendingIntegration.ID.String()); deleteErr != nil {
+				logger.Error("failed to delete integration after cleanup", zap.String("integrationId", pendingIntegration.ID.String()), zap.Error(deleteErr))
+			}
 		}
+
 		deploymentStatus := entities.DeploymentRunStatusFailed
 		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped

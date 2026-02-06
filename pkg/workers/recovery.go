@@ -22,12 +22,11 @@ const recoveryTimeout = 5 * time.Minute
 //uninstaller defines the signature for integration uninstall functions
 type uninstaller func(context.Context, *thanosSDK.ThanosStack) error
 
-// this maps integration types to their cleanup fuunctions
+// this maps integration types to their cleanup functions
 var uninstallers = map[enum.IntegrationType]uninstaller{
 	enum.IntegrationTypeBridge:        thanos.UninstallBridge,
 	enum.IntegrationTypeBlockExplorer: thanos.UninstallBlockExplorer,
 	enum.IntegrationTypeMonitoring:    thanos.UninstallMonitoring,
-	enum.IntegrationTypeCrossTrade:    thanos.UninstallCrossTradeBridge,
 	enum.IntegrationTypeUptimeService: thanos.UninstallUptimeService,
 }
 
@@ -97,8 +96,9 @@ func recoverIntegration(db *gorm.DB, integration *schemas.Integration) {
 }
 
 func cleanupIntegrationResources(integration *schemas.Integration) error {
-	uninstall, ok := uninstallers[enum.IntegrationType(integration.Type)]
-	if !ok {
+	intType := enum.IntegrationType(integration.Type)
+	uninstall, ok := uninstallers[intType]
+	if !ok && intType != enum.IntegrationTypeCrossTrade {
 		return nil
 	}
 
@@ -139,6 +139,14 @@ func cleanupIntegrationResources(integration *schemas.Integration) error {
 	)
 	if err != nil {
 		return err
+	}
+
+	if intType == enum.IntegrationTypeCrossTrade {
+		var installReq dtos.InstallCrossChainBridgeRequest
+		if err := json.Unmarshal(integration.Config, &installReq); err != nil {
+			return err
+		}
+		return thanos.UninstallCrossTradeBridge(ctx, client, string(installReq.Mode))
 	}
 
 	return uninstall(ctx, client)
