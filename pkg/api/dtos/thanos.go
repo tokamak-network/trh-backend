@@ -40,6 +40,13 @@ func (r *RegisterCandidateRequest) Validate(ctx context.Context) error {
 	return nil
 }
 
+type MainnetConfirmation struct {
+	AcknowledgedIrreversibility bool   `json:"acknowledgedIrreversibility"`
+	AcknowledgedCosts           bool   `json:"acknowledgedCosts"`
+	AcknowledgedRisks           bool   `json:"acknowledgedRisks"`
+	ConfirmationTimestamp       string `json:"confirmationTimestamp"`
+}
+
 // BackupConfig defines the backup configuration for chain deployment
 type BackupConfig struct {
 	Enabled bool `json:"enabled"` // Enable automatic backup initialization
@@ -64,12 +71,39 @@ type DeployThanosRequest struct {
 	DeploymentPath           string                     `json:"deploymentPath"`
 	RegisterCandidate        bool                       `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest  `json:"registerCandidateParams,omitempty"`
-	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"` // Backup configuration
+	ReuseDeployment          bool                       `json:"reuseDeployment"`
+	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
+	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`         // Backup configuration
 }
 
 func (request *DeployThanosRequest) Validate() error {
 	if request.Network == entities.DeploymentNetworkLocalDevnet {
 		return errors.New("local devnet is not supported yet")
+	}
+
+	// Mainnet Validation
+	if request.Network == entities.DeploymentNetworkMainnet {
+		if request.MainnetConfirmation == nil {
+			return errors.New("mainnet deployment requires explicit confirmation")
+		}
+		if !request.MainnetConfirmation.AcknowledgedIrreversibility {
+			return errors.New("must acknowledge irreversibility for mainnet deployment")
+		}
+		if !request.MainnetConfirmation.AcknowledgedCosts {
+			return errors.New("must acknowledge costs for mainnet deployment")
+		}
+		if !request.MainnetConfirmation.AcknowledgedRisks {
+			return errors.New("must acknowledge risks for mainnet deployment")
+		}
+
+		// Challenge Period must be at least 7 days
+		if request.ChallengePeriod < consts.MainnetChallengePeriodSeconds {
+			return errors.New("challenge period must be at least 7 days (604800 seconds) for mainnet")
+		}
+		// L2 Block Time must be at least 2 seconds
+		if request.L2BlockTime < consts.MainnetMinL2BlockTimeSeconds {
+			return errors.New("l2 block time must be at least 2 seconds for mainnet")
+		}
 	}
 
 	// Validate Chain Name
@@ -152,6 +186,8 @@ type DeployL1ContractsRequest struct {
 	ProposerAccount          string                    `json:"proposerAccount"          binding:"required" validate:"eth_address"`
 	RegisterCandidate        bool                      `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
+	ReuseDeployment          bool                      `json:"reuseDeployment"`
+	MainnetConfirmation      *MainnetConfirmation      `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
 }
 
 type DeployThanosAWSInfraRequest struct {
@@ -479,4 +515,40 @@ func (r *UpdateTelegramConfigRequest) Validate() error {
 
 type InstallUptimeServiceRequest struct {
 	// Empty request - config is retrieved from SDK
+}
+
+type ValidateDeploymentRequest struct {
+	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
+	L1RpcUrl                 string                     `json:"l1RpcUrl"                 binding:"required" validate:"url"`
+	L1BeaconUrl              string                     `json:"l1BeaconUrl"              binding:"required" validate:"url"`
+	L2BlockTime              int                        `json:"l2BlockTime"              binding:"required" validate:"min=1"`
+	BatchSubmissionFrequency int                        `json:"batchSubmissionFrequency" binding:"required" validate:"min=1"`
+	OutputRootFrequency      int                        `json:"outputRootFrequency"      binding:"required" validate:"min=1"`
+	ChallengePeriod          int                        `json:"challengePeriod"          binding:"required" validate:"min=1"`
+	AdminAddress             string                     `json:"adminAddress"             binding:"required" validate:"eth_address"`
+	SequencerAddress         string                     `json:"sequencerAddress"         binding:"required" validate:"eth_address"`
+	BatcherAddress           string                     `json:"batcherAddress"           binding:"required" validate:"eth_address"`
+	ProposerAddress          string                     `json:"proposerAddress"          binding:"required" validate:"eth_address"`
+	AwsAccessKey             string                     `json:"awsAccessKey"             binding:"required"`
+	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey"       binding:"required"`
+	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
+	ChainName                string                     `json:"chainName"                binding:"required"`
+	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // For validation context
+}
+
+type ValidationCheckResult struct {
+	Valid   bool        `json:"valid"`
+	Error   string      `json:"error,omitempty"`
+	Message string      `json:"message,omitempty"`
+	Details interface{} `json:"details,omitempty"`
+}
+
+type EstimatedCost struct {
+	DeploymentGasEth string `json:"deploymentGasEth"`
+}
+
+type ValidateDeploymentResponse struct {
+	AllValid      bool                             `json:"allValid"`
+	Checks        map[string]ValidationCheckResult `json:"checks"`
+	EstimatedCost *EstimatedCost                   `json:"estimatedCost,omitempty"`
 }
