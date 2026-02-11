@@ -182,31 +182,7 @@ func GetMonitoringConfig(
 	s *thanosStack.ThanosStack,
 	req *dtos.InstallMonitoringRequest,
 ) (*thanosTypes.MonitoringConfig, error) {
-	alertManager := req.AlertManager
-	password := req.GrafanaPassword
-	loggingEnabled := req.LoggingEnabled
-	telegramReceivers := make([]thanosTypes.TelegramReceiver, len(alertManager.Telegram.CriticalReceivers))
-	for i, receiver := range alertManager.Telegram.CriticalReceivers {
-		telegramReceivers[i] = thanosTypes.TelegramReceiver{
-			ChatId: receiver.ChatId,
-		}
-	}
-
-	thanosAlertManagerConfig := thanosTypes.AlertManagerConfig{
-		Telegram: thanosTypes.TelegramConfig{
-			Enabled:           alertManager.Telegram.Enabled,
-			ApiToken:          alertManager.Telegram.ApiToken,
-			CriticalReceivers: telegramReceivers,
-		},
-		Email: thanosTypes.EmailConfig{
-			Enabled:          alertManager.Email.Enabled,
-			SmtpSmarthost:    alertManager.Email.SmtpSmarthost,
-			SmtpFrom:         alertManager.Email.SmtpFrom,
-			SmtpAuthPassword: alertManager.Email.SmtpAuthPassword,
-			AlertReceivers:   alertManager.Email.AlertReceivers,
-		},
-	}
-	return s.GetMonitoringConfig(ctx, password, thanosAlertManagerConfig, loggingEnabled)
+	return s.GetMonitoringConfig(ctx, req.GrafanaPassword, req.ToSDKAlertManagerConfig(), req.LoggingEnabled)
 }
 
 func InstallMonitoring(
