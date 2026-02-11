@@ -270,7 +270,7 @@ type TelegramConfig struct {
 
 // TelegramReceiver represents a Telegram chat recipient
 type TelegramReceiver struct {
-	ChatId string
+	ChatId string `json:"chatId"`
 }
 
 // EmailConfig holds email notification configuration
@@ -293,40 +293,46 @@ type InstallMonitoringRequest struct {
 	LoggingEnabled  bool               `json:"loggingEnabled"`
 }
 
-func (r *InstallMonitoringRequest) Validate() error {
-	// Clean password input before validation
-	r.AlertManager.Email.SmtpAuthPassword = trhSdkUtils.CleanPasswordInput(r.AlertManager.Email.SmtpAuthPassword)
-
+// ToSDKAlertManagerConfig converts DTO AlertManagerConfig to SDK types.
+func (r *InstallMonitoringRequest) ToSDKAlertManagerConfig() trhSdkTypes.AlertManagerConfig {
 	telegramReceivers := make([]trhSdkTypes.TelegramReceiver, len(r.AlertManager.Telegram.CriticalReceivers))
 	for i, receiver := range r.AlertManager.Telegram.CriticalReceivers {
 		telegramReceivers[i] = trhSdkTypes.TelegramReceiver{
 			ChatId: receiver.ChatId,
 		}
 	}
-	installMonitoringInputs := thanosStack.InstallMonitoringInput{
-		AdminPassword: r.GrafanaPassword,
-		AlertManager: trhSdkTypes.AlertManagerConfig{
-			Telegram: trhSdkTypes.TelegramConfig{
-				Enabled:           r.AlertManager.Telegram.Enabled,
-				ApiToken:          r.AlertManager.Telegram.ApiToken,
-				CriticalReceivers: telegramReceivers,
-			},
-			Email: trhSdkTypes.EmailConfig{
-				Enabled:          r.AlertManager.Email.Enabled,
-				SmtpSmarthost:    r.AlertManager.Email.SmtpSmarthost,
-				SmtpFrom:         r.AlertManager.Email.SmtpFrom,
-				SmtpAuthPassword: r.AlertManager.Email.SmtpAuthPassword,
-				AlertReceivers:   r.AlertManager.Email.AlertReceivers,
-			},
+	return trhSdkTypes.AlertManagerConfig{
+		Telegram: trhSdkTypes.TelegramConfig{
+			Enabled:           r.AlertManager.Telegram.Enabled,
+			ApiToken:          r.AlertManager.Telegram.ApiToken,
+			CriticalReceivers: telegramReceivers,
 		},
+		Email: trhSdkTypes.EmailConfig{
+			Enabled:          r.AlertManager.Email.Enabled,
+			SmtpSmarthost:    r.AlertManager.Email.SmtpSmarthost,
+			SmtpFrom:         r.AlertManager.Email.SmtpFrom,
+			SmtpAuthPassword: r.AlertManager.Email.SmtpAuthPassword,
+			AlertReceivers:   r.AlertManager.Email.AlertReceivers,
+		},
+	}
+}
+
+func (r *InstallMonitoringRequest) Validate() error {
+	// Clean password input before validation
+	r.AlertManager.Email.SmtpAuthPassword = trhSdkUtils.CleanPasswordInput(r.AlertManager.Email.SmtpAuthPassword)
+
+	// Force Gmail SMTP when email is enabled (SDK only supports Gmail)
+	if r.AlertManager.Email.Enabled {
+		r.AlertManager.Email.SmtpSmarthost = "smtp.gmail.com:587"
+	}
+
+	input := thanosStack.InstallMonitoringInput{
+		AdminPassword:  r.GrafanaPassword,
+		AlertManager:   r.ToSDKAlertManagerConfig(),
 		LoggingEnabled: r.LoggingEnabled,
 	}
 
-	if err := installMonitoringInputs.Validate(); err != nil {
-		return err
-	}
-
-	return nil
+	return input.Validate()
 }
 
 type ChainInfo struct {
