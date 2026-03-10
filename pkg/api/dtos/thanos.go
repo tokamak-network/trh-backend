@@ -73,7 +73,10 @@ type DeployThanosRequest struct {
 	RegisterCandidateParams  *RegisterCandidateRequest  `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                       `json:"reuseDeployment"`
 	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
-	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`         // Backup configuration
+	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`        // Backup configuration
+	// Preset fields (optional)
+	PresetID   string `json:"presetId,omitempty"`
+	SeedPhrase string `json:"seedPhrase,omitempty"`
 }
 
 func (request *DeployThanosRequest) Validate() error {

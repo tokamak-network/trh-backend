@@ -8,6 +8,7 @@ import (
 
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
+	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
 	"go.uber.org/zap"
 
 	"github.com/gin-gonic/gin"
@@ -46,6 +47,23 @@ func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 		})
 		return
 	}
+
+	// Validate preset ID when provided.
+	if request.PresetID != "" {
+		presetSvc := presets.NewService()
+		if _, err := presetSvc.GetByID(request.PresetID); err != nil {
+			c.JSON(http.StatusBadRequest, &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: err.Error(),
+				Data:    nil,
+			})
+			return
+		}
+	}
+
+	// Sanitize seed phrase — clear it from the request after use so it is never
+	// written to logs or persisted in raw form.
+	request.SeedPhrase = ""
 
 	if request.RegisterCandidate {
 		if request.RegisterCandidateParams == nil {
