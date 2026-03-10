@@ -14,6 +14,20 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
 
+// EthBalanceClient is the minimal interface for querying on-chain balances.
+type EthBalanceClient interface {
+	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
+	Close()
+}
+
+// EthClientFactory creates an EthBalanceClient for the given RPC URL.
+type EthClientFactory func(ctx context.Context, rpcURL string) (EthBalanceClient, error)
+
+// defaultEthClientFactory is the production factory using go-ethereum ethclient.
+func defaultEthClientFactory(ctx context.Context, rpcURL string) (EthBalanceClient, error) {
+	return ethclient.DialContext(ctx, rpcURL)
+}
+
 // RequiredFundingByNetwork defines the minimum required balances (in wei) per
 // network and role. Values are placeholder estimates until product confirms
 // exact thresholds.
@@ -84,7 +98,7 @@ func (s *ThanosStackDeploymentService) GetFundingStatus(
 		}
 	}
 
-	client, err := ethclient.DialContext(ctx, cfg.L1RpcUrl)
+	client, err := s.ethClientFactory(ctx, cfg.L1RpcUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to L1 RPC: %w", err)
 	}
