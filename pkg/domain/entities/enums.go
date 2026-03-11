@@ -3,9 +3,10 @@ package entities
 type DeploymentNetwork string
 
 const (
-	DeploymentNetworkMainnet     DeploymentNetwork = "Mainnet"
-	DeploymentNetworkTestnet     DeploymentNetwork = "Testnet"
-	DeploymentNetworkLocalDevnet DeploymentNetwork = "LocalDevnet"
+	DeploymentNetworkMainnet      DeploymentNetwork = "Mainnet"
+	DeploymentNetworkTestnet      DeploymentNetwork = "Testnet"
+	DeploymentNetworkLocalDevnet  DeploymentNetwork = "LocalDevnet"
+	DeploymentNetworkLocalTestnet DeploymentNetwork = "LocalTestnet"
 )
 
 type StackStatus string

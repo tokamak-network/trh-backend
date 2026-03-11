@@ -19,6 +19,7 @@ type Stack struct {
 	DeploymentPath string                     `gorm:"not null;column:deployment_path"`
 	Config         datatypes.JSON             `gorm:"type:jsonb;not null;column:config"`
 	Metadata       datatypes.JSON             `gorm:"type:jsonb;column:metadata"`
+	KubeconfigPath string                     `gorm:"column:kubeconfig_path"`
 	CreatedAt      time.Time                  `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt      time.Time                  `gorm:"autoUpdateTime;column:updated_at"`
 	DeletedAt      gorm.DeletedAt             `gorm:"column:deleted_at;default:null"`

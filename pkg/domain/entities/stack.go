@@ -53,6 +53,7 @@ type StackEntity struct {
 	Status              StackStatus       `json:"status"`
 	ImmutableConfig     json.RawMessage   `json:"immutable_config"`
 	MainnetConfirmation json.RawMessage   `json:"mainnet_confirmation"`
+	KubeconfigPath      string            `json:"kubeconfig_path"`
 	CreatedAt           time.Time         `json:"created_at"`
 	UpdatedAt           time.Time         `json:"updated_at"`
 	DeletedAt           gorm.DeletedAt    `json:"deleted_at"`

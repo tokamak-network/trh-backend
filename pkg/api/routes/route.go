@@ -183,6 +183,8 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 	{
 		// Stack management operations
 		adminRoutes.POST("/validate-deployment", handler.Validate)
+		adminRoutes.POST("/derive-keys", handler.DeriveKeys)
+		adminRoutes.POST("/check-account-balances", handler.CheckAccountBalances)
 		adminRoutes.POST("", handler.Deploy)
 		adminRoutes.DELETE("/:id", handler.Terminate)
 		adminRoutes.PUT("/:id", handler.UpdateNetwork)

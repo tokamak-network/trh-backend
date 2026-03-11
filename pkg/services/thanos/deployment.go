@@ -65,6 +65,13 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 			zap.Error(updateErr))
 	}
 
+	// LocalTestnet has no AWS SDK client; chain metadata is deferred to Phase 3
+	if stack.Network == entities.DeploymentNetworkLocalTestnet {
+		logger.Info("LocalTestnet deployment complete; skipping chain metadata (Phase 3)",
+			zap.String("stackId", stackId.String()))
+		return
+	}
+
 	config, err := json.Marshal(stack.Config)
 	if err != nil {
 		logger.Error("failed to marshal stack config", zap.Error(err))
@@ -240,7 +247,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 
 	// Filter to only the core deployment steps we want to execute here
 	filtered := make([]*entities.DeploymentEntity, 0, 2)
-	var l1Step, awsStep *entities.DeploymentEntity
+	var l1Step, awsStep, localInfraStep *entities.DeploymentEntity
 	for _, d := range pendingDeployments {
 		if d.Step == constants.DeployL1ContractsStep {
 			// keep the earliest unfinished occurrence
@@ -253,6 +260,11 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				awsStep = d
 			}
 		}
+		if d.Step == constants.DeployLocalInfraStep {
+			if localInfraStep == nil || (localInfraStep.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
+				localInfraStep = d
+			}
+		}
 	}
 	if l1Step != nil {
 		filtered = append(filtered, l1Step)
@@ -260,8 +272,11 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 	if awsStep != nil {
 		filtered = append(filtered, awsStep)
 	}
+	if localInfraStep != nil {
+		filtered = append(filtered, localInfraStep)
+	}
 
-	// Overwrite deployments with filtered list to enforce order L1 first then AWS infra
+	// Overwrite deployments with filtered list to enforce order L1 first then infra
 	if len(filtered) > 0 {
 		pendingDeployments = filtered
 	}
@@ -323,6 +338,53 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 		}
 
 		switch deployment.Step {
+		case constants.DeployLocalInfraStep:
+			// Create a LocalTestnet-specific SDK client that wires runners with the kubeconfig.
+			// The generic sdkClient created above has no kubeconfig and cannot reach the kind cluster.
+			localClient, err := thanos.NewLocalTestnetSDKClient(
+				ctx,
+				deployment.LogPath,
+				stack.DeploymentPath,
+				deploymentConfig.KubeconfigPath,
+			)
+			if err != nil {
+				logger.Error("failed to create LocalTestnet SDK client",
+					zap.String("deploymentId", deployment.ID.String()),
+					zap.Error(err))
+				statusChan <- entities.DeploymentStatusWithID{
+					DeploymentID: deployment.ID,
+					Status:       entities.DeploymentRunStatusFailed,
+				}
+				return err
+			}
+
+			// Start log ingestion for this deployment step
+			ingestCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
+
+			if err := thanos.DeployLocalInfrastructure(ctx, localClient, &deploymentConfig); err != nil {
+				if errors.Is(err, context.Canceled) {
+					logger.Info("deployment cancelled",
+						zap.String("deploymentId", deployment.ID.String()),
+						zap.String("step", deployment.Step))
+					return err
+				}
+				logger.Error("deployment failed",
+					zap.String("deploymentId", deployment.ID.String()),
+					zap.String("step", deployment.Step),
+					zap.Error(err))
+				statusChan <- entities.DeploymentStatusWithID{
+					DeploymentID: deployment.ID,
+					Status:       entities.DeploymentRunStatusFailed,
+				}
+				return err
+			}
+			statusChan <- entities.DeploymentStatusWithID{
+				DeploymentID: deployment.ID,
+				Status:       entities.DeploymentRunStatusSuccess,
+			}
+
 		case "deploy-l1-contracts":
 			var deployL1ContractsConfig dtos.DeployL1ContractsRequest
 			if err := json.Unmarshal(deployment.Config, &deployL1ContractsConfig); err != nil {

@@ -3,6 +3,7 @@ package thanos
 import (
 	"context"
 	"math/big"
+	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -40,6 +41,9 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 			} else if req.Network == entities.DeploymentNetworkTestnet && chainIdVal != consts.SepoliaChainID {
 				rpcCheck.Valid = false
 				rpcCheck.Error = "Selected Testnet but RPC is not Sepolia (ChainID 11155111)"
+			} else if req.Network == entities.DeploymentNetworkLocalTestnet && chainIdVal != consts.SepoliaChainID {
+				rpcCheck.Valid = false
+				rpcCheck.Error = "LocalTestnet requires Sepolia L1 RPC (ChainID 11155111)"
 			}
 			rpcCheck.Details = map[string]interface{}{"chainId": chainIdVal}
 		}
@@ -49,15 +53,31 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 		response.AllValid = false
 	}
 
-	// 2. AWS Credentials check
-	awsCheck := dtos.ValidationCheckResult{Valid: true}
-	if !trhSdkAws.IsAvailableRegion(req.AwsAccessKey, req.AwsSecretAccessKey, req.AwsRegion) {
-		awsCheck.Valid = false
-		awsCheck.Error = "Cannot access AWS region or invalid credentials"
-	}
-	response.Checks["awsRegionAccess"] = awsCheck
-	if !awsCheck.Valid {
-		response.AllValid = false
+	// 2. AWS Credentials check (skipped for LocalTestnet)
+	if req.Network == entities.DeploymentNetworkLocalTestnet {
+		// LocalTestnet: validate kubeconfig file exists instead of AWS
+		kubeconfigCheck := dtos.ValidationCheckResult{Valid: true}
+		if req.KubeconfigPath == "" {
+			kubeconfigCheck.Valid = false
+			kubeconfigCheck.Error = "kubeconfigPath is required for local testnet"
+		} else if _, statErr := os.Stat(req.KubeconfigPath); statErr != nil {
+			kubeconfigCheck.Valid = false
+			kubeconfigCheck.Error = "cannot access kubeconfig at path " + req.KubeconfigPath + ": " + statErr.Error()
+		}
+		response.Checks["kubeconfigAccess"] = kubeconfigCheck
+		if !kubeconfigCheck.Valid {
+			response.AllValid = false
+		}
+	} else {
+		awsCheck := dtos.ValidationCheckResult{Valid: true}
+		if !trhSdkAws.IsAvailableRegion(req.AwsAccessKey, req.AwsSecretAccessKey, req.AwsRegion) {
+			awsCheck.Valid = false
+			awsCheck.Error = "Cannot access AWS region or invalid credentials"
+		}
+		response.Checks["awsRegionAccess"] = awsCheck
+		if !awsCheck.Valid {
+			response.AllValid = false
+		}
 	}
 
 	// 3. Mainnet Logic

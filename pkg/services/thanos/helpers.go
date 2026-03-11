@@ -62,28 +62,50 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 		deployments = append(deployments, l1ContractDeployment)
 	}
 
-	thanosInfrastructureDeploymentID := uuid.New()
-	thanosInfrastructureDeploymentLogPath := utils.GetLogPath(
-		stackId,
-		constants.DeployInfraStep,
-	)
-	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
-		ChainName:    config.ChainName,
-		L1BeaconUrl:  config.L1BeaconUrl,
-		BackupConfig: config.BackupConfig,
-	})
-	if err != nil {
-		return nil, err
+	if config.Network == entities.DeploymentNetworkLocalTestnet {
+		// LocalTestnet: create deploy-local-infra step (kind + Helm, no AWS)
+		localInfraDeploymentID := uuid.New()
+		localInfraDeploymentLogPath := utils.GetLogPath(stackId, constants.DeployLocalInfraStep)
+		localInfraDeploymentConfig, err := json.Marshal(map[string]string{
+			"kubeconfigPath": config.KubeconfigPath,
+			"chainName":      config.ChainName,
+			"l1RpcUrl":       config.L1RpcUrl,
+			"l1BeaconUrl":    config.L1BeaconUrl,
+		})
+		if err != nil {
+			return nil, err
+		}
+		localInfraDeployment := &entities.DeploymentEntity{
+			ID:      localInfraDeploymentID,
+			StackID: &stackId,
+			Step:    constants.DeployLocalInfraStep,
+			Status:  entities.DeploymentRunStatusPending,
+			LogPath: localInfraDeploymentLogPath,
+			Config:  localInfraDeploymentConfig,
+		}
+		deployments = append(deployments, localInfraDeployment)
+	} else {
+		// Mainnet/Testnet: create deploy-aws-infra step
+		thanosInfrastructureDeploymentID := uuid.New()
+		thanosInfrastructureDeploymentLogPath := utils.GetLogPath(stackId, constants.DeployInfraStep)
+		thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
+			ChainName:    config.ChainName,
+			L1BeaconUrl:  config.L1BeaconUrl,
+			BackupConfig: config.BackupConfig,
+		})
+		if err != nil {
+			return nil, err
+		}
+		thanosInfrastructureDeployment := &entities.DeploymentEntity{
+			ID:      thanosInfrastructureDeploymentID,
+			StackID: &stackId,
+			Step:    constants.DeployInfraStep,
+			Status:  entities.DeploymentRunStatusPending,
+			LogPath: thanosInfrastructureDeploymentLogPath,
+			Config:  thanosInfrastructureDeploymentConfig,
+		}
+		deployments = append(deployments, thanosInfrastructureDeployment)
 	}
-	thanosInfrastructureDeployment := &entities.DeploymentEntity{
-		ID:      thanosInfrastructureDeploymentID,
-		StackID: &stackId,
-		Step:    constants.DeployInfraStep,
-		Status:  entities.DeploymentRunStatusPending,
-		LogPath: thanosInfrastructureDeploymentLogPath,
-		Config:  thanosInfrastructureDeploymentConfig,
-	}
-	deployments = append(deployments, thanosInfrastructureDeployment)
 
 	return deployments, nil
 }

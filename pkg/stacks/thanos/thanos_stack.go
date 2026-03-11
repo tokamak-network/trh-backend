@@ -40,7 +40,7 @@ func NewThanosSDKClient(
 		}
 	}
 
-	s, err := thanosStack.NewThanosStack(ctx, l, network, false, deploymentPath, awsConfig)
+	s, err := thanosStack.NewThanosStack(ctx, l, network, false, deploymentPath, awsConfig, nil)
 	if err != nil {
 		logger.Errorf("Failed to create thanos stacks: %s", err)
 		return nil, err
@@ -51,6 +51,46 @@ func NewThanosSDKClient(
 	}
 
 	return s, nil
+}
+
+// NewLocalTestnetSDKClient creates a ThanosStack SDK client for LocalTestnet deployments.
+// Unlike NewThanosSDKClient it skips all AWS/DO setup and wires runners using the provided kubeconfig.
+func NewLocalTestnetSDKClient(
+	ctx context.Context,
+	logPath string,
+	deploymentPath string,
+	kubeconfigPath string,
+) (*thanosStack.ThanosStack, error) {
+	l, err := trhSDKLogging.InitLogger(logPath)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Info("Initializing LocalTestnet Thanos SDK...")
+
+	s, err := thanosStack.NewLocalTestnetThanosStack(ctx, l, deploymentPath, kubeconfigPath)
+	if err != nil {
+		logger.Errorf("Failed to create LocalTestnet thanos stack: %s", err)
+		return nil, err
+	}
+
+	return s, nil
+}
+
+// DeployLocalInfrastructure deploys Thanos Stack Helm charts to a kind cluster.
+func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosRequest) error {
+	logger.Info("Deploying LocalTestnet infrastructure...")
+
+	err := sdkClient.DeployLocalInfrastructure(ctx, &thanosStack.DeployLocalInfraInput{
+		ChainName:   req.ChainName,
+		L1BeaconURL: req.L1BeaconUrl,
+	})
+	if err != nil {
+		return err
+	}
+
+	logger.Info("LocalTestnet infrastructure deployed successfully")
+	return nil
 }
 
 func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosAWSInfraRequest) error {
