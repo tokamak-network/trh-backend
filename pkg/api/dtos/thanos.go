@@ -73,7 +73,11 @@ type DeployThanosRequest struct {
 	RegisterCandidateParams  *RegisterCandidateRequest  `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                       `json:"reuseDeployment"`
 	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
-	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`         // Backup configuration
+	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`        // Backup configuration
+	// Preset fields (optional)
+	PresetID   string `json:"presetId,omitempty"`
+	FeeToken   string `json:"feeToken,omitempty"`   // "TON", "ETH", "USDT", "USDC"
+	SeedPhrase string `json:"seedPhrase,omitempty"`
 }
 
 func (request *DeployThanosRequest) Validate() error {
@@ -187,6 +191,8 @@ type DeployL1ContractsRequest struct {
 	RegisterCandidate        bool                      `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                      `json:"reuseDeployment"`
+	Preset                   string                    `json:"preset,omitempty"`
+	FeeToken                 string                    `json:"feeToken,omitempty"`
 	MainnetConfirmation      *MainnetConfirmation      `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
 }
 

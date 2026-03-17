@@ -71,16 +71,7 @@ func (r *DeploymentRepository) GetDeploymentByID(id string) (*entities.Deploymen
 	if err := r.db.Where("id = ?", id).First(&deployment).Error; err != nil {
 		return nil, err
 	}
-	return &entities.DeploymentEntity{
-		ID:         deployment.ID,
-		StackID:    deployment.StackID,
-		Step:       deployment.Step,
-		Status:     deployment.Status,
-		LogPath:    deployment.LogPath,
-		Config:     json.RawMessage(deployment.Config),
-		StartedAt:  deployment.StartedAt,
-		FinishedAt: deployment.FinishedAt,
-	}, nil
+	return toDeploymentEntity(&deployment), nil
 }
 
 func (r *DeploymentRepository) GetDeploymentsByStackID(
@@ -94,19 +85,8 @@ func (r *DeploymentRepository) GetDeploymentsByStackID(
 		return nil, err
 	}
 	deploymentsEntities := make([]*entities.DeploymentEntity, len(deployments))
-	for i, deployment := range deployments {
-		deploymentsEntities[i] = &entities.DeploymentEntity{
-			ID:         deployment.ID,
-			StackID:    deployment.StackID,
-			Step:       deployment.Step,
-			Status:     deployment.Status,
-			LogPath:    deployment.LogPath,
-			Config:     json.RawMessage(deployment.Config),
-			CreatedAt:  deployment.CreatedAt,
-			UpdatedAt:  deployment.UpdatedAt,
-			StartedAt:  deployment.StartedAt,
-			FinishedAt: deployment.FinishedAt,
-		}
+	for i := range deployments {
+		deploymentsEntities[i] = toDeploymentEntity(&deployments[i])
 	}
 	return deploymentsEntities, nil
 }
@@ -125,19 +105,8 @@ func (r *DeploymentRepository) GetDeploymentsByStackIDAndStatus(
 		return nil, err
 	}
 	deploymentsEntities := make([]*entities.DeploymentEntity, len(deployments))
-	for i, deployment := range deployments {
-		deploymentsEntities[i] = &entities.DeploymentEntity{
-			ID:         deployment.ID,
-			StackID:    deployment.StackID,
-			Step:       deployment.Step,
-			Status:     deployment.Status,
-			LogPath:    deployment.LogPath,
-			Config:     json.RawMessage(deployment.Config),
-			CreatedAt:  deployment.CreatedAt,
-			UpdatedAt:  deployment.UpdatedAt,
-			StartedAt:  deployment.StartedAt,
-			FinishedAt: deployment.FinishedAt,
-		}
+	for i := range deployments {
+		deploymentsEntities[i] = toDeploymentEntity(&deployments[i])
 	}
 	return deploymentsEntities, nil
 }
@@ -158,31 +127,43 @@ func (r *DeploymentRepository) GetDeploymentByStepAndStatus(stackID string, step
 		First(&deployment).Error; err != nil {
 		return nil, err
 	}
+	return toDeploymentEntity(&deployment), nil
+}
+
+func toDeploymentEntity(s *schemas.Deployment) *entities.DeploymentEntity {
 	return &entities.DeploymentEntity{
-		ID:         deployment.ID,
-		StackID:    deployment.StackID,
-		Step:       deployment.Step,
-		Status:     deployment.Status,
-		LogPath:    deployment.LogPath,
-		Config:     json.RawMessage(deployment.Config),
-		CreatedAt:  deployment.CreatedAt,
-		UpdatedAt:  deployment.UpdatedAt,
-		StartedAt:  deployment.StartedAt,
-		FinishedAt: deployment.FinishedAt,
-	}, nil
+		ID:                  s.ID,
+		StackID:             s.StackID,
+		Step:                s.Step,
+		Status:              s.Status,
+		LogPath:             s.LogPath,
+		Config:              json.RawMessage(s.Config),
+		CreatedAt:           s.CreatedAt,
+		UpdatedAt:           s.UpdatedAt,
+		StartedAt:           s.StartedAt,
+		FinishedAt:          s.FinishedAt,
+		PresetID:            s.PresetID,
+		SeedDerivedAccounts: json.RawMessage(s.SeedDerivedAccounts),
+		FundingStatus:       json.RawMessage(s.FundingStatus),
+		ModuleConfigs:       json.RawMessage(s.ModuleConfigs),
+	}
 }
 
 func ToDeploymentSchema(d *entities.DeploymentEntity) *schemas.Deployment {
 	return &schemas.Deployment{
-		ID:         d.ID,
-		StackID:    d.StackID,
-		Step:       d.Step,
-		Status:     d.Status,
-		LogPath:    d.LogPath,
-		Config:     datatypes.JSON(d.Config),
-		CreatedAt:  d.CreatedAt,
-		UpdatedAt:  d.UpdatedAt,
-		StartedAt:  d.StartedAt,
-		FinishedAt: d.FinishedAt,
+		ID:                  d.ID,
+		StackID:             d.StackID,
+		Step:                d.Step,
+		Status:              d.Status,
+		LogPath:             d.LogPath,
+		Config:              datatypes.JSON(d.Config),
+		CreatedAt:           d.CreatedAt,
+		UpdatedAt:           d.UpdatedAt,
+		StartedAt:           d.StartedAt,
+		FinishedAt:          d.FinishedAt,
+		PresetID:            d.PresetID,
+		SeedDerivedAccounts: datatypes.JSON(d.SeedDerivedAccounts),
+		FundingStatus:       datatypes.JSON(d.FundingStatus),
+		ModuleConfigs:       datatypes.JSON(d.ModuleConfigs),
 	}
 }

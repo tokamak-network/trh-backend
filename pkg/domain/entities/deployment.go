@@ -8,16 +8,21 @@ import (
 )
 
 type DeploymentEntity struct {
-	ID         uuid.UUID           `json:"id"`
-	StackID    *uuid.UUID          `json:"stack_id,omitempty"`
-	Step       string              `json:"step"`
-	Status     DeploymentRunStatus `json:"status"`
-	LogPath    string              `json:"log_path"`
-	Config     json.RawMessage     `json:"config"`
-	CreatedAt  time.Time           `json:"created_at"`
-	UpdatedAt  time.Time           `json:"updated_at"`
-	StartedAt  *time.Time          `json:"started_at,omitempty"`
-	FinishedAt *time.Time          `json:"finished_at,omitempty"`
+	ID                  uuid.UUID       `json:"id"`
+	StackID             *uuid.UUID      `json:"stack_id,omitempty"`
+	Step                string          `json:"step"`
+	Status              DeploymentRunStatus `json:"status"`
+	LogPath             string          `json:"log_path"`
+	Config              json.RawMessage `json:"config"`
+	CreatedAt           time.Time       `json:"created_at"`
+	UpdatedAt           time.Time       `json:"updated_at"`
+	StartedAt           *time.Time      `json:"started_at,omitempty"`
+	FinishedAt          *time.Time      `json:"finished_at,omitempty"`
+	// Preset-related fields
+	PresetID            string          `json:"preset_id,omitempty"`
+	SeedDerivedAccounts json.RawMessage `json:"seed_derived_accounts,omitempty"`
+	FundingStatus       json.RawMessage `json:"funding_status,omitempty"`
+	ModuleConfigs       json.RawMessage `json:"module_configs,omitempty"`
 }
 
 type DeploymentStatusWithID struct {

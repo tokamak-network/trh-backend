@@ -47,6 +47,8 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 			ProposerAccount:          config.ProposerAccount,
 			RegisterCandidate:        config.RegisterCandidate,
 			RegisterCandidateParams:  registerCandidateParams,
+			Preset:                   config.PresetID,
+			FeeToken:                 config.FeeToken,
 		})
 		if err != nil {
 			return nil, err
