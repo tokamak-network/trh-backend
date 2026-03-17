@@ -17,13 +17,14 @@ import (
 )
 
 type ThanosStackDeploymentService struct {
-	name            string
-	deploymentRepo  DeploymentRepository
-	stackRepo       StackRepository
-	integrationRepo IntegrationRepository
-	taskManager     TaskManager
-	integrationMgr  *integrations.IntegrationManager
-	logRepo         LogRepository
+	name              string
+	deploymentRepo    DeploymentRepository
+	stackRepo         StackRepository
+	integrationRepo   IntegrationRepository
+	taskManager       TaskManager
+	integrationMgr    *integrations.IntegrationManager
+	logRepo           LogRepository
+	ethClientFactory  EthClientFactory
 }
 
 // taskManagerWrapper wraps TaskManager to match the interface expected by IntegrationManager
@@ -61,13 +62,14 @@ func NewThanosService(
 	taskManagerWrapper := &taskManagerWrapper{taskManager: taskManager}
 
 	thanosDeploymentSrv := &ThanosStackDeploymentService{
-		name:            "Thanos",
-		deploymentRepo:  deploymentRepo,
-		stackRepo:       stackRepo,
-		integrationRepo: integrationRepo,
-		taskManager:     taskManager,
-		integrationMgr:  integrations.NewIntegrationManager(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManagerWrapper),
-		logRepo:         logRepo,
+		name:             "Thanos",
+		deploymentRepo:   deploymentRepo,
+		stackRepo:        stackRepo,
+		integrationRepo:  integrationRepo,
+		taskManager:      taskManager,
+		integrationMgr:   integrations.NewIntegrationManager(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManagerWrapper),
+		logRepo:          logRepo,
+		ethClientFactory: defaultEthClientFactory,
 	}
 
 	thanosDeploymentSrv.taskManager.Start()

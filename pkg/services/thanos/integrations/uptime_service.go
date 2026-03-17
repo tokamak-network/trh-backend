@@ -131,16 +131,38 @@ func (u *UptimeServiceIntegration) Install(ctx context.Context, stackId string) 
 		}, err
 	}
 
+	logPath := utils.GetLogPath(stack.ID, "system-pulse")
+
 	if len(integrations) > 0 {
-		logger.Error("There is already an active uptime service", zap.String("plugin", enum.IntegrationTypeUptimeService.String()))
+		// If all active integrations are pre-created Pending entries (from preset auto-creation),
+		// reuse the first one instead of blocking the install request.
+		allPending := true
+		for _, intg := range integrations {
+			if intg.Status != string(entities.DeploymentStatusPending) {
+				allPending = false
+				break
+			}
+		}
+		if !allPending {
+			logger.Error("There is already an active uptime service", zap.String("plugin", enum.IntegrationTypeUptimeService.String()))
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "There is already an active uptime service",
+				Data:    nil,
+			}, nil
+		}
+		// Reuse pre-created Pending integration
+		existingIntegration := integrations[0]
+		taskId := fmt.Sprintf("install-system-pulse-%s", stackId)
+		u.taskManager.AddTask(taskId, func(ctx context.Context) {
+			u.installTask(ctx, existingIntegration.ID, stack, logPath)
+		})
 		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "There is already an active uptime service",
+			Status:  http.StatusOK,
+			Message: "Successfully",
 			Data:    nil,
 		}, nil
 	}
-
-	logPath := utils.GetLogPath(stack.ID, "system-pulse")
 
 	uptimeServiceIntegration := &entities.IntegrationEntity{
 		ID:      uuid.New(),

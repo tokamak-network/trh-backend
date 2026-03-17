@@ -131,15 +131,6 @@ func (m *MonitoringIntegration) Install(ctx context.Context, stackId uuid.UUID, 
 		}, err
 	}
 
-	if len(integrations) > 0 {
-		logger.Error("There is already an active monitoring", zap.String("plugin", "monitoring"))
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "There is already an active monitoring",
-			Data:    nil,
-		}, nil
-	}
-
 	logPath := utils.GetLogPath(stack.ID, "monitoring")
 
 	// save config for retry: monitoring has a lot of settings we need to preserve
@@ -151,6 +142,45 @@ func (m *MonitoringIntegration) Install(ctx context.Context, stackId uuid.UUID, 
 			Message: "Internal server error",
 			Data:    nil,
 		}, err
+	}
+
+	if len(integrations) > 0 {
+		// If all active integrations are pre-created AwaitingConfig entries (from preset), transition
+		// the first one to installation using the now-provided configuration.
+		allAwaitingConfig := true
+		for _, intg := range integrations {
+			if intg.Status != string(entities.DeploymentStatusAwaitingConfig) {
+				allAwaitingConfig = false
+				break
+			}
+		}
+		if !allAwaitingConfig {
+			logger.Error("There is already an active monitoring", zap.String("plugin", "monitoring"))
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "There is already an active monitoring",
+				Data:    nil,
+			}, nil
+		}
+		// Transition AwaitingConfig integration: save config and launch install task
+		existingIntegration := integrations[0]
+		if err := m.integrationRepo.UpdateConfig(existingIntegration.ID.String(), json.RawMessage(requestConfig)); err != nil {
+			logger.Error("failed to update integration config", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(err))
+			return &entities.Response{
+				Status:  http.StatusInternalServerError,
+				Message: "Internal server error",
+				Data:    nil,
+			}, err
+		}
+		taskId := fmt.Sprintf("install-monitoring-%s", stackId)
+		m.taskManager.AddTask(taskId, func(ctx context.Context) {
+			m.installTask(ctx, existingIntegration.ID, stack, req, logPath, stackId.String())
+		})
+		return &entities.Response{
+			Status:  http.StatusOK,
+			Message: "Successfully",
+			Data:    nil,
+		}, nil
 	}
 
 	monitoringIntegration := &entities.IntegrationEntity{

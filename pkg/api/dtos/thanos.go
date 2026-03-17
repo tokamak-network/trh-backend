@@ -73,10 +73,13 @@ type DeployThanosRequest struct {
 	RegisterCandidateParams  *RegisterCandidateRequest  `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                       `json:"reuseDeployment"`
 	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"`  // Required for Mainnet
-	BackupConfig             *BackupConfig               `json:"backupConfig,omitempty"`         // Backup configuration
+	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`         // Backup configuration
 	KubeconfigPath           string                     `json:"kubeconfigPath,omitempty"`       // Required for LocalTestnet
-	SeedPhrase               string                     `json:"seedPhrase,omitempty"`           // Zeroed before DB persist; used for key derivation
-	BIP39Passphrase          string                     `json:"bip39Passphrase,omitempty"`      // Optional extra passphrase for BIP39 derivation
+	// Preset fields (optional)
+	PresetID        string `json:"presetId,omitempty"`
+	FeeToken        string `json:"feeToken,omitempty"`        // "TON", "ETH", "USDT", "USDC"
+	SeedPhrase      string `json:"seedPhrase,omitempty"`      // Zeroed before DB persist; used for key derivation
+	BIP39Passphrase string `json:"bip39Passphrase,omitempty"` // Optional extra passphrase for BIP39 derivation
 }
 
 func (request *DeployThanosRequest) Validate() error {
@@ -211,6 +214,8 @@ type DeployL1ContractsRequest struct {
 	RegisterCandidate        bool                      `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                      `json:"reuseDeployment"`
+	Preset                   string                    `json:"preset,omitempty"`
+	FeeToken                 string                    `json:"feeToken,omitempty"`
 	MainnetConfirmation      *MainnetConfirmation      `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
 }
 

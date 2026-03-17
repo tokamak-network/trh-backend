@@ -234,6 +234,10 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 	authenticatedRoutes := router.Group("")
 	authenticatedRoutes.Use(jwtMiddleware.AuthMiddleware())
 	{
+		// Preset routes — must be registered before /:id to avoid path collision
+		authenticatedRoutes.GET("/presets", handler.ListPresets)
+		authenticatedRoutes.GET("/presets/:presetId", handler.GetPresetByID)
+
 		// Read-only operations
 		authenticatedRoutes.GET("", handler.GetAllStacks)
 		authenticatedRoutes.GET("/:id", handler.GetStackByID)
@@ -247,6 +251,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		authenticatedRoutes.GET("/:id/deployments/:deploymentId/logs", handler.GetDeploymentLogs)
 		authenticatedRoutes.GET("/:id/deployments/:deploymentId/logs/download", handler.DownloadDeploymentLogFile)
 		authenticatedRoutes.GET("/:id/logs", handler.GetStackLogs)
+		authenticatedRoutes.GET("/:id/funding-status", handler.GetFundingStatus)
 	}
 }
 

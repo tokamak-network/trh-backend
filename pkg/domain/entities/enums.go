@@ -33,6 +33,8 @@ var DeploymentStatusesAllowedToInstall = []DeploymentStatus{
 	DeploymentStatusTerminated, // When terminated, we can try to install again
 	DeploymentStatusCancelled,  // When cancelled, we can try to install again
 	DeploymentStatusUnknown,    // When unknown, we can try to install again
+	// Note: AwaitingConfig is intentionally NOT here - it must be detected by Install() handlers
+	// and transitioned to InProgress when user provides the required configuration.
 }
 
 const (
@@ -43,9 +45,10 @@ const (
 	DeploymentStatusCompleted   DeploymentStatus = "Completed"
 	DeploymentStatusTerminating DeploymentStatus = "Terminating"
 	DeploymentStatusTerminated  DeploymentStatus = "Terminated"
-	DeploymentStatusCancelling  DeploymentStatus = "Cancelling"
-	DeploymentStatusCancelled   DeploymentStatus = "Cancelled"
-	DeploymentStatusUnknown     DeploymentStatus = "Unknown"
+	DeploymentStatusCancelling     DeploymentStatus = "Cancelling"
+	DeploymentStatusCancelled      DeploymentStatus = "Cancelled"
+	DeploymentStatusUnknown        DeploymentStatus = "Unknown"
+	DeploymentStatusAwaitingConfig DeploymentStatus = "AwaitingConfig"
 )
 
 // DeploymentRunStatus is used for deployment steps (not integrations)
