@@ -5,8 +5,11 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -57,6 +60,96 @@ func (h *ThanosDeploymentHandler) GetPresetByID(c *gin.Context) {
 		Status:  http.StatusOK,
 		Message: "ok",
 		Data:    def,
+	})
+}
+
+// @Summary		Deploy with Preset
+// @Description	Create a Thanos stack from a preset definition (Admin only)
+// @Tags			Thanos Presets
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			request	body		dtos.PresetDeployRequest	true	"Preset Deploy Request"
+// @Success		200		{object}	entities.Response
+// @Failure		400		{object}	map[string]interface{}
+// @Failure		401		{object}	map[string]interface{}
+// @Failure		403		{object}	map[string]interface{}
+// @Router			/stacks/thanos/preset-deploy [post]
+func (h *ThanosDeploymentHandler) PresetDeploy(c *gin.Context) {
+	var request dtos.PresetDeployRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Validate preset ID
+	presetSvc := presets.NewService()
+	if _, err := presetSvc.GetByID(request.PresetID); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.CreateThanosStackFromPreset(c.Request.Context(), request)
+	if err != nil {
+		logger.Error("failed to deploy preset stack", zap.Error(err))
+	}
+
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Get Preset Deployment Funding Status
+// @Description	Return L1 funding status for a preset deployment (deploymentId = stackId)
+// @Tags			Thanos Presets
+// @Produce		json
+// @Security		BearerAuth
+// @Param			deploymentId	path		string	true	"Deployment ID (= Stack ID)"
+// @Success		200				{object}	entities.Response
+// @Failure		400				{object}	map[string]interface{}
+// @Failure		401				{object}	map[string]interface{}
+// @Failure		404				{object}	map[string]interface{}
+// @Router			/stacks/thanos/preset-deploy/{deploymentId}/funding [get]
+func (h *ThanosDeploymentHandler) GetPresetFundingStatus(c *gin.Context) {
+	deploymentID := c.Param("deploymentId")
+	if deploymentID == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "deploymentId is required",
+		})
+		return
+	}
+
+	result, err := h.ThanosDeploymentService.GetFundingStatus(c.Request.Context(), deploymentID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, &entities.Response{
+				Status:  http.StatusNotFound,
+				Message: "deployment not found",
+			})
+			return
+		}
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, &entities.Response{
+		Status:  http.StatusOK,
+		Message: "ok",
+		Data: map[string]any{
+			"deploymentId": result.StackID,
+			"network":      result.Network,
+			"accounts":     result.Accounts,
+			"allFulfilled": result.AllFulfilled,
+			"checkedAt":    result.CheckedAt,
+		},
 	})
 }
 

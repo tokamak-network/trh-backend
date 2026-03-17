@@ -523,6 +523,29 @@ type InstallUptimeServiceRequest struct {
 	// Empty request - config is retrieved from SDK
 }
 
+// PresetFieldOverride allows overriding a single overridable field in a preset deployment.
+type PresetFieldOverride struct {
+	Field string `json:"field"`
+	Value any    `json:"value"`
+}
+
+// PresetDeployRequest is the simplified request body for the preset-deploy endpoint.
+// Callers supply a preset ID, seed phrase (for account derivation), and infrastructure
+// credentials. Role accounts are derived automatically via BIP44 HD wallet paths.
+type PresetDeployRequest struct {
+	PresetID     string                     `json:"presetId"     binding:"required"`
+	ChainName    string                     `json:"chainName"    binding:"required"`
+	Network      entities.DeploymentNetwork `json:"network"      binding:"required"`
+	SeedPhrase   string                     `json:"seedPhrase"   binding:"required"`
+	AwsAccessKey string                     `json:"awsAccessKey" binding:"required"`
+	AwsSecretKey string                     `json:"awsSecretKey" binding:"required"`
+	AwsRegion    string                     `json:"awsRegion"    binding:"required"`
+	L1RpcUrl     string                     `json:"l1RpcUrl"     binding:"required"`
+	L1BeaconUrl  string                     `json:"l1BeaconUrl"  binding:"required"`
+	FeeToken     string                     `json:"feeToken"`
+	Overrides    []PresetFieldOverride      `json:"overrides,omitempty"`
+}
+
 type ValidateDeploymentRequest struct {
 	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
 	L1RpcUrl                 string                     `json:"l1RpcUrl"                 binding:"required" validate:"url"`
