@@ -140,15 +140,6 @@ func (b *BlockExplorerIntegration) Install(ctx context.Context, stackId string, 
 		}, err
 	}
 
-	if len(integrations) > 0 {
-		logger.Error("There is already an active block explorer", zap.String("plugin", "block-explorer"))
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "There is already an active block explorer",
-			Data:    nil,
-		}, nil
-	}
-
 	logPath := utils.GetLogPath(stack.ID, "block-explorer")
 
 	// important: save the actual config so we can retry later if installation fails
@@ -160,6 +151,45 @@ func (b *BlockExplorerIntegration) Install(ctx context.Context, stackId string, 
 			Message: "Internal server error",
 			Data:    nil,
 		}, err
+	}
+
+	if len(integrations) > 0 {
+		// If all active integrations are pre-created AwaitingConfig entries (from preset), transition
+		// the first one to installation using the now-provided configuration.
+		allAwaitingConfig := true
+		for _, intg := range integrations {
+			if intg.Status != string(entities.DeploymentStatusAwaitingConfig) {
+				allAwaitingConfig = false
+				break
+			}
+		}
+		if !allAwaitingConfig {
+			logger.Error("There is already an active block explorer", zap.String("plugin", "block-explorer"))
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "There is already an active block explorer",
+				Data:    nil,
+			}, nil
+		}
+		// Transition AwaitingConfig integration: save config and launch install task
+		existingIntegration := integrations[0]
+		if err := b.integrationRepo.UpdateConfig(existingIntegration.ID.String(), json.RawMessage(requestConfig)); err != nil {
+			logger.Error("failed to update integration config", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+			return &entities.Response{
+				Status:  http.StatusInternalServerError,
+				Message: "Internal server error",
+				Data:    nil,
+			}, err
+		}
+		taskId := fmt.Sprintf("install-block-explorer-%s", stackId)
+		b.taskManager.AddTask(taskId, func(ctx context.Context) {
+			b.installTask(ctx, existingIntegration.ID, stack, request, logPath)
+		})
+		return &entities.Response{
+			Status:  http.StatusOK,
+			Message: "Successfully",
+			Data:    nil,
+		}, nil
 	}
 
 	blockExplorerIntegration := &entities.IntegrationEntity{

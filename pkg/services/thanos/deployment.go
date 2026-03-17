@@ -13,6 +13,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
+	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
@@ -194,6 +195,21 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 		if err != nil {
 			logger.Error("failed to update register candidate integration metadata", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
 			return
+		}
+	}
+
+	// Auto-install preset modules that don't require user configuration
+	if stackConfig.PresetID != "" {
+		presetSvc := presets.NewService()
+		def, err := presetSvc.GetByID(stackConfig.PresetID)
+		if err != nil {
+			logger.Error("failed to get preset definition for auto-install", zap.String("presetId", stackConfig.PresetID), zap.Error(err))
+		} else {
+			if enabled, ok := def.Modules["uptimeService"]; ok && enabled {
+				if _, err := s.InstallUptimeService(ctx, stackId.String()); err != nil {
+					logger.Error("failed to auto-install uptime service after deployment", zap.String("stackId", stackId.String()), zap.Error(err))
+				}
+			}
 		}
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
+	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	"go.uber.org/zap"
 )
@@ -96,6 +97,55 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 			Status:  string(entities.DeploymentStatusPending),
 		}
 		integrations = append(integrations, registerCandidateIntegration)
+	}
+
+	if request.PresetID != "" {
+		presetSvc := presets.NewService()
+		def, err := presetSvc.GetByID(request.PresetID)
+		if err != nil {
+			logger.Error("unknown preset id, skipping preset module integration creation", zap.String("presetId", request.PresetID), zap.Error(err))
+		} else {
+			moduleToType := map[string]enum.IntegrationType{
+				"uptimeService": enum.IntegrationTypeUptimeService,
+				"crossTrade":    enum.IntegrationTypeCrossTrade,
+				"blockExplorer": enum.IntegrationTypeBlockExplorer,
+				"monitoring":    enum.IntegrationTypeMonitoring,
+			}
+			// Modules that require user configuration before installation
+			deferredModules := map[string]bool{
+				"blockExplorer": true,
+				"monitoring":    true,
+			}
+			for module, enabled := range def.Modules {
+				if !enabled || module == "bridge" {
+					continue // bridge is always created above
+				}
+				intType, ok := moduleToType[module]
+				if !ok {
+					continue
+				}
+				status := string(entities.DeploymentStatusPending)
+				if deferredModules[module] {
+					status = string(entities.DeploymentStatusAwaitingConfig)
+				}
+				integrations = append(integrations, &entities.IntegrationEntity{
+					ID:      uuid.New(),
+					StackID: &stack.ID,
+					Type:    intType.String(),
+					Status:  status,
+				})
+			}
+			// Apply preset registerCandidate default if not already set
+			if rc, ok := def.ChainDefaults["registerCandidate"].(bool); ok && rc && !request.RegisterCandidate {
+				request.RegisterCandidate = true
+				integrations = append(integrations, &entities.IntegrationEntity{
+					ID:      uuid.New(),
+					StackID: &stack.ID,
+					Type:    enum.IntegrationTypeRegisterCandidate.String(),
+					Status:  string(entities.DeploymentStatusPending),
+				})
+			}
+		}
 	}
 
 	deployments, err := s.getThanosStackDeployments(stackId, &request)

@@ -2,14 +2,14 @@ package presets
 
 // Definition holds all configuration for a single preset.
 type Definition struct {
-	ID                 string
-	Name               string
-	Description        string
-	Modules            map[string]bool
-	GenesisPredeploys  []string
-	EstimatedTime      map[string]string
-	ChainDefaults      map[string]any
-	HelmValues         map[string]any
-	OverridableFields  []string
-	AvailableFeeTokens []string
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Description        string            `json:"description"`
+	Modules            map[string]bool   `json:"modules"`
+	GenesisPredeploys  []string          `json:"genesisPredeploys"`
+	EstimatedTime      map[string]string `json:"estimatedTime"`
+	ChainDefaults      map[string]any    `json:"chainDefaults"`
+	HelmValues         map[string]any    `json:"helmValues"`
+	OverridableFields  []string          `json:"overridableFields"`
+	AvailableFeeTokens []string          `json:"availableFeeTokens"`
 }
