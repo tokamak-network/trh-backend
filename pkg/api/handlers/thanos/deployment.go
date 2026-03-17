@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
@@ -55,6 +56,27 @@ func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, &entities.Response{
 				Status:  http.StatusBadRequest,
 				Message: err.Error(),
+				Data:    nil,
+			})
+			return
+		}
+	}
+
+	if request.FeeToken != "" {
+		upperToken := strings.ToUpper(request.FeeToken)
+		request.FeeToken = upperToken
+		validTokens := []string{"TON", "ETH", "USDT", "USDC"}
+		valid := false
+		for _, t := range validTokens {
+			if upperToken == t {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			c.JSON(http.StatusBadRequest, &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: fmt.Sprintf("invalid feeToken: %s. Must be one of: TON, ETH, USDT, USDC", upperToken),
 				Data:    nil,
 			})
 			return

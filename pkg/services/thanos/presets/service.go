@@ -46,6 +46,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"challengePeriod",
 			"backupEnabled",
 		},
+		AvailableFeeTokens: []string{"TON", "ETH", "USDT", "USDC"},
 	},
 	"defi": {
 		ID:          "defi",
@@ -87,6 +88,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"outputRootFrequency",
 			"challengePeriod",
 		},
+		AvailableFeeTokens: []string{"TON", "ETH", "USDT", "USDC"},
 	},
 	"gaming": {
 		ID:          "gaming",
@@ -128,6 +130,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"batchSubmissionFrequency",
 			"outputRootFrequency",
 		},
+		AvailableFeeTokens: []string{"TON", "ETH", "USDT", "USDC"},
 	},
 	"full": {
 		ID:          "full",
@@ -171,6 +174,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"challengePeriod",
 			"registerCandidate",
 		},
+		AvailableFeeTokens: []string{"TON", "ETH", "USDT", "USDC"},
 	},
 }
 

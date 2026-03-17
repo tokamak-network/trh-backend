@@ -116,6 +116,8 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		ChainConfiguration: &chainConfig,
 		Operators:          &operators,
 		ReuseDeployment:    req.ReuseDeployment,
+		Preset:             req.Preset,
+		FeeToken:           req.FeeToken,
 	}
 
 	if req.RegisterCandidate {
