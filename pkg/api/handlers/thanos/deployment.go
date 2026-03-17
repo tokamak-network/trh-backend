@@ -65,15 +65,13 @@ func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 	if request.FeeToken != "" {
 		upperToken := strings.ToUpper(request.FeeToken)
 		request.FeeToken = upperToken
-		validTokens := []string{"TON", "ETH", "USDT", "USDC"}
-		valid := false
-		for _, t := range validTokens {
-			if upperToken == t {
-				valid = true
-				break
-			}
+		validTokens := map[string]struct{}{
+			"TON":  {},
+			"ETH":  {},
+			"USDT": {},
+			"USDC": {},
 		}
-		if !valid {
+		if _, ok := validTokens[upperToken]; !ok {
 			c.JSON(http.StatusBadRequest, &entities.Response{
 				Status:  http.StatusBadRequest,
 				Message: fmt.Sprintf("invalid feeToken: %s. Must be one of: TON, ETH, USDT, USDC", upperToken),
