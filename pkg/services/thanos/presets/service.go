@@ -58,7 +58,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 		Description: "Baseline rollup preset for standard application workloads.",
 		Modules: map[string]bool{
 			"bridge":        true,
-			"blockExplorer": false,
+			"blockExplorer": true,
 			"monitoring":    false,
 			"crossTrade":    false,
 			"uptimeService": false,
@@ -79,7 +79,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 		HelmValues: map[string]any{
 			"bridge.enabled":        true,
 			"monitoring.enabled":    false,
-			"blockscout.enabled":    false,
+			"blockscout.enabled":    true,
 			"crossTrade.enabled":    false,
 			"uptimeService.enabled": false,
 		},
