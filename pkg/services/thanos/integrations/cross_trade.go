@@ -243,6 +243,11 @@ func (b *CrossTradeBridgeIntegration) Uninstall(ctx context.Context, stackId str
 
 // installTask handles the actual installation process
 func (b *CrossTradeBridgeIntegration) installTask(ctx context.Context, stack *entities.StackEntity, request dtos.InstallCrossChainBridgeRequest, logPath string) {
+	// creates context with 30min timeout so to prevent infinite running installations
+	taskCtx, taskCancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer taskCancel()
+	ctx = taskCtx
+
 	stackConfig := dtos.DeployThanosRequest{}
 	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
 		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
