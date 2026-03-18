@@ -232,6 +232,8 @@ func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uui
 		return im.uptimeService.Cancel(ctx, stackId, integrationId)
 	case "register-candidate":
 		return im.registerCandidate.Cancel(ctx, stackId, integrationId)
+	case "cross-trade":
+		return im.crossTrade.Cancel(ctx, stackId, integrationId)
 	default:
 		return &entities.Response{
 			Status:  400,
@@ -270,6 +272,8 @@ func (im *IntegrationManager) RetryIntegration(ctx context.Context, stackId uuid
 		return im.monitoring.Retry(ctx, stackId, integrationId)
 	case "system-pulse":
 		return im.uptimeService.Retry(ctx, stackId, integrationId)
+	case "cross-trade":
+		return im.crossTrade.Retry(ctx, stackId, integrationId)
 	case "register-candidate":
 		return &entities.Response{
 			Status:  400,

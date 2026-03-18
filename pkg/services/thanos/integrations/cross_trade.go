@@ -41,12 +41,15 @@ type CrossTradeBridgeIntegration struct {
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	}
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
+		IsTaskRunning(id string) bool
 	}
 }
 
@@ -68,12 +71,15 @@ func NewCrossTradeBridgeIntegration(
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
 	},
 	taskManager interface {
 		AddTask(id string, task func(ctx context.Context))
+		StopTask(id string)
+		IsTaskRunning(id string) bool
 	},
 ) *CrossTradeBridgeIntegration {
 	return &CrossTradeBridgeIntegration{
@@ -412,7 +418,7 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, integra
 		return
 	}
 
-	if err = thanos.UninstallBlockExplorer(ctx, sdkClient); err != nil {
+	if err = thanos.UninstallCrossTradeBridge(ctx, sdkClient); err != nil {
 		logger.Error("failed to uninstall cross-trade", zap.String("plugin", enum.IntegrationTypeCrossTrade.String()), zap.Error(err))
 		_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusFailed)
 		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error())
@@ -424,13 +430,130 @@ func (b *CrossTradeBridgeIntegration) uninstallTask(ctx context.Context, integra
 		return
 	}
 
-	stack.Metadata.ExplorerUrl = ""
+	stack.Metadata.CrossTradeUrl = ""
 	if err = b.stackRepo.UpdateMetadata(stackId, stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata", zap.String("stackId", stackId), zap.Error(err))
 		return
 	}
 
 	_ = b.deploymentRepo.UpdateDeploymentStatus(uninstallDeployment.ID.String(), entities.DeploymentRunStatusSuccess)
+}
+
+// Cancel cancels an in-progress cross-trade installation and cleans up AWS resources
+func (b *CrossTradeBridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	integration, err := b.integrationRepo.GetIntegrationById(integrationId.String())
+	if err != nil {
+		logger.Error("failed to get integration", zap.Error(err), zap.String("integrationId", integrationId.String()))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	if integration == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Integration not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if integration.Status != string(entities.DeploymentStatusInProgress) && integration.Status != string(entities.DeploymentStatusPending) {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Can only cancel installations that are in progress or pending",
+			Data:    nil,
+		}, nil
+	}
+
+	if err = b.integrationRepo.UpdateIntegrationStatusWithReason(
+		integration.ID.String(),
+		entities.DeploymentStatusCancelling,
+		"Stopping installation process. This may take a few minutes to safely clean up AWS resources.",
+	); err != nil {
+		return &entities.Response{Status: http.StatusInternalServerError, Message: "Failed to update status"}, err
+	}
+
+	b.taskManager.AddTask(fmt.Sprintf("cancel-cross-trade-%s", stackId.String()), func(ctx context.Context) {
+		taskId := fmt.Sprintf("install-cross-trade-%s", stackId.String())
+		b.taskManager.StopTask(taskId)
+
+		stack, err := b.stackRepo.GetStackByID(stackId.String())
+		if err != nil {
+			logger.Error("failed to get stack", zap.Error(err), zap.String("stackId", stackId.String()))
+			return
+		}
+		stackConfig := dtos.DeployThanosRequest{}
+		if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+			logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+			return
+		}
+
+		sdkClient, err := thanos.NewThanosSDKClient(
+			ctx,
+			utils.GetLogPath(stack.ID, "cancel-cross-trade"),
+			string(stack.Network),
+			stack.DeploymentPath,
+			stackConfig.RegisterCandidate,
+			stackConfig.AwsAccessKey,
+			stackConfig.AwsSecretAccessKey,
+			stackConfig.AwsRegion,
+		)
+		if err != nil {
+			logger.Error("failed to create thanos sdk client", zap.Error(err))
+			return
+		}
+
+		if err = thanos.UninstallCrossTradeBridge(ctx, sdkClient); err != nil {
+			logger.Error("failed to uninstall cross-trade during cancel", zap.Error(err))
+			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+				integration.ID.String(),
+				entities.DeploymentStatusFailed,
+				err.Error(),
+			)
+			return
+		}
+
+		logger.Info("Cancellation completed successfully", zap.String("integrationId", integrationId.String()))
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+			integration.ID.String(),
+			entities.DeploymentStatusCancelled,
+			"Installation cancelled successfully. All AWS resources have been cleaned up.",
+		)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Cancellation in progress. Installation will be stopped and AWS resources will be cleaned up. This may take a few minutes.",
+		Data:    nil,
+	}, nil
+}
+
+// Retry retries a cancelled cross-trade installation
+func (b *CrossTradeBridgeIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
+	return retryIntegrationCommon(ctx, stackId, integrationId, b.integrationRepo, b.stackRepo,
+		func(stack *entities.StackEntity, integration *entities.IntegrationEntity) error {
+			logPath := utils.GetLogPath(stack.ID, fmt.Sprintf("install-%s", integration.Type))
+
+			if integration.Config == nil || len(integration.Config) == 0 || string(integration.Config) == "{}" {
+				logger.Error("installation config is missing or empty", zap.String("integrationId", integrationId.String()))
+				return &BadRequestError{message: "Cannot retry installation: original configuration not found. Please uninstall and reinstall instead."}
+			}
+
+			var request dtos.InstallCrossChainBridgeRequest
+			if err := json.Unmarshal(integration.Config, &request); err != nil {
+				logger.Error("failed to unmarshal config", zap.Error(err), zap.String("integrationId", integrationId.String()))
+				return fmt.Errorf("failed to retrieve installation config")
+			}
+
+			taskId := fmt.Sprintf("install-cross-trade-%s", stackId.String())
+			b.taskManager.AddTask(taskId, func(ctx context.Context) {
+				b.installTask(ctx, stack, request, logPath)
+			})
+
+			return nil
+		})
 }
 
 // tailAndIngestLogs tails a log file and ingests each line into the database
