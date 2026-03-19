@@ -88,7 +88,15 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		}
 	}
 
-	// 5. Build the full deployment request
+	// 5. Validate provider-specific requirements
+	if err := req.ValidateProvider(); err != nil {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		}, nil
+	}
+
+	// 6. Build the full deployment request
 	deployReq := dtos.DeployThanosRequest{
 		Network:                  req.Network,
 		L1RpcUrl:                 req.L1RpcUrl,
@@ -108,17 +116,20 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		RegisterCandidate:        registerCandidate,
 		PresetID:                 req.PresetID,
 		FeeToken:                 strings.ToUpper(req.FeeToken),
+		InfraProvider:            req.InfraProvider,
 	}
 	if backupEnabled {
 		deployReq.BackupConfig = &dtos.BackupConfig{Enabled: true}
 	}
 
-	// 6. Validate the full deployment request (includes I/O: L1 RPC, AWS region checks)
-	if err := deployReq.Validate(); err != nil {
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: err.Error(),
-		}, nil
+	// 7. Validate the full deployment request (only runs AWS-specific checks when provider is aws)
+	if req.InfraProvider != "local" {
+		if err := deployReq.Validate(); err != nil {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: err.Error(),
+			}, nil
+		}
 	}
 
 	// 7. Create the stack

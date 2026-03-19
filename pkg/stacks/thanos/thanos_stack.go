@@ -80,6 +80,16 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 	return nil
 }
 
+func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack) error {
+	logger.Info("Deploying Local Infrastructure (Docker Compose)...")
+	err := sdkClient.Deploy(ctx, consts.Local, nil)
+	if err != nil {
+		return err
+	}
+	logger.Info("Local Infrastructure deployed successfully")
+	return nil
+}
+
 func DestroyAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack) error {
 	logger.Info("Destroying AWS Infrastructure...")
 

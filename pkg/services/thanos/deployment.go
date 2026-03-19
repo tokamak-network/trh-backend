@@ -373,8 +373,8 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				Status:       entities.DeploymentRunStatusSuccess,
 			}
 		case "deploy-aws-infra":
-			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
-			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
+			var deployInfraConfig dtos.DeployThanosAWSInfraRequest
+			if err := json.Unmarshal(deployment.Config, &deployInfraConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
 			}
 
@@ -383,23 +383,28 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 			defer cancel()
 			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
 
-			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
-				if errors.Is(err, context.Canceled) {
+			var infraErr error
+			if deployInfraConfig.InfraProvider == "local" {
+				infraErr = thanos.DeployLocalInfrastructure(ctx, sdkClient)
+			} else {
+				infraErr = thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployInfraConfig)
+			}
+			if infraErr != nil {
+				if errors.Is(infraErr, context.Canceled) {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
 						zap.String("step", deployment.Step))
-					// Keep run status as-is on cancel; no explicit Stopped state in run status
-					return err
+					return infraErr
 				}
 				logger.Error("deployment failed",
 					zap.String("deploymentId", deployment.ID.String()),
 					zap.String("step", deployment.Step),
-					zap.Error(err))
+					zap.Error(infraErr))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentRunStatusFailed,
 				}
-				return err
+				return infraErr
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,

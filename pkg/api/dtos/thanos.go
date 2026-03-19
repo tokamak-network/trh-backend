@@ -3,6 +3,7 @@ package dtos
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/mail"
 	"regexp"
 
@@ -75,9 +76,10 @@ type DeployThanosRequest struct {
 	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
 	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`        // Backup configuration
 	// Preset fields (optional)
-	PresetID   string `json:"presetId,omitempty"`
-	FeeToken   string `json:"feeToken,omitempty"`   // "TON", "ETH", "USDT", "USDC"
-	SeedPhrase string `json:"seedPhrase,omitempty"`
+	PresetID      string `json:"presetId,omitempty"`
+	FeeToken      string `json:"feeToken,omitempty"`      // "TON", "ETH", "USDT", "USDC"
+	SeedPhrase    string `json:"seedPhrase,omitempty"`
+	InfraProvider string `json:"infraProvider,omitempty"` // "aws" or "local"
 }
 
 func (request *DeployThanosRequest) Validate() error {
@@ -197,9 +199,10 @@ type DeployL1ContractsRequest struct {
 }
 
 type DeployThanosAWSInfraRequest struct {
-	ChainName    string        `json:"chainName"          binding:"required"`
-	L1BeaconUrl  string        `json:"l1BeaconUrl"        binding:"required" validate:"url"`
-	BackupConfig *BackupConfig `json:"backupConfig,omitempty"` // Backup configuration
+	ChainName     string        `json:"chainName"      binding:"required"`
+	L1BeaconUrl   string        `json:"l1BeaconUrl"    binding:"required" validate:"url"`
+	BackupConfig  *BackupConfig `json:"backupConfig,omitempty"`
+	InfraProvider string        `json:"infraProvider"` // "aws" or "local"
 }
 
 type InstallBlockExplorerRequest struct {
@@ -532,18 +535,40 @@ type PresetFieldOverride struct {
 // PresetDeployRequest is the simplified request body for the preset-deploy endpoint.
 // Callers supply a preset ID, seed phrase (for account derivation), and infrastructure
 // credentials. Role accounts are derived automatically via BIP44 HD wallet paths.
+// For infraProvider="local", AWS credentials are not required.
 type PresetDeployRequest struct {
-	PresetID     string                     `json:"presetId"     binding:"required"`
-	ChainName    string                     `json:"chainName"    binding:"required"`
-	Network      entities.DeploymentNetwork `json:"network"      binding:"required"`
-	SeedPhrase   string                     `json:"seedPhrase"   binding:"required"`
-	AwsAccessKey string                     `json:"awsAccessKey" binding:"required"`
-	AwsSecretKey string                     `json:"awsSecretKey" binding:"required"`
-	AwsRegion    string                     `json:"awsRegion"    binding:"required"`
-	L1RpcUrl     string                     `json:"l1RpcUrl"     binding:"required"`
-	L1BeaconUrl  string                     `json:"l1BeaconUrl"  binding:"required"`
-	FeeToken     string                     `json:"feeToken"`
-	Overrides    []PresetFieldOverride      `json:"overrides,omitempty"`
+	PresetID      string                     `json:"presetId"      binding:"required"`
+	ChainName     string                     `json:"chainName"     binding:"required"`
+	Network       entities.DeploymentNetwork `json:"network"       binding:"required"`
+	SeedPhrase    string                     `json:"seedPhrase"    binding:"required"`
+	InfraProvider string                     `json:"infraProvider" binding:"required"`
+	AwsAccessKey  string                     `json:"awsAccessKey"`
+	AwsSecretKey  string                     `json:"awsSecretKey"`
+	AwsRegion     string                     `json:"awsRegion"`
+	L1RpcUrl      string                     `json:"l1RpcUrl"      binding:"required"`
+	L1BeaconUrl   string                     `json:"l1BeaconUrl"   binding:"required"`
+	FeeToken      string                     `json:"feeToken"`
+	Overrides     []PresetFieldOverride      `json:"overrides,omitempty"`
+}
+
+// Validate checks provider-specific required fields.
+func (r *PresetDeployRequest) ValidateProvider() error {
+	switch r.InfraProvider {
+	case "aws":
+		if r.AwsAccessKey == "" || r.AwsSecretKey == "" || r.AwsRegion == "" {
+			return fmt.Errorf("awsAccessKey, awsSecretKey, and awsRegion are required for aws provider")
+		}
+		if r.Network == "Mainnet" {
+			// Mainnet is only supported on AWS — no additional check needed here
+		}
+	case "local":
+		if r.Network == "Mainnet" {
+			return fmt.Errorf("local deployment is not supported for Mainnet")
+		}
+	default:
+		return fmt.Errorf("invalid infraProvider %q: must be \"aws\" or \"local\"", r.InfraProvider)
+	}
+	return nil
 }
 
 type ValidateDeploymentRequest struct {
