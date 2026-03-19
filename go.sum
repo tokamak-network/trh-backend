@@ -333,6 +333,12 @@ github.com/tklauser/numcpus v0.9.0 h1:lmyCHtANi8aRUgkckBgoDk1nHCux3n2cgkJLXdQGPD
 github.com/tklauser/numcpus v0.9.0/go.mod h1:SN6Nq1O3VychhC1npsWostA+oW+VOQTxZrS604NSRyI=
 github.com/tokamak-network/trh-sdk v1.0.4-0.20260317100319-19ca5da36b4c h1:mJmyd86RAbDiwh05ZHm8MskU+YTSL3xqVTkO59fhW08=
 github.com/tokamak-network/trh-sdk v1.0.4-0.20260317100319-19ca5da36b4c/go.mod h1:a21DV+Lz0nUn+C2pQ6YQ0e0jjbp16c9rfUhWH8UgVOI=
+github.com/tokamak-network/trh-sdk v1.0.4-0.20260319024254-facd08903243 h1:XFlFhGivm28MR8pST2lvCb/fan86nNTj/BVlp9DWlyM=
+github.com/tokamak-network/trh-sdk v1.0.4-0.20260319024254-facd08903243/go.mod h1:a21DV+Lz0nUn+C2pQ6YQ0e0jjbp16c9rfUhWH8UgVOI=
+github.com/tokamak-network/trh-sdk v1.0.4-0.20260319071933-569af5ce9be1 h1:bgpIqxnq+uuz1T7yPPnHJJfbWcKPKBYorZAabtqO5ug=
+github.com/tokamak-network/trh-sdk v1.0.4-0.20260319071933-569af5ce9be1/go.mod h1:a21DV+Lz0nUn+C2pQ6YQ0e0jjbp16c9rfUhWH8UgVOI=
+github.com/tokamak-network/trh-sdk v1.0.4-0.20260319074625-984f5b178096 h1:HTNIomkB41AASInaKRqaqpNKqG9YC239980IEBoDjlg=
+github.com/tokamak-network/trh-sdk v1.0.4-0.20260319074625-984f5b178096/go.mod h1:a21DV+Lz0nUn+C2pQ6YQ0e0jjbp16c9rfUhWH8UgVOI=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/tyler-smith/go-bip32 v1.0.0 h1:sDR9juArbUgX+bO/iblgZnMPeWY1KZMUC2AFUJdv5KE=
@@ -343,6 +349,8 @@ github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65E
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/urfave/cli/v2 v2.27.1 h1:8xSQ6szndafKVRmfyeUMxkNUJQMjL1F2zmsZ+qHpfho=
 github.com/urfave/cli/v2 v2.27.1/go.mod h1:8qnjx1vcq5s2/wpsqoZFndg2CE5tNFyrTvS6SinrnYQ=
+github.com/urfave/cli/v3 v3.0.0-beta1 h1:6DTaaUarcM0wX7qj5Hcvs+5Dm3dyUTBbEwIWAjcw9Zg=
+github.com/urfave/cli/v3 v3.0.0-beta1/go.mod h1:FnIeEMYu+ko8zP1F9Ypr3xkZMIDqW3DR92yUtY39q1Y=
 github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 h1:bAn7/zixMGCfxrRTfdpNzjtPYqr8smhKouy9mxVdGPU=
 github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673/go.mod h1:N3UwUGtsrSj3ccvlPHLoLsHnpR27oXr4ZE984MbSER8=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
