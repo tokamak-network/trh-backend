@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -314,7 +315,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 		sdkClient, err := thanos.NewThanosSDKClient(
 			ctx,
 			deployment.LogPath,
-			string(stack.Network),
+			strings.ToLower(string(stack.Network)),
 			stack.DeploymentPath,
 			deploymentConfig.RegisterCandidate,
 			deploymentConfig.AwsAccessKey,
