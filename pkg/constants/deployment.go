@@ -1,6 +1,7 @@
 package constants
 
 const (
+	BuildL1ContractsStep          = "build-l1-contracts"
 	DeployL1ContractsStep         = "deploy-l1-contracts"
 	DeployInfraStep               = "deploy-aws-infra"
 	DeployLocalInfraStep          = "deploy-local-infra"

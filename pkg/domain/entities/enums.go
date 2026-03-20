@@ -9,6 +9,15 @@ const (
 	DeploymentNetworkLocalTestnet DeploymentNetwork = "LocalTestnet"
 )
 
+// DeploymentTarget distinguishes WHERE the stack is deployed (infrastructure location),
+// independent of which L1 network it connects to.
+type DeploymentTarget string
+
+const (
+	DeploymentTargetCloud DeploymentTarget = "Cloud" // AWS EKS
+	DeploymentTargetLocal DeploymentTarget = "Local" // kind cluster with kubeconfig
+)
+
 type StackStatus string
 
 const (

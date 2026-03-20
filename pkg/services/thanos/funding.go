@@ -33,10 +33,10 @@ func defaultEthClientFactory(ctx context.Context, rpcURL string) (EthBalanceClie
 // exact thresholds.
 var RequiredFundingByNetwork = map[entities.DeploymentNetwork]map[string]string{
 	entities.DeploymentNetworkTestnet: {
-		"admin":     "500000000000000000",  // 0.5 ETH
-		"sequencer": "100000000000000000",  // 0.1 ETH
-		"batcher":   "1000000000000000000", // 1 ETH
-		"proposer":  "200000000000000000",  // 0.2 ETH
+		"admin":     "500000000000000000", // 0.5 ETH
+		"sequencer": "100000000000000000", // 0.1 ETH
+		"batcher":   "300000000000000000", // 0.3 ETH
+		"proposer":  "200000000000000000", // 0.2 ETH
 	},
 	entities.DeploymentNetworkMainnet: {
 		"admin":     "2000000000000000000", // 2 ETH

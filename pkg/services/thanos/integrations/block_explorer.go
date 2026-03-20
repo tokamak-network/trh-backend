@@ -316,16 +316,7 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, newIntegrati
 	defer cancel()
 	go b.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
 
-	sdkClient, err := thanos.NewThanosSDKClient(
-		taskCtx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
+	sdkClient, err := thanos.NewSDKClientForStack(taskCtx, logPath, stack, &stackConfig)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
@@ -429,16 +420,7 @@ func (b *BlockExplorerIntegration) uninstallTask(ctx context.Context, integratio
 	defer cancel()
 	go b.tailAndIngestLogs(ingestCtx, stack.ID, uninstallDeployment.ID, logPath)
 
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
+	sdkClient, err := thanos.NewSDKClientForStack(ctx, logPath, stack, &stackConfig)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
@@ -583,15 +565,11 @@ func (b *BlockExplorerIntegration) Cancel(ctx context.Context, stackId uuid.UUID
 			return
 		}
 
-		sdkClient, err := thanos.NewThanosSDKClient(
+		sdkClient, err := thanos.NewSDKClientForStack(
 			ctx,
 			utils.GetLogPath(stack.ID, "cancel-block-explorer"),
-			string(stack.Network),
-			stack.DeploymentPath,
-			stackConfig.RegisterCandidate,
-			stackConfig.AwsAccessKey,
-			stackConfig.AwsSecretAccessKey,
-			stackConfig.AwsRegion,
+			stack,
+			&stackConfig,
 		)
 
 		// Clean up any resources that were created

@@ -41,9 +41,9 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 			} else if req.Network == entities.DeploymentNetworkTestnet && chainIdVal != consts.SepoliaChainID {
 				rpcCheck.Valid = false
 				rpcCheck.Error = "Selected Testnet but RPC is not Sepolia (ChainID 11155111)"
-			} else if req.Network == entities.DeploymentNetworkLocalTestnet && chainIdVal != consts.SepoliaChainID {
+			} else if isLocalTarget(req.Network) && chainIdVal != consts.SepoliaChainID {
 				rpcCheck.Valid = false
-				rpcCheck.Error = "LocalTestnet requires Sepolia L1 RPC (ChainID 11155111)"
+				rpcCheck.Error = "Local deployment requires Sepolia L1 RPC (ChainID 11155111)"
 			}
 			rpcCheck.Details = map[string]interface{}{"chainId": chainIdVal}
 		}
@@ -53,9 +53,9 @@ func (s *ThanosStackDeploymentService) ValidateDeployment(ctx context.Context, r
 		response.AllValid = false
 	}
 
-	// 2. AWS Credentials check (skipped for LocalTestnet)
-	if req.Network == entities.DeploymentNetworkLocalTestnet {
-		// LocalTestnet: validate kubeconfig file exists instead of AWS
+	// 2. Infrastructure credentials check
+	if isLocalTarget(req.Network) {
+		// Local target: validate kubeconfig file exists instead of AWS
 		kubeconfigCheck := dtos.ValidationCheckResult{Valid: true}
 		if req.KubeconfigPath == "" {
 			kubeconfigCheck.Valid = false

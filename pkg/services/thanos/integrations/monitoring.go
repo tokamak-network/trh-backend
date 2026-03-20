@@ -301,16 +301,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, newIntegrationI
 		return
 	}
 
-	sdkClient, err := thanos.NewThanosSDKClient(
-		taskCtx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
+	sdkClient, err := thanos.NewSDKClientForStack(taskCtx, logPath, stack, &stackConfig)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
@@ -454,16 +445,7 @@ func (m *MonitoringIntegration) uninstallTask(ctx context.Context, integrationID
 		return
 	}
 
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
+	sdkClient, err := thanos.NewSDKClientForStack(ctx, logPath, stack, &stackConfig)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
@@ -640,16 +622,7 @@ func (m *MonitoringIntegration) disableEmailAlertTask(ctx context.Context, stack
 		return
 	}
 
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
+	sdkClient, err := thanos.NewSDKClientForStack(ctx, logPath, stack, &stackConfig)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
@@ -678,16 +651,7 @@ func (m *MonitoringIntegration) disableTelegramAlertTask(ctx context.Context, st
 		return
 	}
 
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
+	sdkClient, err := thanos.NewSDKClientForStack(ctx, logPath, stack, &stackConfig)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
@@ -876,16 +840,7 @@ func (m *MonitoringIntegration) updateEmailAlertTask(ctx context.Context, stack 
 		return
 	}
 
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
+	sdkClient, err := thanos.NewSDKClientForStack(ctx, logPath, stack, &stackConfig)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
@@ -914,16 +869,7 @@ func (m *MonitoringIntegration) updateTelegramAlertTask(ctx context.Context, sta
 		return
 	}
 
-	sdkClient, err := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
+	sdkClient, err := thanos.NewSDKClientForStack(ctx, logPath, stack, &stackConfig)
 	if err != nil {
 		logger.Error("failed to create thanos sdk client", zap.Error(err))
 		return
@@ -1317,15 +1263,11 @@ func (m *MonitoringIntegration) Cancel(ctx context.Context, stackId uuid.UUID, i
 			logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
 			return
 		}
-		sdkClient, err := thanos.NewThanosSDKClient(
+		sdkClient, err := thanos.NewSDKClientForStack(
 			ctx,
 			utils.GetLogPath(stack.ID, "cancel-monitoring"),
-			string(stack.Network),
-			stack.DeploymentPath,
-			stackConfig.RegisterCandidate,
-			stackConfig.AwsAccessKey,
-			stackConfig.AwsSecretAccessKey,
-			stackConfig.AwsRegion,
+			stack,
+			&stackConfig,
 		)
 		if err := thanos.UninstallMonitoring(ctx, sdkClient); err != nil {
 			logger.Error("failed to uninstall monitoring", zap.Error(err))

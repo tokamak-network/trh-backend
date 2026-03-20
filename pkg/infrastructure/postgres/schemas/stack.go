@@ -16,6 +16,7 @@ type Stack struct {
 	Status         entities.StackStatus       `gorm:"not null;column:status"`
 	Reason         string                     `gorm:"column:reason"`
 	Network        entities.DeploymentNetwork `gorm:"not null;column:network"`
+	Target         entities.DeploymentTarget  `gorm:"column:target;default:''"`
 	DeploymentPath string                     `gorm:"not null;column:deployment_path"`
 	Config         datatypes.JSON             `gorm:"type:jsonb;not null;column:config"`
 	Metadata       datatypes.JSON             `gorm:"type:jsonb;column:metadata"`

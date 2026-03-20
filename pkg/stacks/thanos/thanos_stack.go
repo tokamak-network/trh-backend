@@ -2,11 +2,13 @@ package thanos
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	trhSDKLogging "github.com/tokamak-network/trh-sdk/pkg/logging"
 	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	thanosTypes "github.com/tokamak-network/trh-sdk/pkg/types"
@@ -40,7 +42,7 @@ func NewThanosSDKClient(
 		}
 	}
 
-	s, err := thanosStack.NewThanosStack(ctx, l, network, false, deploymentPath, awsConfig, nil)
+	s, err := thanosStack.NewThanosStack(ctx, l, network, false, deploymentPath, awsConfig)
 	if err != nil {
 		logger.Errorf("Failed to create thanos stacks: %s", err)
 		return nil, err
@@ -75,6 +77,36 @@ func NewLocalTestnetSDKClient(
 	}
 
 	return s, nil
+}
+
+// NewSDKClientForStack creates the appropriate SDK client based on the stack's network type.
+// For LocalTestnet it uses the kubeconfig-based client; for other networks it uses the AWS-based client.
+func NewSDKClientForStack(
+	ctx context.Context,
+	logPath string,
+	stack *entities.StackEntity,
+	stackConfig *dtos.DeployThanosRequest,
+) (*thanosStack.ThanosStack, error) {
+	if stackConfig == nil {
+		return nil, fmt.Errorf("stackConfig is required for NewSDKClientForStack")
+	}
+	if stack.ResolveTarget() == entities.DeploymentTargetLocal {
+		kubeconfigPath := stack.KubeconfigPath
+		if kubeconfigPath == "" && stackConfig != nil {
+			kubeconfigPath = stackConfig.KubeconfigPath
+		}
+		return NewLocalTestnetSDKClient(ctx, logPath, stack.DeploymentPath, kubeconfigPath)
+	}
+	return NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
 }
 
 // DeployLocalInfrastructure deploys Thanos Stack Helm charts to a kind cluster.
@@ -156,6 +188,7 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		ChainConfiguration: &chainConfig,
 		Operators:          &operators,
 		ReuseDeployment:    req.ReuseDeployment,
+		BuildOnly:          req.BuildOnly,
 		Preset:             req.Preset,
 		FeeToken:           req.FeeToken,
 	}

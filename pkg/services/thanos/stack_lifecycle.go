@@ -70,10 +70,16 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		immutableConfig = bytes
 	}
 
+	target := entities.DeploymentTargetCloud
+	if isLocalTarget(request.Network) {
+		target = entities.DeploymentTargetLocal
+	}
+
 	stack := &entities.StackEntity{
 		ID:                  stackId,
 		Name:                s.name,
 		Network:             request.Network,
+		Target:              target,
 		Type:                enum.StackTypeOptimisticRollup.String(),
 		Config:              config,
 		DeploymentPath:      deploymentPath,

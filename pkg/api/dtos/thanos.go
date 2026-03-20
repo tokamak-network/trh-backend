@@ -101,10 +101,10 @@ func (request *DeployThanosRequest) Validate() error {
 		}
 	}
 
-	// LocalTestnet validation
+	// Local deployment validation
 	if request.Network == entities.DeploymentNetworkLocalTestnet {
 		if request.KubeconfigPath == "" {
-			return errors.New("kubeconfigPath is required for local testnet deployment")
+			return errors.New("kubeconfigPath is required for local deployment")
 		}
 	}
 
@@ -153,7 +153,7 @@ func (request *DeployThanosRequest) Validate() error {
 		return errors.New("invalid l1BeaconUrl")
 	}
 
-	// AWS validation: skip for LocalTestnet
+	// AWS validation: skip for local deployments
 	if request.Network != entities.DeploymentNetworkLocalTestnet {
 		if !trhSdkUtils.IsValidAWSAccessKey(request.AwsAccessKey) {
 			logger.Error("invalid awsAccessKey", zap.String("awsAccessKey", request.AwsAccessKey))
@@ -214,6 +214,7 @@ type DeployL1ContractsRequest struct {
 	RegisterCandidate        bool                      `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                      `json:"reuseDeployment"`
+	BuildOnly                bool                      `json:"buildOnly"` // When true, only build contracts (no deploy)
 	Preset                   string                    `json:"preset,omitempty"`
 	FeeToken                 string                    `json:"feeToken,omitempty"`
 	MainnetConfirmation      *MainnetConfirmation      `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
