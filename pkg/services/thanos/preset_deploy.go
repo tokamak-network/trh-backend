@@ -44,9 +44,14 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 	l2BlockTime := chainDefaultInt(def.ChainDefaults, "l2BlockTime", 2)
 	batchFreq := chainDefaultInt(def.ChainDefaults, "batchSubmissionFrequency", 1800)
 	outputFreq := chainDefaultInt(def.ChainDefaults, "outputRootFrequency", 1800)
-	challengePeriod := chainDefaultInt(def.ChainDefaults, "challengePeriod", 86400)
+	challengePeriod := chainDefaultInt(def.ChainDefaults, "challengePeriod", 10)
 	registerCandidate := chainDefaultBool(def.ChainDefaults, "registerCandidate", false)
 	backupEnabled := chainDefaultBool(def.ChainDefaults, "backupEnabled", false)
+
+	// Force challenge period for mainnet (non-overridable)
+	if strings.EqualFold(req.Network, "Mainnet") {
+		challengePeriod = 6048000
+	}
 
 	// 4. Apply user overrides (only for fields listed in preset's OverridableFields)
 	overridableSet := make(map[string]bool, len(def.OverridableFields))
@@ -74,8 +79,10 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 				outputFreq = v
 			}
 		case "challengePeriod":
-			if v, ok := anyToInt(override.Value); ok {
-				challengePeriod = v
+			if !strings.EqualFold(req.Network, "Mainnet") {
+				if v, ok := anyToInt(override.Value); ok {
+					challengePeriod = v
+				}
 			}
 		case "backupEnabled":
 			if b, ok := override.Value.(bool); ok {
