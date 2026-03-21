@@ -49,7 +49,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 	backupEnabled := chainDefaultBool(def.ChainDefaults, "backupEnabled", false)
 
 	// Force challenge period for mainnet (non-overridable)
-	if strings.EqualFold(req.Network, "Mainnet") {
+	if strings.EqualFold(string(req.Network), "Mainnet") {
 		challengePeriod = 6048000
 	}
 
@@ -79,7 +79,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 				outputFreq = v
 			}
 		case "challengePeriod":
-			if !strings.EqualFold(req.Network, "Mainnet") {
+			if !strings.EqualFold(string(req.Network), "Mainnet") {
 				if v, ok := anyToInt(override.Value); ok {
 					challengePeriod = v
 				}
