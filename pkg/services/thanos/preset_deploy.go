@@ -103,7 +103,13 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		}, nil
 	}
 
-	// 6. Build the full deployment request
+	// 6. Determine reuseDeployment: testnet always true, mainnet uses request value (default true)
+	reuseDeployment := true
+	if strings.EqualFold(string(req.Network), "Mainnet") && req.ReuseDeployment != nil {
+		reuseDeployment = *req.ReuseDeployment
+	}
+
+	// 7. Build the full deployment request
 	deployReq := dtos.DeployThanosRequest{
 		Network:                  req.Network,
 		L1RpcUrl:                 req.L1RpcUrl,
@@ -121,6 +127,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		AwsRegion:                req.AwsRegion,
 		ChainName:                req.ChainName,
 		RegisterCandidate:        registerCandidate,
+		ReuseDeployment:          reuseDeployment,
 		PresetID:                 req.PresetID,
 		FeeToken:                 strings.ToUpper(req.FeeToken),
 		InfraProvider:            req.InfraProvider,
@@ -129,7 +136,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		deployReq.BackupConfig = &dtos.BackupConfig{Enabled: true}
 	}
 
-	// 7. Validate the full deployment request (only runs AWS-specific checks when provider is aws)
+	// 8. Validate the full deployment request (only runs AWS-specific checks when provider is aws)
 	if req.InfraProvider != "local" {
 		if err := deployReq.Validate(); err != nil {
 			return &entities.Response{
@@ -139,7 +146,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		}
 	}
 
-	// 7. Create the stack
+	// 9. Create the stack
 	resp, err := s.CreateThanosStack(ctx, deployReq)
 	if err != nil {
 		return resp, err
