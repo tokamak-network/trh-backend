@@ -80,9 +80,15 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 	return nil
 }
 
-func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack) error {
+func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosAWSInfraRequest) error {
 	logger.Info("Deploying Local Infrastructure (Docker Compose)...")
-	err := sdkClient.Deploy(ctx, consts.Local, nil)
+
+	deployInfraInput := &thanosStack.DeployInfraInput{
+		ChainName:   req.ChainName,
+		L1BeaconURL: req.L1BeaconUrl,
+	}
+
+	err := sdkClient.Deploy(ctx, consts.Local, deployInfraInput)
 	if err != nil {
 		return err
 	}

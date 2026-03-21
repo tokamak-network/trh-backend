@@ -386,7 +386,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 
 			var infraErr error
 			if deployInfraConfig.InfraProvider == "local" {
-				infraErr = thanos.DeployLocalInfrastructure(ctx, sdkClient)
+				infraErr = thanos.DeployLocalInfrastructure(ctx, sdkClient, &deployInfraConfig)
 			} else {
 				infraErr = thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployInfraConfig)
 			}
