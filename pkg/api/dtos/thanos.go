@@ -65,6 +65,8 @@ type DeployThanosRequest struct {
 	SequencerAccount         string                     `json:"sequencerAccount"         binding:"required" validate:"eth_address"`
 	BatcherAccount           string                     `json:"batcherAccount"           binding:"required" validate:"eth_address"`
 	ProposerAccount          string                     `json:"proposerAccount"          binding:"required" validate:"eth_address"`
+	ChallengerAccount        string                     `json:"challengerAccount,omitempty"`
+	EnableFaultProof         bool                       `json:"enableFaultProof"`
 	AwsAccessKey             string                     `json:"awsAccessKey"             binding:"required"`
 	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey"       binding:"required"`
 	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
@@ -190,6 +192,8 @@ type DeployL1ContractsRequest struct {
 	SequencerAccount         string                    `json:"sequencerAccount"         binding:"required" validate:"eth_address"`
 	BatcherAccount           string                    `json:"batcherAccount"           binding:"required" validate:"eth_address"`
 	ProposerAccount          string                    `json:"proposerAccount"          binding:"required" validate:"eth_address"`
+	ChallengerAccount        string                    `json:"challengerAccount,omitempty"`
+	EnableFaultProof         bool                      `json:"enableFaultProof"`
 	RegisterCandidate        bool                      `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                      `json:"reuseDeployment"`

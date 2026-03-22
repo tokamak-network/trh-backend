@@ -59,6 +59,8 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 			"sequencerAccount":         request.SequencerAccount,
 			"batcherAccount":           request.BatcherAccount,
 			"proposerAccount":          request.ProposerAccount,
+			"challengerAccount":        request.ChallengerAccount,
+			"enableFaultProof":         request.EnableFaultProof,
 		}
 		bytes, err = json.Marshal(immConfig)
 		if err != nil {

@@ -29,8 +29,8 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		}, nil
 	}
 
-	// 2. Derive 4 role accounts from seed phrase
-	adminKey, sequencerKey, batcherKey, proposerKey, err := DeriveRoleAccounts(req.SeedPhrase)
+	// 2. Derive 5 role accounts from seed phrase
+	adminKey, sequencerKey, batcherKey, proposerKey, challengerKey, err := DeriveRoleAccounts(req.SeedPhrase)
 	// Clear seed phrase from memory immediately after derivation
 	req.SeedPhrase = ""
 	if err != nil {
@@ -122,6 +122,8 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		SequencerAccount:         utils.TrimPrivateKey(sequencerKey),
 		BatcherAccount:           utils.TrimPrivateKey(batcherKey),
 		ProposerAccount:          utils.TrimPrivateKey(proposerKey),
+		ChallengerAccount:        utils.TrimPrivateKey(challengerKey),
+		EnableFaultProof:         true,
 		AwsAccessKey:             req.AwsAccessKey,
 		AwsSecretAccessKey:       req.AwsSecretKey,
 		AwsRegion:                req.AwsRegion,

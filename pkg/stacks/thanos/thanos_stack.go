@@ -124,7 +124,7 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		SequencerPrivateKey:  req.SequencerAccount,
 		BatcherPrivateKey:    req.BatcherAccount,
 		ProposerPrivateKey:   req.ProposerAccount,
-		ChallengerPrivateKey: "", // TODO: enable challenger in the future when we support fp
+		ChallengerPrivateKey: req.ChallengerAccount,
 	}
 
 	contractDeploymentInput := thanosStack.DeployContractsInput{
@@ -132,6 +132,7 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		ChainConfiguration: &chainConfig,
 		Operators:          &operators,
 		ReuseDeployment:    req.ReuseDeployment,
+		EnableFaultProof:   req.EnableFaultProof,
 		Preset:             req.Preset,
 		FeeToken:           req.FeeToken,
 	}

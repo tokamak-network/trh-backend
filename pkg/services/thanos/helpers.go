@@ -45,6 +45,8 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 			SequencerAccount:         config.SequencerAccount,
 			BatcherAccount:           config.BatcherAccount,
 			ProposerAccount:          config.ProposerAccount,
+			ChallengerAccount:        config.ChallengerAccount,
+			EnableFaultProof:         config.EnableFaultProof,
 			RegisterCandidate:        config.RegisterCandidate,
 			RegisterCandidateParams:  registerCandidateParams,
 			Preset:                   config.PresetID,
