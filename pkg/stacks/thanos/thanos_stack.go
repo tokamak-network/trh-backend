@@ -86,6 +86,9 @@ func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.Thano
 	deployInfraInput := &thanosStack.DeployInfraInput{
 		ChainName:   req.ChainName,
 		L1BeaconURL: req.L1BeaconUrl,
+		BackupConfig: &thanosStack.BackupConfig{
+			Enabled: false,
+		},
 	}
 
 	err := sdkClient.Deploy(ctx, consts.Local, deployInfraInput)
