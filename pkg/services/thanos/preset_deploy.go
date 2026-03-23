@@ -103,9 +103,9 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		}, nil
 	}
 
-	// 6. Determine reuseDeployment: testnet always true, mainnet uses request value (default true)
+	// 6. Determine reuseDeployment from request (default true for all networks).
 	reuseDeployment := true
-	if strings.EqualFold(string(req.Network), "Mainnet") && req.ReuseDeployment != nil {
+	if req.ReuseDeployment != nil {
 		reuseDeployment = *req.ReuseDeployment
 	}
 
