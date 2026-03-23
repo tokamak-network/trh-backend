@@ -51,6 +51,7 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 			RegisterCandidateParams:  registerCandidateParams,
 			Preset:                   config.PresetID,
 			FeeToken:                 config.FeeToken,
+			ReuseDeployment:          config.ReuseDeployment,
 		})
 		if err != nil {
 			return nil, err
