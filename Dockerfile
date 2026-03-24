@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     wget \
+    unzip \
     ca-certificates \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
