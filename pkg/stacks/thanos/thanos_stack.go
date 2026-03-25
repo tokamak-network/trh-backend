@@ -83,11 +83,16 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosAWSInfraRequest) error {
 	logger.Info("Deploying Local Infrastructure (Docker Compose)...")
 
+	backupEnabled := false
+	if req.BackupConfig != nil {
+		backupEnabled = req.BackupConfig.Enabled
+	}
+
 	deployInfraInput := &thanosStack.DeployInfraInput{
 		ChainName:   req.ChainName,
 		L1BeaconURL: req.L1BeaconUrl,
 		BackupConfig: &thanosStack.BackupConfig{
-			Enabled: false,
+			Enabled: backupEnabled,
 		},
 	}
 

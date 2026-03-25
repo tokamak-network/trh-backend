@@ -131,7 +131,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		RegisterCandidate:        registerCandidate,
 		ReuseDeployment:          reuseDeployment,
 		PresetID:                 req.PresetID,
-		FeeToken:                 strings.ToUpper(req.FeeToken),
+		FeeToken:                 resolvePresetFeeToken(req.FeeToken, def),
 		InfraProvider:            req.InfraProvider,
 	}
 	if backupEnabled {
@@ -187,6 +187,19 @@ func chainDefaultBool(defaults map[string]any, key string, fallback bool) bool {
 		return b
 	}
 	return fallback
+}
+
+// resolvePresetFeeToken returns the uppercased fee token from the request,
+// falling back to the first available fee token in the preset definition when empty.
+func resolvePresetFeeToken(token string, def *presets.Definition) string {
+	token = strings.TrimSpace(strings.ToUpper(token))
+	if token != "" {
+		return token
+	}
+	if len(def.AvailableFeeTokens) > 0 {
+		return strings.ToUpper(def.AvailableFeeTokens[0])
+	}
+	return "TON"
 }
 
 // anyToInt converts common numeric types to int.
