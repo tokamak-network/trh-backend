@@ -44,7 +44,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 	l2BlockTime := chainDefaultInt(def.ChainDefaults, "l2BlockTime", 2)
 	batchFreq := chainDefaultInt(def.ChainDefaults, "batchSubmissionFrequency", 1800)
 	outputFreq := chainDefaultInt(def.ChainDefaults, "outputRootFrequency", 1800)
-	challengePeriod := chainDefaultInt(def.ChainDefaults, "challengePeriod", 10)
+	challengePeriod := chainDefaultInt(def.ChainDefaults, "challengePeriod", 12)
 	registerCandidate := chainDefaultBool(def.ChainDefaults, "registerCandidate", false)
 	backupEnabled := chainDefaultBool(def.ChainDefaults, "backupEnabled", false)
 
@@ -129,6 +129,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		AwsRegion:                req.AwsRegion,
 		ChainName:                req.ChainName,
 		RegisterCandidate:        registerCandidate,
+		RegisterCandidateParams:  defaultRegisterCandidateParams(registerCandidate),
 		ReuseDeployment:          reuseDeployment,
 		PresetID:                 req.PresetID,
 		FeeToken:                 resolvePresetFeeToken(req.FeeToken, def),
@@ -215,4 +216,17 @@ func anyToInt(v any) (int, bool) {
 		return int(val), true
 	}
 	return 0, false
+}
+
+// defaultRegisterCandidateParams returns sensible defaults when registerCandidate
+// is enabled by a preset but no explicit params were provided.
+func defaultRegisterCandidateParams(enabled bool) *dtos.RegisterCandidateRequest {
+	if !enabled {
+		return nil
+	}
+	return &dtos.RegisterCandidateRequest{
+		Amount:   0,
+		Memo:     "Deployed via TRH preset",
+		NameInfo: "",
+	}
 }
