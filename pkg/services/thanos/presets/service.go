@@ -2,6 +2,54 @@ package presets
 
 import "fmt"
 
+// opPredeploys contains the base OP Stack predeploy contracts included in every preset.
+// Addresses follow the 0x4200000000000000000000000000000000000xxx convention.
+var opPredeploys = []string{
+	"L2ToL1MessagePasser",       // 0x4200000000000000000000000000000000000016
+	"L2CrossDomainMessenger",    // 0x4200000000000000000000000000000000000007
+	"L2StandardBridge",          // 0x4200000000000000000000000000000000000010
+	"L2ERC721Bridge",            // 0x4200000000000000000000000000000000000014
+	"OptimismMintableERC20Factory", // 0x4200000000000000000000000000000000000012
+	"OptimismMintableERC721Factory", // 0x4200000000000000000000000000000000000017
+	"L1Block",                   // 0x4200000000000000000000000000000000000015
+	"GasPriceOracle",            // 0x420000000000000000000000000000000000000F
+	"SequencerFeeVault",         // 0x4200000000000000000000000000000000000011
+	"BaseFeeVault",              // 0x4200000000000000000000000000000000000019
+	"L1FeeVault",                // 0x420000000000000000000000000000000000001A
+	"SchemaRegistry",            // 0x4200000000000000000000000000000000000020
+	"EAS",                       // 0x4200000000000000000000000000000000000021
+}
+
+// defiPredeploys adds DeFi-specific contracts on top of opPredeploys.
+var defiPredeploys = append(opPredeploys,
+	"UniswapV3Factory",          // 0x4200000000000000000000000000000000000100
+	"UniswapV3SwapRouter",       // 0x4200000000000000000000000000000000000101
+	"UniswapV3NonfungiblePositionManager", // 0x4200000000000000000000000000000000000102
+	"USDCBridge",                // 0x4200000000000000000000000000000000000110
+	"WrappedETH",                // 0x4200000000000000000000000000000000000111
+)
+
+// gamingPredeploys adds gaming-specific contracts on top of opPredeploys.
+var gamingPredeploys = append(opPredeploys,
+	"VRF",                       // 0x4200000000000000000000000000000000000200
+	"VRFCoordinator",            // 0x4200000000000000000000000000000000000201
+	"EntryPoint",                // 0x4200000000000000000000000000000000000210 (ERC-4337 AA)
+	"Paymaster",                 // 0x4200000000000000000000000000000000000211
+)
+
+// fullPredeploys combines DeFi and Gaming additions on top of opPredeploys.
+var fullPredeploys = append(opPredeploys,
+	"UniswapV3Factory",
+	"UniswapV3SwapRouter",
+	"UniswapV3NonfungiblePositionManager",
+	"USDCBridge",
+	"WrappedETH",
+	"VRF",
+	"VRFCoordinator",
+	"EntryPoint",
+	"Paymaster",
+)
+
 // DefaultPresetDefinitions holds all backend-owned preset definitions.
 var DefaultPresetDefinitions = map[string]Definition{
 	"general": {
@@ -10,16 +58,12 @@ var DefaultPresetDefinitions = map[string]Definition{
 		Description: "Baseline rollup preset for standard application workloads.",
 		Modules: map[string]bool{
 			"bridge":        true,
-			"blockExplorer": false,
+			"blockExplorer": true,
 			"monitoring":    false,
 			"crossTrade":    false,
 			"uptimeService": false,
 		},
-		GenesisPredeploys: []string{
-			"L2StandardBridge",
-			"L2CrossDomainMessenger",
-			"OptimismMintableERC20Factory",
-		},
+		GenesisPredeploys: opPredeploys,
 		EstimatedTime: map[string]string{
 			"deploy":      "20-30m",
 			"fundingWait": "5-15m",
@@ -28,14 +72,14 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"l2BlockTime":              2,
 			"batchSubmissionFrequency": 1800,
 			"outputRootFrequency":      1800,
-			"challengePeriod":          86400,
+			"challengePeriod":          12,
 			"registerCandidate":        false,
 			"backupEnabled":            false,
 		},
 		HelmValues: map[string]any{
 			"bridge.enabled":        true,
 			"monitoring.enabled":    false,
-			"blockscout.enabled":    false,
+			"blockscout.enabled":    true,
 			"crossTrade.enabled":    false,
 			"uptimeService.enabled": false,
 		},
@@ -59,11 +103,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"crossTrade":    false,
 			"uptimeService": true,
 		},
-		GenesisPredeploys: []string{
-			"L2StandardBridge",
-			"L2CrossDomainMessenger",
-			"OptimismMintableERC20Factory",
-		},
+		GenesisPredeploys: defiPredeploys,
 		EstimatedTime: map[string]string{
 			"deploy":      "30-40m",
 			"fundingWait": "5-15m",
@@ -72,7 +112,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"l2BlockTime":              2,
 			"batchSubmissionFrequency": 900,
 			"outputRootFrequency":      900,
-			"challengePeriod":          86400,
+			"challengePeriod":          12,
 			"registerCandidate":        false,
 			"backupEnabled":            true,
 		},
@@ -101,11 +141,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"crossTrade":    true,
 			"uptimeService": true,
 		},
-		GenesisPredeploys: []string{
-			"L2StandardBridge",
-			"L2CrossDomainMessenger",
-			"OptimismMintableERC20Factory",
-		},
+		GenesisPredeploys: gamingPredeploys,
 		EstimatedTime: map[string]string{
 			"deploy":      "35-45m",
 			"fundingWait": "5-15m",
@@ -114,7 +150,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"l2BlockTime":              2,
 			"batchSubmissionFrequency": 300,
 			"outputRootFrequency":      600,
-			"challengePeriod":          86400,
+			"challengePeriod":          12,
 			"registerCandidate":        false,
 			"backupEnabled":            true,
 		},
@@ -143,11 +179,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"crossTrade":    true,
 			"uptimeService": true,
 		},
-		GenesisPredeploys: []string{
-			"L2StandardBridge",
-			"L2CrossDomainMessenger",
-			"OptimismMintableERC20Factory",
-		},
+		GenesisPredeploys: fullPredeploys,
 		EstimatedTime: map[string]string{
 			"deploy":      "40-50m",
 			"fundingWait": "5-15m",
@@ -156,7 +188,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"l2BlockTime":              2,
 			"batchSubmissionFrequency": 600,
 			"outputRootFrequency":      600,
-			"challengePeriod":          86400,
+			"challengePeriod":          12,
 			"registerCandidate":        true,
 			"backupEnabled":            true,
 		},

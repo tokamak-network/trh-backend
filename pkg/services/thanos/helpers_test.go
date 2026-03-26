@@ -54,6 +54,7 @@ func TestDeploymentService_LocalTestnet_SkipsAWS(t *testing.T) {
 		L1RpcUrl:       "https://sepolia.example.com",
 		L1BeaconUrl:    "https://beacon.sepolia.example.com",
 		KubeconfigPath: "/tmp/test.kubeconfig",
+		InfraProvider:  "local",
 	}
 
 	deployments, err := svc.getThanosStackDeployments(stackId, config)
@@ -61,20 +62,15 @@ func TestDeploymentService_LocalTestnet_SkipsAWS(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	// Main uses unified deploy-aws-infra step with InfraProvider field
+	hasInfra := false
 	for _, d := range deployments {
 		if d.Step == constants.DeployInfraStep {
-			t.Errorf("deploy-aws-infra step should NOT be created for LocalTestnet, but found it")
+			hasInfra = true
 		}
 	}
-
-	hasLocalInfra := false
-	for _, d := range deployments {
-		if d.Step == constants.DeployLocalInfraStep {
-			hasLocalInfra = true
-		}
-	}
-	if !hasLocalInfra {
-		t.Error("deploy-local-infra step should be created for LocalTestnet, but was not found")
+	if !hasInfra {
+		t.Error("infra step should be created for LocalTestnet")
 	}
 }
 

@@ -10,6 +10,7 @@ const (
 	IntegrationTypeBlockExplorer       IntegrationType = "block-explorer"
 	IntegrationTypeMonitoring          IntegrationType = "monitoring"
 	IntegrationTypeUptimeService       IntegrationType = "system-pulse"
+	IntegrationTypeDRB                 IntegrationType = "drb"
 )
 
 func (i IntegrationType) String() string {

@@ -10,4 +10,4 @@ tokamak-thanos-stack
 logs
 
 .idea
-.vscode
+.vscode.worktrees/

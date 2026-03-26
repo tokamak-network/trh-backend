@@ -20,7 +20,7 @@ fi
 
 OS_TYPE=$(uname)
 
-TOTAL_STEPS=12
+TOTAL_STEPS=8
 STEP=1
 SUCCESS="false"
 
@@ -101,81 +101,7 @@ fi
 STEP=$((STEP + 1))
 echo
 
-# 4. Install Terraform
-echo "[$STEP/$TOTAL_STEPS] Installing Terraform..."
-if command -v terraform &> /dev/null && current_version=$(terraform --version | grep -oP "v\K[0-9]+\.[0-9]+") && (( $(echo "$current_version >= 1.1" | bc -l) )); then
-    echo "Terraform v$current_version is already installed"
-else
-    echo "Installing Terraform..."
-    sudo apt-get install -y gnupg software-properties-common curl
-    curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
-    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-    sudo apt-get update && sudo apt-get install -y terraform
-fi
-STEP=$((STEP + 1))
-echo
-
-# 5. Install AWS CLI
-echo "[$STEP/$TOTAL_STEPS] Installing AWS CLI..."
-if command -v aws &> /dev/null && version=$(aws --version | cut -d/ -f2 | cut -d' ' -f1) && [[ $version == 2* ]]; then
-    echo "AWS CLI v2 is already installed (version $version)"
-else
-    echo "Installing AWS CLI v2..."
-    if ! command -v unzip &> /dev/null; then
-        sudo apt-get install -y unzip
-    fi
-    if [ "$ARCH" = "arm64" ]; then
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
-    else
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-    fi
-    unzip awscliv2.zip
-    sudo ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
-    rm -rf aws awscliv2.zip
-fi
-STEP=$((STEP + 1))
-echo
-
-# 6. Install Helm
-echo "[$STEP/$TOTAL_STEPS] Installing Helm..."
-if command -v helm &> /dev/null; then
-    echo "Helm is already installed"
-else
-    echo "Installing Helm..."
-    curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-    chmod 700 get_helm.sh
-    ./get_helm.sh
-    rm get_helm.sh
-fi
-STEP=$((STEP + 1))
-echo
-
-# 7. Install kubectl
-echo "[$STEP/$TOTAL_STEPS] Installing kubectl..."
-if command -v kubectl &> /dev/null; then
-    echo "kubectl is already installed"
-else
-    echo "Installing kubectl..."
-    if [[ "$ARCH" == "arm64" ]]; then
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/arm64/kubectl"
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/arm64/kubectl.sha256"
-    else
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
-    fi
-    if echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check; then
-        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-        rm kubectl kubectl.sha256
-    else
-        echo "kubectl checksum validation failed"
-        rm kubectl kubectl.sha256
-        exit 1
-    fi
-fi
-STEP=$((STEP + 1))
-echo
-
-# 8. Install Node.js
+# 4. Install Node.js
 echo "[$STEP/$TOTAL_STEPS] Installing Node.js (v20.16.0)..."
 current_node_version=$(node -v 2>/dev/null)
 if [[ "$current_node_version" != "v20.16.0" ]]; then
@@ -211,7 +137,7 @@ fi
 STEP=$((STEP + 1))
 echo
 
-# 9. Install Pnpm
+# 5. Install Pnpm
 echo "[$STEP/$TOTAL_STEPS] Installing Pnpm..."
 export PATH="$HOME/.local/share/pnpm:$PATH"
 if ! command -v pnpm &> /dev/null; then
@@ -235,7 +161,7 @@ fi
 STEP=$((STEP + 1))
 echo
 
-# 10. Verify npx availability
+# 6. Verify npx availability
 echo "[$STEP/$TOTAL_STEPS] Verifying npx availability..."
 # Add npm global bin to PATH for npx access
 export PATH="$PATH:$(npm config get prefix)/bin"
@@ -274,7 +200,7 @@ fi
 STEP=$((STEP + 1))
 echo
 
-# 11. Install Foundry
+# 7. Install Foundry
 echo "[$STEP/$TOTAL_STEPS] Installing Foundry..."
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then
@@ -316,7 +242,7 @@ fi
 STEP=$((STEP + 1))
 echo
 
-# 12. Install Go
+# 8. Install Go
 echo "[$STEP/$TOTAL_STEPS] Installing Go (v1.24.11)..."
 export PATH="$PATH:/usr/local/go/bin"
 
@@ -427,10 +353,6 @@ check_command_version gcc "" "gcc --version"
 check_command_version node "v20.16.0" "node -v"
 check_command_version pnpm "" "pnpm --version"
 check_command_version npx "" "npx --version"
-check_command_version terraform "" "terraform --version"
-check_command_version aws "" "aws --version"
-check_command_version helm "" "helm version"
-check_command_version kubectl "" "kubectl version --client"
 check_command_version forge "" "forge --version"
 check_command_version cast "" "cast --version"
 check_command_version anvil "" "anvil --version"

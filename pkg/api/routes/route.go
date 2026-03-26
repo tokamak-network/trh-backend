@@ -183,8 +183,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 	{
 		// Stack management operations
 		adminRoutes.POST("/validate-deployment", handler.Validate)
-		adminRoutes.POST("/derive-keys", handler.DeriveKeys)
-		adminRoutes.POST("/check-account-balances", handler.CheckAccountBalances)
+		adminRoutes.POST("/preset-deploy", handler.PresetDeploy)
 		adminRoutes.POST("", handler.Deploy)
 		adminRoutes.DELETE("/:id", handler.Terminate)
 		adminRoutes.PUT("/:id", handler.UpdateNetwork)
@@ -237,6 +236,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		// Preset routes — must be registered before /:id to avoid path collision
 		authenticatedRoutes.GET("/presets", handler.ListPresets)
 		authenticatedRoutes.GET("/presets/:presetId", handler.GetPresetByID)
+		authenticatedRoutes.GET("/preset-deploy/:deploymentId/funding", handler.GetPresetFundingStatus)
 
 		// Read-only operations
 		authenticatedRoutes.GET("", handler.GetAllStacks)

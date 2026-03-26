@@ -3,6 +3,7 @@ package dtos
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/mail"
 	"regexp"
 
@@ -64,6 +65,8 @@ type DeployThanosRequest struct {
 	SequencerAccount         string                     `json:"sequencerAccount,omitempty"`
 	BatcherAccount           string                     `json:"batcherAccount,omitempty"`
 	ProposerAccount          string                     `json:"proposerAccount,omitempty"`
+	ChallengerAccount        string                     `json:"challengerAccount,omitempty"`
+	EnableFaultProof         bool                       `json:"enableFaultProof"`
 	AwsAccessKey             string                     `json:"awsAccessKey,omitempty"`
 	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey,omitempty"`
 	AwsRegion                string                     `json:"awsRegion,omitempty"`
@@ -78,8 +81,9 @@ type DeployThanosRequest struct {
 	// Preset fields (optional)
 	PresetID        string `json:"presetId,omitempty"`
 	FeeToken        string `json:"feeToken,omitempty"`        // "TON", "ETH", "USDT", "USDC"
-	SeedPhrase      string `json:"seedPhrase,omitempty"`      // Zeroed before DB persist; used for key derivation
-	BIP39Passphrase string `json:"bip39Passphrase,omitempty"` // Optional extra passphrase for BIP39 derivation
+	SeedPhrase      string `json:"seedPhrase,omitempty"`
+	BIP39Passphrase string `json:"bip39Passphrase,omitempty"`
+	InfraProvider   string `json:"infraProvider,omitempty"` // "aws" or "local"
 }
 
 func (request *DeployThanosRequest) Validate() error {
@@ -211,6 +215,8 @@ type DeployL1ContractsRequest struct {
 	SequencerAccount         string                    `json:"sequencerAccount"         binding:"required" validate:"eth_address"`
 	BatcherAccount           string                    `json:"batcherAccount"           binding:"required" validate:"eth_address"`
 	ProposerAccount          string                    `json:"proposerAccount"          binding:"required" validate:"eth_address"`
+	ChallengerAccount        string                    `json:"challengerAccount,omitempty"`
+	EnableFaultProof         bool                      `json:"enableFaultProof"`
 	RegisterCandidate        bool                      `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                      `json:"reuseDeployment"`
@@ -221,9 +227,10 @@ type DeployL1ContractsRequest struct {
 }
 
 type DeployThanosAWSInfraRequest struct {
-	ChainName    string        `json:"chainName"          binding:"required"`
-	L1BeaconUrl  string        `json:"l1BeaconUrl"        binding:"required" validate:"url"`
-	BackupConfig *BackupConfig `json:"backupConfig,omitempty"` // Backup configuration
+	ChainName     string        `json:"chainName"      binding:"required"`
+	L1BeaconUrl   string        `json:"l1BeaconUrl"    binding:"required" validate:"url"`
+	BackupConfig  *BackupConfig `json:"backupConfig,omitempty"`
+	InfraProvider string        `json:"infraProvider"` // "aws" or "local"
 }
 
 type InstallBlockExplorerRequest struct {
@@ -545,6 +552,52 @@ func (r *UpdateTelegramConfigRequest) Validate() error {
 
 type InstallUptimeServiceRequest struct {
 	// Empty request - config is retrieved from SDK
+}
+
+// PresetFieldOverride allows overriding a single overridable field in a preset deployment.
+type PresetFieldOverride struct {
+	Field string `json:"field"`
+	Value any    `json:"value"`
+}
+
+// PresetDeployRequest is the simplified request body for the preset-deploy endpoint.
+// Callers supply a preset ID, seed phrase (for account derivation), and infrastructure
+// credentials. Role accounts are derived automatically via BIP44 HD wallet paths.
+// For infraProvider="local", AWS credentials are not required.
+type PresetDeployRequest struct {
+	PresetID      string                     `json:"presetId"      binding:"required"`
+	ChainName     string                     `json:"chainName"     binding:"required"`
+	Network       entities.DeploymentNetwork `json:"network"       binding:"required"`
+	SeedPhrase    string                     `json:"seedPhrase"    binding:"required"`
+	InfraProvider string                     `json:"infraProvider" binding:"required"`
+	AwsAccessKey  string                     `json:"awsAccessKey"`
+	AwsSecretKey  string                     `json:"awsSecretKey"`
+	AwsRegion     string                     `json:"awsRegion"`
+	L1RpcUrl      string                     `json:"l1RpcUrl"      binding:"required"`
+	L1BeaconUrl   string                     `json:"l1BeaconUrl"   binding:"required"`
+	FeeToken         string                     `json:"feeToken"`
+	ReuseDeployment  *bool                      `json:"reuseDeployment,omitempty"`
+	Overrides        []PresetFieldOverride      `json:"overrides,omitempty"`
+}
+
+// Validate checks provider-specific required fields.
+func (r *PresetDeployRequest) ValidateProvider() error {
+	switch r.InfraProvider {
+	case "aws":
+		if r.AwsAccessKey == "" || r.AwsSecretKey == "" || r.AwsRegion == "" {
+			return fmt.Errorf("awsAccessKey, awsSecretKey, and awsRegion are required for aws provider")
+		}
+		if r.Network == "Mainnet" {
+			// Mainnet is only supported on AWS — no additional check needed here
+		}
+	case "local":
+		if r.Network == "Mainnet" {
+			return fmt.Errorf("local deployment is not supported for Mainnet")
+		}
+	default:
+		return fmt.Errorf("invalid infraProvider %q: must be \"aws\" or \"local\"", r.InfraProvider)
+	}
+	return nil
 }
 
 type ValidateDeploymentRequest struct {

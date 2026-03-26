@@ -1,5 +1,6 @@
 package consts
 
 const (
-	AWS = "aws"
+	AWS   = "aws"
+	Local = "local"
 )

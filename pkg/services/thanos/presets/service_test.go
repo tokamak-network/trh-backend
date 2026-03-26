@@ -120,23 +120,97 @@ func TestPresetDefinitions_OverridableFieldsNotEmpty(t *testing.T) {
 }
 
 func TestPresetDefinitions_GenesisPredeploys(t *testing.T) {
-	expectedPredeploys := []string{
-		"L2StandardBridge",
+	// Every preset must include the base OP Stack contracts.
+	baseContracts := []string{
+		"L2ToL1MessagePasser",
 		"L2CrossDomainMessenger",
-		"OptimismMintableERC20Factory",
+		"L2StandardBridge",
+		"L1Block",
+		"GasPriceOracle",
+	}
+
+	// DeFi-specific contracts expected in "defi" and "full" presets.
+	defiContracts := []string{
+		"UniswapV3Factory",
+		"UniswapV3SwapRouter",
+		"USDCBridge",
+	}
+
+	// Gaming-specific contracts expected in "gaming" and "full" presets.
+	gamingContracts := []string{
+		"VRF",
+		"VRFCoordinator",
+		"EntryPoint",
+		"Paymaster",
+	}
+
+	containsAll := func(predeploys []string, required []string) bool {
+		set := make(map[string]struct{}, len(predeploys))
+		for _, p := range predeploys {
+			set[p] = struct{}{}
+		}
+		for _, r := range required {
+			if _, ok := set[r]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+
+	containsAny := func(predeploys []string, names []string) bool {
+		set := make(map[string]struct{}, len(predeploys))
+		for _, p := range predeploys {
+			set[p] = struct{}{}
+		}
+		for _, n := range names {
+			if _, ok := set[n]; ok {
+				return true
+			}
+		}
+		return false
 	}
 
 	svc := presets.NewService()
 	for _, def := range svc.ListAll() {
-		if len(def.GenesisPredeploys) != len(expectedPredeploys) {
-			t.Errorf("preset %q: expected %d genesis predeploys, got %d",
-				def.ID, len(expectedPredeploys), len(def.GenesisPredeploys))
+		if len(def.GenesisPredeploys) == 0 {
+			t.Errorf("preset %q: GenesisPredeploys is empty", def.ID)
 			continue
 		}
-		for i, p := range expectedPredeploys {
-			if def.GenesisPredeploys[i] != p {
-				t.Errorf("preset %q: predeploy[%d] expected %q, got %q",
-					def.ID, i, p, def.GenesisPredeploys[i])
+
+		// All presets must include base OP Stack contracts.
+		if !containsAll(def.GenesisPredeploys, baseContracts) {
+			t.Errorf("preset %q: missing one or more base OP Stack predeploys", def.ID)
+		}
+
+		switch def.ID {
+		case "general":
+			// General should NOT include DeFi or Gaming extras.
+			if containsAny(def.GenesisPredeploys, defiContracts) {
+				t.Errorf("preset %q: should not contain DeFi-specific predeploys", def.ID)
+			}
+			if containsAny(def.GenesisPredeploys, gamingContracts) {
+				t.Errorf("preset %q: should not contain Gaming-specific predeploys", def.ID)
+			}
+		case "defi":
+			if !containsAll(def.GenesisPredeploys, defiContracts) {
+				t.Errorf("preset %q: missing DeFi-specific predeploys", def.ID)
+			}
+			if containsAny(def.GenesisPredeploys, gamingContracts) {
+				t.Errorf("preset %q: should not contain Gaming-specific predeploys", def.ID)
+			}
+		case "gaming":
+			if !containsAll(def.GenesisPredeploys, gamingContracts) {
+				t.Errorf("preset %q: missing Gaming-specific predeploys", def.ID)
+			}
+			if containsAny(def.GenesisPredeploys, defiContracts) {
+				t.Errorf("preset %q: should not contain DeFi-specific predeploys", def.ID)
+			}
+		case "full":
+			if !containsAll(def.GenesisPredeploys, defiContracts) {
+				t.Errorf("preset %q: missing DeFi-specific predeploys", def.ID)
+			}
+			if !containsAll(def.GenesisPredeploys, gamingContracts) {
+				t.Errorf("preset %q: missing Gaming-specific predeploys", def.ID)
 			}
 		}
 	}

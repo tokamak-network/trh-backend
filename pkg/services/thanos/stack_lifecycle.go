@@ -62,6 +62,8 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 			"sequencerAccount":         request.SequencerAccount,
 			"batcherAccount":           request.BatcherAccount,
 			"proposerAccount":          request.ProposerAccount,
+			"challengerAccount":        request.ChallengerAccount,
+			"enableFaultProof":         request.EnableFaultProof,
 		}
 		bytes, err = json.Marshal(immConfig)
 		if err != nil {
@@ -120,15 +122,24 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 				"crossTrade":    enum.IntegrationTypeCrossTrade,
 				"blockExplorer": enum.IntegrationTypeBlockExplorer,
 				"monitoring":    enum.IntegrationTypeMonitoring,
+				"drb":           enum.IntegrationTypeDRB,
 			}
 			// Modules that require user configuration before installation
 			deferredModules := map[string]bool{
 				"blockExplorer": true,
 				"monitoring":    true,
 			}
+			// Modules that are not supported on local deployments
+			localUnsupported := map[string]bool{
+				"crossTrade": true, // requires additional contract deployment on AWS
+			}
+			isLocal := request.InfraProvider == "local"
 			for module, enabled := range def.Modules {
 				if !enabled || module == "bridge" {
 					continue // bridge is always created above
+				}
+				if isLocal && localUnsupported[module] {
+					continue // skip modules not supported on local deployment
 				}
 				intType, ok := moduleToType[module]
 				if !ok {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -379,7 +380,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 		sdkClient, err := thanos.NewThanosSDKClient(
 			ctx,
 			deployment.LogPath,
-			string(stack.Network),
+			strings.ToLower(string(stack.Network)),
 			stack.DeploymentPath,
 			deploymentConfig.RegisterCandidate,
 			deploymentConfig.AwsAccessKey,
@@ -437,53 +438,6 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				Status:       entities.DeploymentRunStatusSuccess,
 			}
 
-		case constants.DeployLocalInfraStep:
-			// Create a LocalTestnet-specific SDK client that wires runners with the kubeconfig.
-			// The generic sdkClient created above has no kubeconfig and cannot reach the kind cluster.
-			localClient, err := thanos.NewLocalTestnetSDKClient(
-				ctx,
-				deployment.LogPath,
-				stack.DeploymentPath,
-				deploymentConfig.KubeconfigPath,
-			)
-			if err != nil {
-				logger.Error("failed to create LocalTestnet SDK client",
-					zap.String("deploymentId", deployment.ID.String()),
-					zap.Error(err))
-				statusChan <- entities.DeploymentStatusWithID{
-					DeploymentID: deployment.ID,
-					Status:       entities.DeploymentRunStatusFailed,
-				}
-				return err
-			}
-
-			// Start log ingestion for this deployment step
-			ingestCtx, cancel := context.WithCancel(ctx)
-			defer cancel()
-			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
-
-			if err := thanos.DeployLocalInfrastructure(ctx, localClient, &deploymentConfig); err != nil {
-				if errors.Is(err, context.Canceled) {
-					logger.Info("deployment cancelled",
-						zap.String("deploymentId", deployment.ID.String()),
-						zap.String("step", deployment.Step))
-					return err
-				}
-				logger.Error("deployment failed",
-					zap.String("deploymentId", deployment.ID.String()),
-					zap.String("step", deployment.Step),
-					zap.Error(err))
-				statusChan <- entities.DeploymentStatusWithID{
-					DeploymentID: deployment.ID,
-					Status:       entities.DeploymentRunStatusFailed,
-				}
-				return err
-			}
-			statusChan <- entities.DeploymentStatusWithID{
-				DeploymentID: deployment.ID,
-				Status:       entities.DeploymentRunStatusSuccess,
-			}
-
 		case "deploy-l1-contracts":
 			var deployL1ContractsConfig dtos.DeployL1ContractsRequest
 			if err := json.Unmarshal(deployment.Config, &deployL1ContractsConfig); err != nil {
@@ -518,8 +472,8 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				Status:       entities.DeploymentRunStatusSuccess,
 			}
 		case "deploy-aws-infra":
-			var deployAwsInfraConfig dtos.DeployThanosAWSInfraRequest
-			if err := json.Unmarshal(deployment.Config, &deployAwsInfraConfig); err != nil {
+			var deployInfraConfig dtos.DeployThanosAWSInfraRequest
+			if err := json.Unmarshal(deployment.Config, &deployInfraConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
 			}
 
@@ -528,23 +482,28 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 			defer cancel()
 			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
 
-			if err := thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployAwsInfraConfig); err != nil {
-				if errors.Is(err, context.Canceled) {
+			var infraErr error
+			if deployInfraConfig.InfraProvider == "local" {
+				infraErr = thanos.DeployLocalInfrastructure(ctx, sdkClient, &deployInfraConfig)
+			} else {
+				infraErr = thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployInfraConfig)
+			}
+			if infraErr != nil {
+				if errors.Is(infraErr, context.Canceled) {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
 						zap.String("step", deployment.Step))
-					// Keep run status as-is on cancel; no explicit Stopped state in run status
-					return err
+					return infraErr
 				}
 				logger.Error("deployment failed",
 					zap.String("deploymentId", deployment.ID.String()),
 					zap.String("step", deployment.Step),
-					zap.Error(err))
+					zap.Error(infraErr))
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentRunStatusFailed,
 				}
-				return err
+				return infraErr
 			}
 			statusChan <- entities.DeploymentStatusWithID{
 				DeploymentID: deployment.ID,

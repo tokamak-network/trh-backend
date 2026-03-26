@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,10 +10,21 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 )
+
+// privateKeyToAddress derives the Ethereum address from a hex-encoded private key.
+func privateKeyToAddress(hexKey string) (common.Address, error) {
+	privateKey, err := crypto.HexToECDSA(hexKey)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("invalid private key: %w", err)
+	}
+	publicKey := privateKey.Public().(*ecdsa.PublicKey)
+	return crypto.PubkeyToAddress(*publicKey), nil
+}
 
 // EthBalanceClient is the minimal interface for querying on-chain balances.
 type EthBalanceClient interface {
@@ -85,17 +97,24 @@ func (s *ThanosStackDeploymentService) GetFundingStatus(
 		return nil, fmt.Errorf("no funding requirements defined for network %q", stack.Network)
 	}
 
-	roleAddresses := map[string]string{
+	// Config stores private keys (not addresses). Derive addresses from them.
+	roleKeys := map[string]string{
 		"admin":     cfg.AdminAccount,
 		"sequencer": cfg.SequencerAccount,
 		"batcher":   cfg.BatcherAccount,
 		"proposer":  cfg.ProposerAccount,
 	}
 
-	for role, addr := range roleAddresses {
-		if addr == "" {
-			return nil, errors.New("missing address for role: " + role)
+	roleAddresses := make(map[string]string, len(roleKeys))
+	for role, key := range roleKeys {
+		if key == "" {
+			return nil, errors.New("missing private key for role: " + role)
 		}
+		addr, err := privateKeyToAddress(key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive address for %s: %w", role, err)
+		}
+		roleAddresses[role] = addr.Hex()
 	}
 
 	client, err := s.ethClientFactory(ctx, cfg.L1RpcUrl)

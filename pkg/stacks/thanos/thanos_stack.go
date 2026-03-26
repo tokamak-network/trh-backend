@@ -70,7 +70,9 @@ func NewLocalTestnetSDKClient(
 
 	logger.Info("Initializing LocalTestnet Thanos SDK...")
 
-	s, err := thanosStack.NewLocalTestnetThanosStack(ctx, l, deploymentPath, kubeconfigPath)
+	// TODO: Replace with NewLocalTestnetThanosStack after SDK PR #213 merges.
+	// For now, use NewThanosStack with nil AWS config (skips AWS setup).
+	s, err := thanosStack.NewThanosStack(ctx, l, "LocalTestnet", false, deploymentPath, nil)
 	if err != nil {
 		logger.Errorf("Failed to create LocalTestnet thanos stack: %s", err)
 		return nil, err
@@ -109,22 +111,6 @@ func NewSDKClientForStack(
 	)
 }
 
-// DeployLocalInfrastructure deploys Thanos Stack Helm charts to a kind cluster.
-func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosRequest) error {
-	logger.Info("Deploying LocalTestnet infrastructure...")
-
-	err := sdkClient.DeployLocalInfrastructure(ctx, &thanosStack.DeployLocalInfraInput{
-		ChainName:   req.ChainName,
-		L1BeaconURL: req.L1BeaconUrl,
-	})
-	if err != nil {
-		return err
-	}
-
-	logger.Info("LocalTestnet infrastructure deployed successfully")
-	return nil
-}
-
 func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosAWSInfraRequest) error {
 	logger.Info("Deploying AWS Infrastructure...")
 
@@ -149,6 +135,30 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 
 	logger.Info("AWS Infrastructure deployed successfully")
 
+	return nil
+}
+
+func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosAWSInfraRequest) error {
+	logger.Info("Deploying Local Infrastructure (Docker Compose)...")
+
+	backupEnabled := false
+	if req.BackupConfig != nil {
+		backupEnabled = req.BackupConfig.Enabled
+	}
+
+	deployInfraInput := &thanosStack.DeployInfraInput{
+		ChainName:   req.ChainName,
+		L1BeaconURL: req.L1BeaconUrl,
+		BackupConfig: &thanosStack.BackupConfig{
+			Enabled: backupEnabled,
+		},
+	}
+
+	err := sdkClient.Deploy(ctx, consts.Local, deployInfraInput)
+	if err != nil {
+		return err
+	}
+	logger.Info("Local Infrastructure deployed successfully")
 	return nil
 }
 
@@ -180,7 +190,7 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		SequencerPrivateKey:  req.SequencerAccount,
 		BatcherPrivateKey:    req.BatcherAccount,
 		ProposerPrivateKey:   req.ProposerAccount,
-		ChallengerPrivateKey: "", // TODO: enable challenger in the future when we support fp
+		ChallengerPrivateKey: req.ChallengerAccount,
 	}
 
 	contractDeploymentInput := thanosStack.DeployContractsInput{
@@ -188,7 +198,7 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		ChainConfiguration: &chainConfig,
 		Operators:          &operators,
 		ReuseDeployment:    req.ReuseDeployment,
-		BuildOnly:          req.BuildOnly,
+		EnableFaultProof:   req.EnableFaultProof,
 		Preset:             req.Preset,
 		FeeToken:           req.FeeToken,
 	}

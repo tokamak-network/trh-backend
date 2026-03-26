@@ -68,50 +68,25 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 		})
 	}
 
-	if isLocalTarget(config.Network) {
-		// Local target: create deploy-local-infra step (kind + Helm, no AWS)
-		localInfraDeploymentID := uuid.New()
-		localInfraDeploymentLogPath := utils.GetLogPath(stackId, constants.DeployLocalInfraStep)
-		localInfraDeploymentConfig, err := json.Marshal(map[string]string{
-			"kubeconfigPath": config.KubeconfigPath,
-			"chainName":      config.ChainName,
-			"l1RpcUrl":       config.L1RpcUrl,
-			"l1BeaconUrl":    config.L1BeaconUrl,
-		})
-		if err != nil {
-			return nil, err
-		}
-		localInfraDeployment := &entities.DeploymentEntity{
-			ID:      localInfraDeploymentID,
-			StackID: &stackId,
-			Step:    constants.DeployLocalInfraStep,
-			Status:  entities.DeploymentRunStatusPending,
-			LogPath: localInfraDeploymentLogPath,
-			Config:  localInfraDeploymentConfig,
-		}
-		deployments = append(deployments, localInfraDeployment)
-	} else {
-		// Mainnet/Testnet: create deploy-aws-infra step
-		thanosInfrastructureDeploymentID := uuid.New()
-		thanosInfrastructureDeploymentLogPath := utils.GetLogPath(stackId, constants.DeployInfraStep)
-		thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
-			ChainName:    config.ChainName,
-			L1BeaconUrl:  config.L1BeaconUrl,
-			BackupConfig: config.BackupConfig,
-		})
-		if err != nil {
-			return nil, err
-		}
-		thanosInfrastructureDeployment := &entities.DeploymentEntity{
-			ID:      thanosInfrastructureDeploymentID,
-			StackID: &stackId,
-			Step:    constants.DeployInfraStep,
-			Status:  entities.DeploymentRunStatusPending,
-			LogPath: thanosInfrastructureDeploymentLogPath,
-			Config:  thanosInfrastructureDeploymentConfig,
-		}
-		deployments = append(deployments, thanosInfrastructureDeployment)
+	thanosInfrastructureDeploymentID := uuid.New()
+	thanosInfrastructureDeploymentLogPath := utils.GetLogPath(stackId, constants.DeployInfraStep)
+	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
+		ChainName:     config.ChainName,
+		L1BeaconUrl:   config.L1BeaconUrl,
+		BackupConfig:  config.BackupConfig,
+		InfraProvider: config.InfraProvider,
+	})
+	if err != nil {
+		return nil, err
 	}
+	deployments = append(deployments, &entities.DeploymentEntity{
+		ID:      thanosInfrastructureDeploymentID,
+		StackID: &stackId,
+		Step:    constants.DeployInfraStep,
+		Status:  entities.DeploymentRunStatusPending,
+		LogPath: thanosInfrastructureDeploymentLogPath,
+		Config:  thanosInfrastructureDeploymentConfig,
+	})
 
 	return deployments, nil
 }
@@ -128,8 +103,11 @@ func makeL1ContractsConfig(config *dtos.DeployThanosRequest, registerCandidatePa
 		SequencerAccount:         config.SequencerAccount,
 		BatcherAccount:           config.BatcherAccount,
 		ProposerAccount:          config.ProposerAccount,
+		ChallengerAccount:        config.ChallengerAccount,
+		EnableFaultProof:         config.EnableFaultProof,
 		RegisterCandidate:        config.RegisterCandidate,
 		RegisterCandidateParams:  registerCandidateParams,
+		ReuseDeployment:          config.ReuseDeployment,
 		BuildOnly:                buildOnly,
 		Preset:                   config.PresetID,
 		FeeToken:                 config.FeeToken,
