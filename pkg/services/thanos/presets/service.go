@@ -189,7 +189,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"batchSubmissionFrequency": 600,
 			"outputRootFrequency":      600,
 			"challengePeriod":          12,
-			"registerCandidate":        true,
+			"registerCandidate":        false,
 			"backupEnabled":            true,
 		},
 		HelmValues: map[string]any{
@@ -204,7 +204,6 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"batchSubmissionFrequency",
 			"outputRootFrequency",
 			"challengePeriod",
-			"registerCandidate",
 		},
 		AvailableFeeTokens: []string{"TON", "ETH", "USDT", "USDC"},
 	},
