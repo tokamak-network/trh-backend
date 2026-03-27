@@ -170,6 +170,18 @@ func ShowChainInformation(
 	return sdkClient.ShowInformation(ctx)
 }
 
+// BuildLocalChainInformation constructs chain information for local infra deployments
+// where K8s is not available. URLs use localhost ports defined in the local compose template.
+func BuildLocalChainInformation(deploymentPath string) *thanosTypes.ChainInformation {
+	return &thanosTypes.ChainInformation{
+		L2RpcUrl:       "http://localhost:8545",
+		BridgeUrl:      "http://localhost:3001",
+		BlockExplorer:  "http://localhost:4001",
+		MonitoringUrl:  "http://localhost:3002",
+		RollupFilePath: deploymentPath + "/tokamak-thanos/build/rollup.json",
+	}
+}
+
 func InstallBridge(
 	ctx context.Context,
 	sdkClient *thanosStack.ThanosStack,

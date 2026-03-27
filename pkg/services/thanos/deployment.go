@@ -16,6 +16,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
+	thanosSDKTypes "github.com/tokamak-network/trh-sdk/pkg/types"
 	"go.uber.org/zap"
 )
 
@@ -96,11 +97,17 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 		return
 	}
 
-	// Get chain information
-	chainInformation, err := thanos.ShowChainInformation(ctx, sdkClient)
-	if err != nil || chainInformation == nil {
-		logger.Error("failed to show chain information", zap.Error(err))
-		return
+	// Get chain information — local infra deployments don't have K8s, so build
+	// chain info directly from well-known localhost ports.
+	var chainInformation *thanosSDKTypes.ChainInformation
+	if stackConfig.InfraProvider == "local" {
+		chainInformation = thanos.BuildLocalChainInformation(stack.DeploymentPath)
+	} else {
+		chainInformation, err = thanos.ShowChainInformation(ctx, sdkClient)
+		if err != nil || chainInformation == nil {
+			logger.Error("failed to show chain information", zap.Error(err))
+			return
+		}
 	}
 
 	var layer1Name string
@@ -127,10 +134,6 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 	}
 
 	bridgeUrl := chainInformation.BridgeUrl
-	if bridgeUrl == "" {
-		logger.Error("bridge url is empty", zap.String("stackId", stackId.String()))
-		return
-	}
 
 	// bridgeIntegration
 	bridgeIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeBridge.String())
