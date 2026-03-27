@@ -349,6 +349,8 @@ github.com/tokamak-network/trh-sdk v1.0.4-0.20260326121629-a1cd62fdc842 h1:a7+gm
 github.com/tokamak-network/trh-sdk v1.0.4-0.20260326121629-a1cd62fdc842/go.mod h1:fWQIYXdewWjlZPdSSNhi9W1o/0HTBU5csjwNs4r2/nk=
 github.com/tokamak-network/trh-sdk v1.0.4-0.20260327061442-5683d8e30f71 h1:g4/PPOj6E0CphcBYOVNAr1gfDTfsVoR8IJrsRxuOj7Q=
 github.com/tokamak-network/trh-sdk v1.0.4-0.20260327061442-5683d8e30f71/go.mod h1:fWQIYXdewWjlZPdSSNhi9W1o/0HTBU5csjwNs4r2/nk=
+github.com/tokamak-network/trh-sdk v1.0.4-0.20260327090256-dd988cc306f1 h1:tDQ3d99svPDxO0715Avpu5dy7waNJgkfB3/IefJReuI=
+github.com/tokamak-network/trh-sdk v1.0.4-0.20260327090256-dd988cc306f1/go.mod h1:fWQIYXdewWjlZPdSSNhi9W1o/0HTBU5csjwNs4r2/nk=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/tyler-smith/go-bip32 v1.0.0 h1:sDR9juArbUgX+bO/iblgZnMPeWY1KZMUC2AFUJdv5KE=
