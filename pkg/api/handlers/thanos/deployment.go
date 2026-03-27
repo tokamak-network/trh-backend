@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tokamak-network/trh-backend/internal/keyderivation"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
@@ -104,6 +105,27 @@ func (h *ThanosDeploymentHandler) Deploy(c *gin.Context) {
 		}
 	} else {
 		request.RegisterCandidateParams = nil
+	}
+
+	// If a seed phrase is provided, derive operator private keys automatically.
+	if request.SeedPhrase != "" {
+		admin, seq, batcher, proposer, deriveErr := keyderivation.DeriveOperatorKeys(request.SeedPhrase, request.BIP39Passphrase)
+		if deriveErr != nil {
+			logger.Error("seed phrase key derivation failed", zap.Error(deriveErr))
+			c.JSON(http.StatusBadRequest, &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "seed phrase key derivation failed: " + deriveErr.Error(),
+			})
+			return
+		}
+		request.AdminAccount = admin.PrivateKey
+		request.SequencerAccount = seq.PrivateKey
+		request.BatcherAccount = batcher.PrivateKey
+		request.ProposerAccount = proposer.PrivateKey
+		// NOTE: Go strings are immutable; assignment to "" removes the reference but
+		// does not zero the underlying bytes. The memory is reclaimed on next GC.
+		request.SeedPhrase = ""
+		request.BIP39Passphrase = ""
 	}
 
 	request.AdminAccount = utils.TrimPrivateKey(request.AdminAccount)

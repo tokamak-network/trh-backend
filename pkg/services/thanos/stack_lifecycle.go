@@ -24,6 +24,9 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 	stackId := uuid.New()
 	deploymentPath := utils.GetDeploymentPath(s.name, request.Network, stackId.String())
 	request.DeploymentPath = deploymentPath
+	// Zero out sensitive fields before persisting to DB.
+	// SeedPhrase is received from the API in-memory only and must never be stored.
+	request.SeedPhrase = ""
 	config, err := json.Marshal(request)
 	if err != nil {
 		return &entities.Response{
@@ -69,16 +72,23 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		immutableConfig = bytes
 	}
 
+	target := entities.DeploymentTargetCloud
+	if isLocalTarget(request.Network) {
+		target = entities.DeploymentTargetLocal
+	}
+
 	stack := &entities.StackEntity{
 		ID:                  stackId,
 		Name:                s.name,
 		Network:             request.Network,
+		Target:              target,
 		Type:                enum.StackTypeOptimisticRollup.String(),
 		Config:              config,
 		DeploymentPath:      deploymentPath,
 		Status:              entities.StackStatusPending,
 		ImmutableConfig:     immutableConfig,
 		MainnetConfirmation: mainnetConfirmation,
+		KubeconfigPath:      request.KubeconfigPath,
 	}
 
 	// We install the bridge by default

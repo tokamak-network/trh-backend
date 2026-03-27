@@ -54,39 +54,62 @@ type BackupConfig struct {
 }
 
 type DeployThanosRequest struct {
-	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
+	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet LocalTestnet"`
 	L1RpcUrl                 string                     `json:"l1RpcUrl"                 binding:"required" validate:"url"`
 	L1BeaconUrl              string                     `json:"l1BeaconUrl"              binding:"required" validate:"url"`
 	L2BlockTime              int                        `json:"l2BlockTime"              binding:"required" validate:"min=1"` // seconds
 	BatchSubmissionFrequency int                        `json:"batchSubmissionFrequency" binding:"required" validate:"min=1"` // seconds
 	OutputRootFrequency      int                        `json:"outputRootFrequency"      binding:"required" validate:"min=1"` // seconds
 	ChallengePeriod          int                        `json:"challengePeriod"          binding:"required" validate:"min=1"` // seconds
-	AdminAccount             string                     `json:"adminAccount"             binding:"required" validate:"eth_address"`
-	SequencerAccount         string                     `json:"sequencerAccount"         binding:"required" validate:"eth_address"`
-	BatcherAccount           string                     `json:"batcherAccount"           binding:"required" validate:"eth_address"`
-	ProposerAccount          string                     `json:"proposerAccount"          binding:"required" validate:"eth_address"`
+	AdminAccount             string                     `json:"adminAccount,omitempty"`
+	SequencerAccount         string                     `json:"sequencerAccount,omitempty"`
+	BatcherAccount           string                     `json:"batcherAccount,omitempty"`
+	ProposerAccount          string                     `json:"proposerAccount,omitempty"`
 	ChallengerAccount        string                     `json:"challengerAccount,omitempty"`
 	EnableFaultProof         bool                       `json:"enableFaultProof"`
-	AwsAccessKey             string                     `json:"awsAccessKey"             binding:"required"`
-	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey"       binding:"required"`
-	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
+	AwsAccessKey             string                     `json:"awsAccessKey,omitempty"`
+	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey,omitempty"`
+	AwsRegion                string                     `json:"awsRegion,omitempty"`
 	ChainName                string                     `json:"chainName"                binding:"required"`
 	DeploymentPath           string                     `json:"deploymentPath"`
 	RegisterCandidate        bool                       `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest  `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                       `json:"reuseDeployment"`
-	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
-	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`        // Backup configuration
+	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"`  // Required for Mainnet
+	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`         // Backup configuration
+	KubeconfigPath           string                     `json:"kubeconfigPath,omitempty"`       // Required for LocalTestnet
 	// Preset fields (optional)
-	PresetID      string `json:"presetId,omitempty"`
-	FeeToken      string `json:"feeToken,omitempty"`      // "TON", "ETH", "USDT", "USDC"
-	SeedPhrase    string `json:"seedPhrase,omitempty"`
-	InfraProvider string `json:"infraProvider,omitempty"` // "aws" or "local"
+	PresetID        string `json:"presetId,omitempty"`
+	FeeToken        string `json:"feeToken,omitempty"`        // "TON", "ETH", "USDT", "USDC"
+	SeedPhrase      string `json:"seedPhrase,omitempty"`
+	BIP39Passphrase string `json:"bip39Passphrase,omitempty"`
+	InfraProvider   string `json:"infraProvider,omitempty"` // "aws" or "local"
 }
 
 func (request *DeployThanosRequest) Validate() error {
 	if request.Network == entities.DeploymentNetworkLocalDevnet {
 		return errors.New("local devnet is not supported yet")
+	}
+
+	// Operator accounts: required unless a seed phrase is provided for auto-derivation.
+	if request.SeedPhrase == "" {
+		if request.AdminAccount == "" || request.SequencerAccount == "" ||
+			request.BatcherAccount == "" || request.ProposerAccount == "" {
+			return errors.New("adminAccount, sequencerAccount, batcherAccount, and proposerAccount are required when seedPhrase is not provided")
+		}
+	} else {
+		// Reject ambiguous input: seedPhrase and explicit accounts must not coexist.
+		if request.AdminAccount != "" || request.SequencerAccount != "" ||
+			request.BatcherAccount != "" || request.ProposerAccount != "" {
+			return errors.New("provide either seedPhrase or operator accounts, not both")
+		}
+	}
+
+	// Local deployment validation
+	if request.Network == entities.DeploymentNetworkLocalTestnet {
+		if request.KubeconfigPath == "" {
+			return errors.New("kubeconfigPath is required for local deployment")
+		}
 	}
 
 	// Mainnet Validation
@@ -134,29 +157,29 @@ func (request *DeployThanosRequest) Validate() error {
 		return errors.New("invalid l1BeaconUrl")
 	}
 
-	// Validate AWS Access Key
-	if !trhSdkUtils.IsValidAWSAccessKey(request.AwsAccessKey) {
-		logger.Error("invalid awsAccessKey", zap.String("awsAccessKey", request.AwsAccessKey))
-		return errors.New("invalid awsAccessKey")
-	}
+	// AWS validation: skip for local deployments
+	if request.Network != entities.DeploymentNetworkLocalTestnet {
+		if !trhSdkUtils.IsValidAWSAccessKey(request.AwsAccessKey) {
+			logger.Error("invalid awsAccessKey", zap.String("awsAccessKey", request.AwsAccessKey))
+			return errors.New("invalid awsAccessKey")
+		}
 
-	// Validate AWS Secret Key
-	if !trhSdkUtils.IsValidAWSSecretKey(request.AwsSecretAccessKey) {
-		logger.Error(
-			"invalid awsSecretKey",
-			zap.String("awsSecretAccessKey", request.AwsSecretAccessKey),
-		)
-		return errors.New("invalid awsSecretKey")
-	}
+		if !trhSdkUtils.IsValidAWSSecretKey(request.AwsSecretAccessKey) {
+			logger.Error(
+				"invalid awsSecretKey",
+				zap.String("awsSecretAccessKey", request.AwsSecretAccessKey),
+			)
+			return errors.New("invalid awsSecretKey")
+		}
 
-	// Validate AWS Region
-	if !trhSdkAws.IsAvailableRegion(
-		request.AwsAccessKey,
-		request.AwsSecretAccessKey,
-		request.AwsRegion,
-	) {
-		logger.Error("invalid awsRegion", zap.String("awsRegion", request.AwsRegion))
-		return errors.New("invalid awsRegion")
+		if !trhSdkAws.IsAvailableRegion(
+			request.AwsAccessKey,
+			request.AwsSecretAccessKey,
+			request.AwsRegion,
+		) {
+			logger.Error("invalid awsRegion", zap.String("awsRegion", request.AwsRegion))
+			return errors.New("invalid awsRegion")
+		}
 	}
 
 	// Validate Chain Config
@@ -197,6 +220,7 @@ type DeployL1ContractsRequest struct {
 	RegisterCandidate        bool                      `json:"registerCandidate"`
 	RegisterCandidateParams  *RegisterCandidateRequest `json:"registerCandidateParams,omitempty"`
 	ReuseDeployment          bool                      `json:"reuseDeployment"`
+	BuildOnly                bool                      `json:"buildOnly"` // When true, only build contracts (no deploy)
 	Preset                   string                    `json:"preset,omitempty"`
 	FeeToken                 string                    `json:"feeToken,omitempty"`
 	MainnetConfirmation      *MainnetConfirmation      `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
@@ -577,7 +601,7 @@ func (r *PresetDeployRequest) ValidateProvider() error {
 }
 
 type ValidateDeploymentRequest struct {
-	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet"`
+	Network                  entities.DeploymentNetwork `json:"network"                  binding:"required" validate:"oneof=Mainnet Testnet LocalDevnet LocalTestnet"`
 	L1RpcUrl                 string                     `json:"l1RpcUrl"                 binding:"required" validate:"url"`
 	L1BeaconUrl              string                     `json:"l1BeaconUrl"              binding:"required" validate:"url"`
 	L2BlockTime              int                        `json:"l2BlockTime"              binding:"required" validate:"min=1"`
@@ -588,11 +612,12 @@ type ValidateDeploymentRequest struct {
 	SequencerAddress         string                     `json:"sequencerAddress"         binding:"required" validate:"eth_address"`
 	BatcherAddress           string                     `json:"batcherAddress"           binding:"required" validate:"eth_address"`
 	ProposerAddress          string                     `json:"proposerAddress"          binding:"required" validate:"eth_address"`
-	AwsAccessKey             string                     `json:"awsAccessKey"             binding:"required"`
-	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey"       binding:"required"`
-	AwsRegion                string                     `json:"awsRegion"                binding:"required"`
+	AwsAccessKey             string                     `json:"awsAccessKey,omitempty"`
+	AwsSecretAccessKey       string                     `json:"awsSecretAccessKey,omitempty"`
+	AwsRegion                string                     `json:"awsRegion,omitempty"`
 	ChainName                string                     `json:"chainName"                binding:"required"`
 	MainnetConfirmation      *MainnetConfirmation       `json:"mainnetConfirmation,omitempty"` // For validation context
+	KubeconfigPath           string                     `json:"kubeconfigPath,omitempty"`       // Required for LocalTestnet
 }
 
 type ValidationCheckResult struct {

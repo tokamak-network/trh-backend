@@ -127,10 +127,12 @@ func (r *StackRepository) GetStackByID(
 		Name:           stack.Name,
 		Type:           stack.Type,
 		Network:        stack.Network,
+		Target:         stack.Target,
 		Config:         json.RawMessage(stack.Config),
 		Metadata:       metadata,
 		DeploymentPath: stack.DeploymentPath,
 		Status:         stack.Status,
+		KubeconfigPath: stack.KubeconfigPath,
 		CreatedAt:      stack.CreatedAt,
 		UpdatedAt:      stack.UpdatedAt,
 		DeletedAt:      stack.DeletedAt,
@@ -139,7 +141,7 @@ func (r *StackRepository) GetStackByID(
 
 func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 	var stacks []schemas.Stack
-	err := r.db.Select("id, name, type, network, config, metadata, deployment_path, status, created_at, updated_at, deleted_at").Find(&stacks).Error
+	err := r.db.Select("id, name, type, network, target, config, metadata, deployment_path, status, kubeconfig_path, created_at, updated_at, deleted_at").Find(&stacks).Error
 	if err != nil {
 		return nil, err
 	}
@@ -156,10 +158,12 @@ func (r *StackRepository) GetAllStacks() ([]*entities.StackEntity, error) {
 			Name:           stack.Name,
 			Type:           stack.Type,
 			Network:        stack.Network,
+			Target:         stack.Target,
 			Config:         json.RawMessage(stack.Config),
 			Metadata:       metadata,
 			DeploymentPath: stack.DeploymentPath,
 			Status:         stack.Status,
+			KubeconfigPath: stack.KubeconfigPath,
 			CreatedAt:      stack.CreatedAt,
 			UpdatedAt:      stack.UpdatedAt,
 			DeletedAt:      stack.DeletedAt,
@@ -192,9 +196,11 @@ func ToStackEntity(s *entities.StackEntity) *schemas.Stack {
 		Name:           s.Name,
 		Type:           s.Type,
 		Network:        s.Network,
+		Target:         s.Target,
 		Config:         datatypes.JSON(s.Config),
 		DeploymentPath: s.DeploymentPath,
 		Status:         s.Status,
+		KubeconfigPath: s.KubeconfigPath,
 		CreatedAt:      s.CreatedAt,
 		UpdatedAt:      s.UpdatedAt,
 		DeletedAt:      s.DeletedAt,

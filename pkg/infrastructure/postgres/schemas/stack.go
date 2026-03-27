@@ -16,9 +16,11 @@ type Stack struct {
 	Status         entities.StackStatus       `gorm:"not null;column:status"`
 	Reason         string                     `gorm:"column:reason"`
 	Network        entities.DeploymentNetwork `gorm:"not null;column:network"`
+	Target         entities.DeploymentTarget  `gorm:"column:target;default:''"`
 	DeploymentPath string                     `gorm:"not null;column:deployment_path"`
 	Config         datatypes.JSON             `gorm:"type:jsonb;not null;column:config"`
 	Metadata       datatypes.JSON             `gorm:"type:jsonb;column:metadata"`
+	KubeconfigPath string                     `gorm:"column:kubeconfig_path"`
 	CreatedAt      time.Time                  `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt      time.Time                  `gorm:"autoUpdateTime;column:updated_at"`
 	DeletedAt      gorm.DeletedAt             `gorm:"column:deleted_at;default:null"`

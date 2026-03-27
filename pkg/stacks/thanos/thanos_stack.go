@@ -2,11 +2,13 @@ package thanos
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	trhSDKLogging "github.com/tokamak-network/trh-sdk/pkg/logging"
 	thanosStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	thanosTypes "github.com/tokamak-network/trh-sdk/pkg/types"
@@ -51,6 +53,62 @@ func NewThanosSDKClient(
 	}
 
 	return s, nil
+}
+
+// NewLocalTestnetSDKClient creates a ThanosStack SDK client for LocalTestnet deployments.
+// Unlike NewThanosSDKClient it skips all AWS/DO setup and wires runners using the provided kubeconfig.
+func NewLocalTestnetSDKClient(
+	ctx context.Context,
+	logPath string,
+	deploymentPath string,
+	kubeconfigPath string,
+) (*thanosStack.ThanosStack, error) {
+	l, err := trhSDKLogging.InitLogger(logPath)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Info("Initializing LocalTestnet Thanos SDK...")
+
+	// TODO: Replace with NewLocalTestnetThanosStack after SDK PR #213 merges.
+	// For now, use NewThanosStack with nil AWS config (skips AWS setup).
+	s, err := thanosStack.NewThanosStack(ctx, l, "LocalTestnet", false, deploymentPath, nil)
+	if err != nil {
+		logger.Errorf("Failed to create LocalTestnet thanos stack: %s", err)
+		return nil, err
+	}
+
+	return s, nil
+}
+
+// NewSDKClientForStack creates the appropriate SDK client based on the stack's network type.
+// For LocalTestnet it uses the kubeconfig-based client; for other networks it uses the AWS-based client.
+func NewSDKClientForStack(
+	ctx context.Context,
+	logPath string,
+	stack *entities.StackEntity,
+	stackConfig *dtos.DeployThanosRequest,
+) (*thanosStack.ThanosStack, error) {
+	if stackConfig == nil {
+		return nil, fmt.Errorf("stackConfig is required for NewSDKClientForStack")
+	}
+	if stack.ResolveTarget() == entities.DeploymentTargetLocal {
+		kubeconfigPath := stack.KubeconfigPath
+		if kubeconfigPath == "" && stackConfig != nil {
+			kubeconfigPath = stackConfig.KubeconfigPath
+		}
+		return NewLocalTestnetSDKClient(ctx, logPath, stack.DeploymentPath, kubeconfigPath)
+	}
+	return NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
 }
 
 func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosAWSInfraRequest) error {

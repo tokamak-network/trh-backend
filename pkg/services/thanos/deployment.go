@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/google/uuid"
@@ -26,6 +27,12 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			logger.Info("deployment cancelled", zap.String("stackId", stackId.String()))
+			// Set status to Stopped so the user can Resume later
+			if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusStopped, "deployment cancelled"); updateErr != nil {
+				logger.Error("failed to update stack status after cancellation",
+					zap.String("stackId", stackId.String()),
+					zap.Error(updateErr))
+			}
 			return
 		}
 		logger.Error("failed to deploy thanos stacks",
@@ -66,6 +73,47 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 		logger.Error("failed to update stacks status",
 			zap.String("stackId", stackId.String()),
 			zap.Error(updateErr))
+	}
+
+	// Local target: populate metadata from stack config directly (no AWS SDK client needed)
+	if stack.ResolveTarget() == entities.DeploymentTargetLocal {
+		var localConfig dtos.DeployThanosRequest
+		if cfgBytes, marshalErr := json.Marshal(stack.Config); marshalErr == nil {
+			if json.Unmarshal(cfgBytes, &localConfig) == nil {
+				namespace := fmt.Sprintf("locall2-%s", stackId.String()[:5])
+				l2RpcUrl := fmt.Sprintf("http://localhost:8545") // port-forward target
+				l2ChainIDVal := 0
+				// Try to read l2ChainID from deploy config if available
+				deployConfigPath := fmt.Sprintf("%s/tokamak-thanos/packages/tokamak/contracts-bedrock/deploy-config/tmp/config.json", stack.DeploymentPath)
+				if raw, readErr := os.ReadFile(deployConfigPath); readErr == nil {
+					var deployCfg map[string]interface{}
+					if json.Unmarshal(raw, &deployCfg) == nil {
+						if v, ok := deployCfg["l2ChainID"]; ok {
+							if fv, ok := v.(float64); ok {
+								l2ChainIDVal = int(fv)
+							}
+						}
+					}
+				}
+
+				metaErr := s.stackRepo.UpdateMetadata(stackId.String(), &entities.StackMetadata{
+					Layer1:    "Ethereum Sepolia",
+					Layer2:    "Thanos Stack (Local)",
+					L1ChainId: 11155111,
+					L2ChainId: l2ChainIDVal,
+					L2RpcUrl:  l2RpcUrl,
+				})
+				if metaErr != nil {
+					logger.Error("failed to update local stack metadata", zap.Error(metaErr))
+				} else {
+					logger.Info("LocalTestnet metadata updated",
+						zap.String("stackId", stackId.String()),
+						zap.String("namespace", namespace),
+						zap.Int("l2ChainId", l2ChainIDVal))
+				}
+			}
+		}
+		return
 	}
 
 	config, err := json.Marshal(stack.Config)
@@ -291,9 +339,14 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 	}
 
 	// Filter to only the core deployment steps we want to execute here
-	filtered := make([]*entities.DeploymentEntity, 0, 2)
-	var l1Step, awsStep *entities.DeploymentEntity
+	filtered := make([]*entities.DeploymentEntity, 0, 3)
+	var buildStep, l1Step, awsStep, localInfraStep *entities.DeploymentEntity
 	for _, d := range pendingDeployments {
+		if d.Step == constants.BuildL1ContractsStep {
+			if buildStep == nil || (buildStep.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
+				buildStep = d
+			}
+		}
 		if d.Step == constants.DeployL1ContractsStep {
 			// keep the earliest unfinished occurrence
 			if l1Step == nil || (l1Step.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
@@ -305,6 +358,15 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				awsStep = d
 			}
 		}
+		if d.Step == constants.DeployLocalInfraStep {
+			if localInfraStep == nil || (localInfraStep.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
+				localInfraStep = d
+			}
+		}
+	}
+	// Order: build → deploy-l1-contracts → infra
+	if buildStep != nil {
+		filtered = append(filtered, buildStep)
 	}
 	if l1Step != nil {
 		filtered = append(filtered, l1Step)
@@ -312,8 +374,11 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 	if awsStep != nil {
 		filtered = append(filtered, awsStep)
 	}
+	if localInfraStep != nil {
+		filtered = append(filtered, localInfraStep)
+	}
 
-	// Overwrite deployments with filtered list to enforce order L1 first then AWS infra
+	// Overwrite deployments with filtered list to enforce order L1 first then infra
 	if len(filtered) > 0 {
 		pendingDeployments = filtered
 	}
@@ -375,6 +440,39 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 		}
 
 		switch deployment.Step {
+		case constants.BuildL1ContractsStep:
+			var buildConfig dtos.DeployL1ContractsRequest
+			if err := json.Unmarshal(deployment.Config, &buildConfig); err != nil {
+				return fmt.Errorf("failed to unmarshal build config: %w", err)
+			}
+
+			// Start log ingestion for this deployment step
+			ingestCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
+
+			if err := thanos.DeployL1Contracts(ctx, sdkClient, &buildConfig); err != nil {
+				if errors.Is(err, context.Canceled) {
+					logger.Info("build cancelled",
+						zap.String("deploymentId", deployment.ID.String()),
+						zap.String("step", deployment.Step))
+					return err
+				}
+				logger.Error("build failed",
+					zap.String("deploymentId", deployment.ID.String()),
+					zap.String("step", deployment.Step),
+					zap.Error(err))
+				statusChan <- entities.DeploymentStatusWithID{
+					DeploymentID: deployment.ID,
+					Status:       entities.DeploymentRunStatusFailed,
+				}
+				return err
+			}
+			statusChan <- entities.DeploymentStatusWithID{
+				DeploymentID: deployment.ID,
+				Status:       entities.DeploymentRunStatusSuccess,
+			}
+
 		case "deploy-l1-contracts":
 			var deployL1ContractsConfig dtos.DeployL1ContractsRequest
 			if err := json.Unmarshal(deployment.Config, &deployL1ContractsConfig); err != nil {
