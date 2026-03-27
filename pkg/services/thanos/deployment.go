@@ -203,8 +203,8 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 	}
 
 	// Auto-install preset modules that don't require user configuration.
-	// For local infra, mark block-explorer / monitoring / uptimeService as installed
-	// directly (they run as Docker Compose profiles; no extra user config needed).
+	// For local infra, mark block-explorer / monitoring / uptimeService / DRB as
+	// installed directly (they run as Docker Compose profiles; no user config needed).
 	if stackConfig.PresetID != "" {
 		presetSvc := presets.NewService()
 		def, err := presetSvc.GetByID(stackConfig.PresetID)
@@ -215,6 +215,7 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 				enum.IntegrationTypeBlockExplorer.String(): chainInformation.BlockExplorer,
 				enum.IntegrationTypeMonitoring.String():    chainInformation.MonitoringUrl,
 				enum.IntegrationTypeUptimeService.String(): "http://localhost:3003",
+				enum.IntegrationTypeDRB.String():           "http://localhost:9600",
 			}
 			for intType, url := range localIntegrationURLs {
 				moduleKey := intType
@@ -226,8 +227,11 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 					moduleKey = "monitoring"
 				case enum.IntegrationTypeUptimeService.String():
 					moduleKey = "uptimeService"
+				case enum.IntegrationTypeDRB.String():
+					moduleKey = "drb"
 				}
-				if enabled, ok := def.Modules[moduleKey]; !ok || !enabled {
+				enabled, ok := def.Modules[moduleKey]
+				if !ok || !enabled {
 					continue
 				}
 				integration, err := s.integrationRepo.GetIntegration(stackId.String(), intType)

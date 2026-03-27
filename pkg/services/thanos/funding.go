@@ -62,8 +62,8 @@ var RequiredFundingByNetwork = map[entities.DeploymentNetwork]map[string]string{
 type AccountFunding struct {
 	Role      string `json:"role"`
 	Address   string `json:"address"`
-	Required  string `json:"required"`
-	Current   string `json:"current"`
+	Required  string `json:"requiredWei"`
+	Current   string `json:"currentWei"`
 	Fulfilled bool   `json:"fulfilled"`
 }
 

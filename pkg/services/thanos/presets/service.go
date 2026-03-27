@@ -140,6 +140,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"monitoring":    true,
 			"crossTrade":    true,
 			"uptimeService": true,
+			"drb":           true,
 		},
 		GenesisPredeploys: gamingPredeploys,
 		EstimatedTime: map[string]string{
@@ -178,6 +179,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 			"monitoring":    true,
 			"crossTrade":    true,
 			"uptimeService": true,
+			"drb":           true,
 		},
 		GenesisPredeploys: fullPredeploys,
 		EstimatedTime: map[string]string{
