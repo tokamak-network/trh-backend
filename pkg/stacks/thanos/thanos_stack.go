@@ -145,7 +145,7 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		FeeToken:           req.FeeToken,
 	}
 
-	if req.RegisterCandidate {
+	if req.RegisterCandidate && req.RegisterCandidateParams != nil {
 		contractDeploymentInput.RegisterCandidate = &thanosStack.RegisterCandidateInput{
 			Amount:   req.RegisterCandidateParams.Amount,
 			Memo:     req.RegisterCandidateParams.Memo,

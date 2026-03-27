@@ -167,7 +167,7 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 		return
 	}
 
-	if stackConfig.RegisterCandidate {
+	if stackConfig.RegisterCandidate && stackConfig.RegisterCandidateParams != nil {
 		registerCandidateIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeRegisterCandidate.String())
 		if err != nil {
 			logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(err))
@@ -202,12 +202,44 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 		}
 	}
 
-	// Auto-install preset modules that don't require user configuration
+	// Auto-install preset modules that don't require user configuration.
+	// For local infra, mark block-explorer / monitoring / uptimeService as installed
+	// directly (they run as Docker Compose profiles; no extra user config needed).
 	if stackConfig.PresetID != "" {
 		presetSvc := presets.NewService()
 		def, err := presetSvc.GetByID(stackConfig.PresetID)
 		if err != nil {
 			logger.Error("failed to get preset definition for auto-install", zap.String("presetId", stackConfig.PresetID), zap.Error(err))
+		} else if stackConfig.InfraProvider == "local" {
+			localIntegrationURLs := map[string]string{
+				enum.IntegrationTypeBlockExplorer.String(): chainInformation.BlockExplorer,
+				enum.IntegrationTypeMonitoring.String():    chainInformation.MonitoringUrl,
+				enum.IntegrationTypeUptimeService.String(): "http://localhost:3003",
+			}
+			for intType, url := range localIntegrationURLs {
+				moduleKey := intType
+				// map integration type names to preset module keys
+				switch intType {
+				case enum.IntegrationTypeBlockExplorer.String():
+					moduleKey = "blockExplorer"
+				case enum.IntegrationTypeMonitoring.String():
+					moduleKey = "monitoring"
+				case enum.IntegrationTypeUptimeService.String():
+					moduleKey = "uptimeService"
+				}
+				if enabled, ok := def.Modules[moduleKey]; !ok || !enabled {
+					continue
+				}
+				integration, err := s.integrationRepo.GetIntegration(stackId.String(), intType)
+				if err != nil || integration == nil {
+					logger.Error("failed to get integration for local auto-install", zap.String("type", intType), zap.Error(err))
+					continue
+				}
+				metaBytes, _ := json.Marshal(map[string]string{"url": url})
+				if err := s.integrationRepo.UpdateMetadataAfterInstalled(integration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
+					logger.Error("failed to mark local integration as installed", zap.String("type", intType), zap.Error(err))
+				}
+			}
 		} else {
 			if enabled, ok := def.Modules["uptimeService"]; ok && enabled {
 				if _, err := s.InstallUptimeService(ctx, stackId.String()); err != nil {
