@@ -385,6 +385,18 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)
 			}
 
+			// For local deployments, ensure Docker CLI and Compose are available before
+			// running any deployment steps (Docker-in-Docker pattern requires them).
+			if deploymentConfig.InfraProvider == "local" {
+				if err := ensureDockerTools(); err != nil {
+					statusChan <- entities.DeploymentStatusWithID{
+						DeploymentID: deployment.ID,
+						Status:       entities.DeploymentRunStatusFailed,
+					}
+					return fmt.Errorf("failed to install docker tools: %w", err)
+				}
+			}
+
 			// Start log ingestion for this deployment step
 			ingestCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
