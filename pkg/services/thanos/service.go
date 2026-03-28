@@ -304,6 +304,11 @@ func (s *ThanosStackDeploymentService) UninstallUptimeService(ctx context.Contex
 	return s.integrationMgr.UninstallUptimeService(ctx, stackId)
 }
 
+// UninstallDRB uninstalls the DRB integration for the given stack
+func (s *ThanosStackDeploymentService) UninstallDRB(ctx context.Context, stackId string) (*entities.Response, error) {
+	return s.integrationMgr.UninstallDRB(ctx, stackId)
+}
+
 func (s *ThanosStackDeploymentService) CancelIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
 	return s.integrationMgr.CancelIntegration(ctx, stackId, integrationId)
 }

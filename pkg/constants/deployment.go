@@ -16,4 +16,5 @@ const (
 	UninstallCrossTradeBridgeStep = "uninstall-cross-trade-bridge"
 	InstallUptimeServiceStep      = "install-system-pulse"
 	UninstallUptimeServiceStep    = "uninstall-system-pulse"
+	UninstallDRBStep              = "uninstall-drb"
 )

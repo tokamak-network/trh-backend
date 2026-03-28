@@ -22,6 +22,7 @@ type IntegrationManager struct {
 	backupManager       *BackupManager
 	crossTrade          *CrossTradeBridgeIntegration
 	uptimeService       *UptimeServiceIntegration
+	drb                 *DRBIntegration
 }
 
 // NewIntegrationManager creates a new integration manager with all integration handlers
@@ -65,6 +66,7 @@ func NewIntegrationManager(
 		backupManager:       NewBackupManager(stackRepo, deploymentRepo, integrationRepo, taskManager),
 		crossTrade:          NewCrossTradeBridgeIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 		uptimeService:       NewUptimeServiceIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
+		drb:                 NewDRBIntegration(stackRepo, deploymentRepo, integrationRepo, logRepo, taskManager),
 	}
 }
 
@@ -199,6 +201,11 @@ func (im *IntegrationManager) InstallUptimeService(ctx context.Context, stackId 
 // UninstallUptimeService uninstalls the uptime service for the given stack
 func (im *IntegrationManager) UninstallUptimeService(ctx context.Context, stackId string) (*entities.Response, error) {
 	return im.uptimeService.Uninstall(ctx, stackId)
+}
+
+// UninstallDRB uninstalls the DRB integration for the given stack
+func (im *IntegrationManager) UninstallDRB(ctx context.Context, stackId string) (*entities.Response, error) {
+	return im.drb.Uninstall(ctx, stackId)
 }
 
 func (im *IntegrationManager) CancelIntegration(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {

@@ -202,6 +202,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.DELETE("/:id/integrations/block-explorer", handler.UninstallBlockExplorer)
 		adminRoutes.POST("/:id/integrations/system-pulse", handler.InstallUptimeService)
 		adminRoutes.DELETE("/:id/integrations/system-pulse", handler.UninstallUptimeService)
+		adminRoutes.DELETE("/:id/integrations/drb", handler.UninstallDRB)
 
 		// Monitoring management
 		adminRoutes.POST("/:id/integrations/monitoring", handler.InstallMonitoring)

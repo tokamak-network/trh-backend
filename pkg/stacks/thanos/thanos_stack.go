@@ -489,3 +489,10 @@ func UninstallUptimeService(
 ) error {
 	return sdkClient.UninstallUptimeService(ctx)
 }
+
+func UninstallDRB(
+	ctx context.Context,
+	sdkClient *thanosStack.ThanosStack,
+) error {
+	return sdkClient.UninstallDRB(ctx)
+}
