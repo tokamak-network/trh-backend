@@ -2,6 +2,8 @@ package thanos
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"strings"
 
 	"github.com/tokamak-network/trh-backend/internal/consts"
@@ -173,13 +175,27 @@ func ShowChainInformation(
 // BuildLocalChainInformation constructs chain information for local infra deployments
 // where K8s is not available. URLs use localhost ports defined in the local compose template.
 func BuildLocalChainInformation(deploymentPath string) *thanosTypes.ChainInformation {
-	return &thanosTypes.ChainInformation{
+	info := &thanosTypes.ChainInformation{
 		L2RpcUrl:       "http://localhost:8545",
 		BridgeUrl:      "http://localhost:3001",
 		BlockExplorer:  "http://localhost:4001",
 		MonitoringUrl:  "http://localhost:3002",
 		RollupFilePath: deploymentPath + "/tokamak-thanos/build/rollup.json",
 	}
+
+	rollupPath := deploymentPath + "/tokamak-thanos/build/rollup.json"
+	if data, err := os.ReadFile(rollupPath); err == nil {
+		var rollup struct {
+			L1ChainID int `json:"l1_chain_id"`
+			L2ChainID int `json:"l2_chain_id"`
+		}
+		if err := json.Unmarshal(data, &rollup); err == nil {
+			info.L1ChainID = rollup.L1ChainID
+			info.L2ChainID = rollup.L2ChainID
+		}
+	}
+
+	return info
 }
 
 func InstallBridge(
