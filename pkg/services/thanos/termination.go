@@ -38,6 +38,23 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 		return
 	}
 
+	// For local deployments, ensure Docker CLI and Compose are available
+	// inside the backend container (Docker-in-Docker pattern).
+	// These tools may be missing if the container was restarted since initial deployment.
+	if stackConfig.InfraProvider == "local" {
+		if err := ensureDockerTools(); err != nil {
+			logger.Error("failed to install docker tools for local termination",
+				zap.String("stackId", stackId.String()),
+				zap.Error(err))
+			if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusFailedToTerminate, err.Error()); updateErr != nil {
+				logger.Error("failed to update stacks status after docker tools error",
+					zap.String("stackId", stackId.String()),
+					zap.Error(updateErr))
+			}
+			return
+		}
+	}
+
 	logPath := utils.GetLogPath(stack.ID, "destroy")
 
 	// Create a deployment record for termination
@@ -141,7 +158,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	_ = s.deploymentRepo.UpdateDeploymentStatus(terminationDeploymentID.String(), entities.DeploymentRunStatusSuccess)
 
 	logger.Info(
-		"AWS infrastructure destroyed successfully",
+		"Infrastructure destroyed successfully",
 		zap.String("stackId", stackId.String()),
 	)
 }
