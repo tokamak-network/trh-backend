@@ -3,6 +3,7 @@ package thanos
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -77,7 +78,7 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
-		string(stack.Network),
+		strings.ToLower(string(stack.Network)),
 		stack.DeploymentPath,
 		stackConfig.RegisterCandidate,
 		stackConfig.AwsAccessKey,
