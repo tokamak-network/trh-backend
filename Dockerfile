@@ -8,9 +8,9 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./main.go
+RUN CGO_ENABLED=0 go build -o main ./main.go
 
-FROM ubuntu:latest
+FROM ubuntu:24.04
 
 # Set environment variables to prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
