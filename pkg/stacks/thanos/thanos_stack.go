@@ -106,6 +106,13 @@ func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.Thano
 	return nil
 }
 
+// StartAAOperatorFromConfig runs the AA operator goroutine using the SDK client's loaded
+// deployment config (FeeToken, AdminPrivateKey). Blocks until ctx is cancelled.
+// Intended to be called via taskManager.AddTask so it runs as a managed background task.
+func StartAAOperatorFromConfig(ctx context.Context, sdkClient *thanosStack.ThanosStack) {
+	sdkClient.RunAAOperatorFromConfig(ctx)
+}
+
 func DestroyAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack) error {
 	logger.Info("Destroying AWS Infrastructure...")
 

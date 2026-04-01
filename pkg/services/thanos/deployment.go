@@ -16,6 +16,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
+	thanosSDKConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
 	thanosSDKTypes "github.com/tokamak-network/trh-sdk/pkg/types"
 	"go.uber.org/zap"
 )
@@ -438,6 +439,12 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 			var infraErr error
 			if deployInfraConfig.InfraProvider == "local" {
 				infraErr = thanos.DeployLocalInfrastructure(ctx, sdkClient, &deployInfraConfig)
+				if infraErr == nil && thanosSDKConstants.NeedsAASetup(deploymentConfig.PresetID, deploymentConfig.FeeToken) {
+					capturedClient := sdkClient
+					s.taskManager.AddTask(fmt.Sprintf("aa-operator-%s", stackId.String()), func(ctx context.Context) {
+						thanos.StartAAOperatorFromConfig(ctx, capturedClient)
+					})
+				}
 			} else {
 				infraErr = thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployInfraConfig)
 			}

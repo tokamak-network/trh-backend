@@ -43,6 +43,9 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	// inside the backend container (Docker-in-Docker pattern).
 	// These tools may be missing if the container was restarted since initial deployment.
 	if stackConfig.InfraProvider == "local" {
+		// Stop the aa-operator goroutine if it is running for this stack.
+		s.taskManager.StopTask("aa-operator-" + stackId.String())
+
 		if err := ensureDockerTools(); err != nil {
 			logger.Error("failed to install docker tools for local termination",
 				zap.String("stackId", stackId.String()),
