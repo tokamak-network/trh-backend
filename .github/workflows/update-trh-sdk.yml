@@ -1,0 +1,36 @@
+name: Update trh-sdk dependency
+
+on:
+  repository_dispatch:
+    types: [trh-sdk-updated]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Update trh-sdk to new commit
+        run: |
+          go get github.com/tokamak-network/trh-sdk@${{ github.event.client_payload.commit }}
+          go mod tidy
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(deps): bump trh-sdk to ${{ github.event.client_payload.commit }}"
+          branch: auto/trh-sdk-${{ github.event.client_payload.commit }}
+          title: "chore(deps): bump trh-sdk to ${{ github.event.client_payload.commit }}"
+          body: |
+            Automated dependency update triggered by a push to [trh-sdk](https://github.com/tokamak-network/trh-sdk/commit/${{ github.event.client_payload.commit }}).
+
+            **Changes:** `go.mod` and `go.sum` updated to `${{ github.event.client_payload.commit }}`.
+          labels: dependencies
