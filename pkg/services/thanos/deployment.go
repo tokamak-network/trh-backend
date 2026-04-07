@@ -17,7 +17,9 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	thanosSDKConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
+	thanosSDKStack "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 	thanosSDKTypes "github.com/tokamak-network/trh-sdk/pkg/types"
+	trhSDKUtils "github.com/tokamak-network/trh-sdk/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -243,6 +245,43 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 				metaBytes, _ := json.Marshal(map[string]string{"url": url})
 				if err := s.integrationRepo.UpdateMetadataAfterInstalled(integration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
 					logger.Error("failed to mark local integration as installed", zap.String("type", intType), zap.Error(err))
+				}
+			}
+
+			// CrossTrade auto-install for local DeFi/Full preset.
+			// Unlike other modules (which just mark a URL), CrossTrade requires SDK contract
+			// deployment via L1 OptimismPortal depositTransaction calls.
+			if enabled, ok := def.Modules["crossTrade"]; ok && enabled {
+				crossTradeIntegration, getErr := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeCrossTrade.String())
+				if getErr != nil || crossTradeIntegration == nil {
+					logger.Error("failed to get crossTrade integration for local auto-install",
+						zap.String("stackId", stackId.String()), zap.Error(getErr))
+				} else {
+					crossTradeOutput, ctErr := s.autoInstallCrossTradeLocal(ctx, stack, &stackConfig, chainInformation)
+					if ctErr != nil {
+						logger.Error("failed to auto-install CrossTrade local",
+							zap.String("stackId", stackId.String()), zap.Error(ctErr))
+						if updateErr := s.integrationRepo.UpdateIntegrationStatusWithReason(
+							crossTradeIntegration.ID.String(),
+							entities.DeploymentStatusFailed,
+							ctErr.Error(),
+						); updateErr != nil {
+							logger.Error("failed to update crossTrade integration status",
+								zap.String("stackId", stackId.String()), zap.Error(updateErr))
+						}
+					} else {
+						ctMetaBytes, _ := json.Marshal(map[string]interface{}{
+							"url":       "http://localhost:3004",
+							"contracts": crossTradeOutput,
+						})
+						if updateErr := s.integrationRepo.UpdateMetadataAfterInstalled(
+							crossTradeIntegration.ID.String(),
+							entities.IntegrationInfo(ctMetaBytes),
+						); updateErr != nil {
+							logger.Error("failed to mark CrossTrade integration as installed",
+								zap.String("stackId", stackId.String()), zap.Error(updateErr))
+						}
+					}
 				}
 			}
 		} else {
@@ -475,4 +514,75 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 
 	// Wait for final status update
 	return <-errChan
+}
+
+// ---------------------------------------------------------------------------
+// CrossTrade local auto-install helpers
+// ---------------------------------------------------------------------------
+
+// crossTradeSepoliaL1CrossTradeProxy is the pre-deployed L1CrossTradeProxy address on Sepolia.
+// Used for local L2 deployments: setChainInfo is called against this L1 proxy via deposit tx.
+const crossTradeSepoliaL1CrossTradeProxy = ""
+
+// crossTradeSepoliaL2toL2CrossTradeL1 is the pre-deployed L2toL2CrossTradeL1 address on Sepolia.
+// Used for local L2 deployments: L2toL2 setChainInfo points at this L1 contract.
+const crossTradeSepoliaL2toL2CrossTradeL1 = ""
+
+// autoInstallCrossTradeLocal deploys CrossTrade contracts on the local L2 via L1 deposit txs.
+// It reads L1 contract addresses from the deployment artifacts and calls SDK DeployCrossTradeLocal.
+// Called from deploy() after the main L2 stack is up (local infra, crossTrade preset enabled).
+func (s *ThanosStackDeploymentService) autoInstallCrossTradeLocal(
+	ctx context.Context,
+	stack *entities.StackEntity,
+	stackConfig *dtos.DeployThanosRequest,
+	chainInfo *thanosSDKTypes.ChainInformation,
+) (*thanosSDKStack.DeployCrossTradeLocalOutput, error) {
+	if chainInfo.L1ChainID == 0 {
+		return nil, fmt.Errorf("L1ChainID is 0: rollup.json may not be available yet")
+	}
+
+	// Read OptimismPortalProxy and L1CrossDomainMessengerProxy from deployment artifacts.
+	contracts, err := trhSDKUtils.ReadDeployementConfigFromJSONFile(
+		stack.DeploymentPath,
+		uint64(chainInfo.L1ChainID),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read deployment contracts for CrossTrade: %w", err)
+	}
+
+	if contracts.OptimismPortalProxy == "" {
+		return nil, fmt.Errorf("OptimismPortalProxy address is empty in deployment artifacts")
+	}
+	if contracts.L1CrossDomainMessengerProxy == "" {
+		return nil, fmt.Errorf("L1CrossDomainMessengerProxy address is empty in deployment artifacts")
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "crosstrade-local")
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		false,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SDK client for CrossTrade local deploy: %w", err)
+	}
+
+	return thanos.DeployCrossTradeLocal(
+		ctx,
+		sdkClient,
+		stackConfig.AdminAccount,
+		stackConfig.L1RpcUrl,
+		uint64(chainInfo.L1ChainID),
+		uint64(chainInfo.L2ChainID),
+		contracts.OptimismPortalProxy,
+		contracts.L1CrossDomainMessengerProxy,
+		crossTradeSepoliaL1CrossTradeProxy,
+		crossTradeSepoliaL2toL2CrossTradeL1,
+		[]thanosSDKStack.TokenPair{},
+	)
 }
