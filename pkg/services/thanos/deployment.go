@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
+	"github.com/tokamak-network/trh-backend/pkg/services/thanos/integrations"
 	"github.com/tokamak-network/trh-backend/pkg/services/thanos/presets"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	thanosSDKConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
@@ -281,6 +283,39 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 							logger.Error("failed to mark CrossTrade integration as installed",
 								zap.String("stackId", stackId.String()), zap.Error(updateErr))
 						}
+
+						// Write .env.crosstrade for the CrossTrade dApp container (BE-07).
+						// Non-fatal: env file failure does not block deployment success.
+						envCfg := &integrations.CrossTradeDAppConfig{
+							L1ChainID:              uint64(chainInformation.L1ChainID),
+							L2ChainID:              uint64(chainInformation.L2ChainID),
+							L2ChainName:            stackConfig.ChainName,
+							L2RPCURL:               chainInformation.L2RpcUrl,
+							L2BlockExplorerURL:     chainInformation.BlockExplorer,
+							DeployOutput:           crossTradeOutput,
+							L1CrossTradeProxyAddr:  crossTradeSepoliaL1CrossTradeProxy,
+							L2toL2CrossTradeL1Addr: crossTradeSepoliaL2toL2CrossTradeL1,
+						}
+						envPath := filepath.Join(stack.DeploymentPath, "config", ".env.crosstrade")
+						if envErr := integrations.BuildDAppEnvConfig(envPath, envCfg); envErr != nil {
+							logger.Warn("failed to write .env.crosstrade (non-fatal)",
+								zap.String("stackId", stackId.String()), zap.Error(envErr))
+						}
+
+						// Update stack metadata with CrossTrade dApp URL.
+						if stack.Metadata == nil {
+							stack.Metadata = &entities.StackMetadata{}
+						}
+						stack.Metadata.CrossTradeUrl = "http://localhost:3004"
+						if metaErr := s.stackRepo.UpdateMetadata(stackId.String(), stack.Metadata); metaErr != nil {
+							logger.Warn("failed to update stack metadata with CrossTradeUrl (non-fatal)",
+								zap.String("stackId", stackId.String()), zap.Error(metaErr))
+						}
+
+						logger.Info("CrossTrade auto-install completed",
+							zap.String("stackId", stackId.String()),
+							zap.String("l2CrossTradeProxy", crossTradeOutput.L2CrossTradeProxy),
+						)
 					}
 				}
 			}
