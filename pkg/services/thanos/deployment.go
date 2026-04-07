@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -345,6 +347,42 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 							if envErr := integrations.BuildDAppEnvConfig(envPath, envCfg); envErr != nil {
 								logger.Warn("failed to write .env.crosstrade (non-fatal)",
 									zap.String("stackId", stackId.String()), zap.Error(envErr))
+							}
+
+							// BE-08: Write docker-compose.crosstrade.yml and start dApp container (non-fatal).
+							// The compose file must be at stack.DeploymentPath so that its relative
+							// env_file (./config/.env.crosstrade) resolves alongside the env file
+							// already written above.
+							crossTradeComposePath := filepath.Join(stack.DeploymentPath, "docker-compose.crosstrade.yml")
+							crossTradeComposeContent := `version: "3.8"
+
+services:
+  crosstrade-dapp:
+    image: tokamaknetwork/cross-trade-app:latest
+    container_name: trh-crosstrade-dapp
+    ports:
+      - "3004:3000"
+    env_file:
+      - ./config/.env.crosstrade
+    restart: unless-stopped
+`
+							if writeErr := os.WriteFile(crossTradeComposePath, []byte(crossTradeComposeContent), 0644); writeErr != nil {
+								logger.Warn("failed to write docker-compose.crosstrade.yml (non-fatal)",
+									zap.String("stackId", stackId.String()), zap.Error(writeErr))
+							} else {
+								startOut, startErr := exec.CommandContext(ctx,
+									"docker", "compose", "-f", crossTradeComposePath, "up", "-d",
+								).CombinedOutput()
+								if startErr != nil {
+									logger.Warn("failed to start CrossTrade dApp container (non-fatal)",
+										zap.String("stackId", stackId.String()),
+										zap.Error(startErr),
+										zap.String("output", string(startOut)))
+								} else {
+									logger.Info("CrossTrade dApp container started",
+										zap.String("stackId", stackId.String()),
+										zap.String("composePath", crossTradeComposePath))
+								}
 							}
 
 							// Update stack metadata with CrossTrade dApp URL.
