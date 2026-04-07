@@ -272,50 +272,98 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 								zap.String("stackId", stackId.String()), zap.Error(updateErr))
 						}
 					} else {
-						ctMetaBytes, _ := json.Marshal(map[string]interface{}{
-							"url":       "http://localhost:3004",
-							"contracts": crossTradeOutput,
-						})
-						if updateErr := s.integrationRepo.UpdateMetadataAfterInstalled(
-							crossTradeIntegration.ID.String(),
-							entities.IntegrationInfo(ctMetaBytes),
-						); updateErr != nil {
-							logger.Error("failed to mark CrossTrade integration as installed",
-								zap.String("stackId", stackId.String()), zap.Error(updateErr))
-						}
-
-						// Write .env.crosstrade for the CrossTrade dApp container (BE-07).
-						// Non-fatal: env file failure does not block deployment success.
-						envCfg := &integrations.CrossTradeDAppConfig{
-							L1ChainID:              uint64(chainInformation.L1ChainID),
-							L2ChainID:              uint64(chainInformation.L2ChainID),
-							L2ChainName:            stackConfig.ChainName,
-							L2RPCURL:               chainInformation.L2RpcUrl,
-							L2BlockExplorerURL:     chainInformation.BlockExplorer,
-							DeployOutput:           crossTradeOutput,
-							L1CrossTradeProxyAddr:  crossTradeSepoliaL1CrossTradeProxy,
-							L2toL2CrossTradeL1Addr: crossTradeSepoliaL2toL2CrossTradeL1,
-						}
-						envPath := filepath.Join(stack.DeploymentPath, "config", ".env.crosstrade")
-						if envErr := integrations.BuildDAppEnvConfig(envPath, envCfg); envErr != nil {
-							logger.Warn("failed to write .env.crosstrade (non-fatal)",
-								zap.String("stackId", stackId.String()), zap.Error(envErr))
-						}
-
-						// Update stack metadata with CrossTrade dApp URL.
-						if stack.Metadata == nil {
-							stack.Metadata = &entities.StackMetadata{}
-						}
-						stack.Metadata.CrossTradeUrl = "http://localhost:3004"
-						if metaErr := s.stackRepo.UpdateMetadata(stackId.String(), stack.Metadata); metaErr != nil {
-							logger.Warn("failed to update stack metadata with CrossTradeUrl (non-fatal)",
-								zap.String("stackId", stackId.String()), zap.Error(metaErr))
-						}
-
-						logger.Info("CrossTrade auto-install completed",
-							zap.String("stackId", stackId.String()),
-							zap.String("l2CrossTradeProxy", crossTradeOutput.L2CrossTradeProxy),
+						// Read L1 bridge addresses from deploy.json for L2toL2 setChainInfo 7-param call.
+						// trhSDKUtils.ReadDeployementConfigFromJSONFile returns the {l1ChainID}-deploy.json contracts.
+						l1Contracts, contractsErr := trhSDKUtils.ReadDeployementConfigFromJSONFile(
+							stack.DeploymentPath,
+							uint64(chainInformation.L1ChainID),
 						)
+						l1StandardBridge := ""
+						l1USDCBridge := ""
+						if contractsErr != nil {
+							logger.Warn("failed to read L1 bridge addresses for CrossTrade registration (non-fatal, using empty)",
+								zap.String("stackId", stackId.String()), zap.Error(contractsErr))
+						} else {
+							l1StandardBridge = l1Contracts.L1StandardBridgeProxy
+							l1USDCBridge = l1Contracts.L1UsdcBridgeProxy
+						}
+
+						// BE-04, BE-05, BE-06: L1 CrossTrade 컨트랙트에 새 L2 등록 (setChainInfo x2, max 3 retries)
+						regInput := &integrations.CrossTradeL1RegistrationInput{
+							L1RPCURL:              stackConfig.L1RpcUrl,
+							L1ChainID:             uint64(chainInformation.L1ChainID),
+							L2ChainID:             uint64(chainInformation.L2ChainID),
+							DeployerPrivKey:       stackConfig.AdminAccount,
+							L2CrossTradeProxy:     crossTradeOutput.L2CrossTradeProxy,
+							L2toL2CrossTradeProxy: crossTradeOutput.L2toL2CrossTradeProxy,
+							L1StandardBridge:      l1StandardBridge,
+							L1USDCBridge:          l1USDCBridge,
+						}
+						regOutput, regErr := integrations.RegisterCrossTradeL2(ctx, regInput, 3)
+						if regErr != nil {
+							// D-01: L2 컨트랙트는 배포됐으나 L1 등록 실패 → CrossTrade integration만 failed 표시
+							// crossTradeOutput은 보존되며 L2 배포 성공은 덮어쓰지 않음
+							logger.Error("CrossTrade L1 registration (setChainInfo) failed",
+								zap.String("stackId", stackId.String()), zap.Error(regErr))
+							if updateErr := s.integrationRepo.UpdateIntegrationStatusWithReason(
+								crossTradeIntegration.ID.String(),
+								entities.DeploymentStatusFailed,
+								regErr.Error(),
+							); updateErr != nil {
+								logger.Error("failed to update crossTrade integration status after L1 registration failure",
+									zap.String("stackId", stackId.String()), zap.Error(updateErr))
+							}
+						} else {
+							// L1 등록 성공 — metadata에 tx hash 포함하여 저장
+							ctMetaBytes, _ := json.Marshal(map[string]interface{}{
+								"url":                     "http://localhost:3004",
+								"contracts":               crossTradeOutput,
+								"l1_registration_tx_hash": regOutput.L2L1TxHash,
+								"l1_l2l2_tx_hash":         regOutput.L2L2TxHash,
+							})
+							if updateErr := s.integrationRepo.UpdateMetadataAfterInstalled(
+								crossTradeIntegration.ID.String(),
+								entities.IntegrationInfo(ctMetaBytes),
+							); updateErr != nil {
+								logger.Error("failed to mark CrossTrade integration as installed",
+									zap.String("stackId", stackId.String()), zap.Error(updateErr))
+							}
+
+							// Write .env.crosstrade for the CrossTrade dApp container (BE-07).
+							// Non-fatal: env file failure does not block deployment success.
+							envCfg := &integrations.CrossTradeDAppConfig{
+								L1ChainID:              uint64(chainInformation.L1ChainID),
+								L2ChainID:              uint64(chainInformation.L2ChainID),
+								L2ChainName:            stackConfig.ChainName,
+								L2RPCURL:               chainInformation.L2RpcUrl,
+								L2BlockExplorerURL:     chainInformation.BlockExplorer,
+								DeployOutput:           crossTradeOutput,
+								L1CrossTradeProxyAddr:  crossTradeSepoliaL1CrossTradeProxy,
+								L2toL2CrossTradeL1Addr: crossTradeSepoliaL2toL2CrossTradeL1,
+							}
+							envPath := filepath.Join(stack.DeploymentPath, "config", ".env.crosstrade")
+							if envErr := integrations.BuildDAppEnvConfig(envPath, envCfg); envErr != nil {
+								logger.Warn("failed to write .env.crosstrade (non-fatal)",
+									zap.String("stackId", stackId.String()), zap.Error(envErr))
+							}
+
+							// Update stack metadata with CrossTrade dApp URL.
+							if stack.Metadata == nil {
+								stack.Metadata = &entities.StackMetadata{}
+							}
+							stack.Metadata.CrossTradeUrl = "http://localhost:3004"
+							if metaErr := s.stackRepo.UpdateMetadata(stackId.String(), stack.Metadata); metaErr != nil {
+								logger.Warn("failed to update stack metadata with CrossTradeUrl (non-fatal)",
+									zap.String("stackId", stackId.String()), zap.Error(metaErr))
+							}
+
+							logger.Info("CrossTrade auto-install completed",
+								zap.String("stackId", stackId.String()),
+								zap.String("l2CrossTradeProxy", crossTradeOutput.L2CrossTradeProxy),
+								zap.String("l2L1TxHash", regOutput.L2L1TxHash),
+								zap.String("l2L2TxHash", regOutput.L2L2TxHash),
+							)
+						}
 					}
 				}
 			}
