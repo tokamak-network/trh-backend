@@ -224,6 +224,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		// Cross trade management
 		adminRoutes.POST("/:id/integrations/cross-trade", handler.InstallCrossChainBridge)
 		adminRoutes.DELETE("/:id/integrations/cross-trade", handler.UninstallCrossChainBridge)
+		adminRoutes.POST("/:id/integrations/cross-trade-local", handler.RetriggerCrossTradeLocal)
 
 		adminRoutes.POST("/:id/integrations/:integrationId/cancel", handler.CancelIntegration)
 		adminRoutes.POST("/:id/integrations/:integrationId/retry", handler.RetryIntegration)

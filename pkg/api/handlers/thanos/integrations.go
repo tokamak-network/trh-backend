@@ -845,6 +845,30 @@ func (h *ThanosDeploymentHandler) RetryIntegration(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+// @Summary		Retrigger CrossTrade Local
+// @Description	Re-run CrossTrade local deployment on an existing Deployed local stack
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/cross-trade-local [post]
+func (h *ThanosDeploymentHandler) RetriggerCrossTradeLocal(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+		})
+		return
+	}
+	response, err := h.ThanosDeploymentService.RetriggerCrossTradeLocal(c.Request.Context(), id)
+	if err != nil {
+		logger.Error("failed to retrigger cross trade local", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 // parseAndValidateIntegrationIDs extracts and validates stack and integration IDs from request params
 func parseAndValidateIntegrationIDs(c *gin.Context) (stackUUID uuid.UUID, integrationUUID uuid.UUID, handled bool) {
 	id := c.Param("id")

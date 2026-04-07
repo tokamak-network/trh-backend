@@ -412,6 +412,19 @@ services:
 				}
 			}
 		}
+
+		// Start AA Operator AFTER all preset auto-installs (including CrossTrade) have
+		// completed. Starting it earlier would allow the operator to consume L2 deployer
+		// nonces before CrossTrade's CREATE address predictions are resolved, causing
+		// waitForContractCode to poll the wrong address and time out.
+		if stackConfig.InfraProvider == "local" && thanosSDKConstants.NeedsAASetup(stackConfig.PresetID, stackConfig.FeeToken) {
+			capturedClient := sdkClient
+			s.taskManager.AddTask(fmt.Sprintf("aa-operator-%s", stackId.String()), func(ctx context.Context) {
+				thanos.StartAAOperatorFromConfig(ctx, capturedClient)
+			})
+			logger.Info("AA Operator task queued (after CrossTrade install)",
+				zap.String("stackId", stackId.String()))
+		}
 	}
 
 	logger.Info("Thanos stack deployed successfully",
@@ -599,12 +612,10 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 			var infraErr error
 			if deployInfraConfig.InfraProvider == "local" {
 				infraErr = thanos.DeployLocalInfrastructure(ctx, sdkClient, &deployInfraConfig)
-				if infraErr == nil && thanosSDKConstants.NeedsAASetup(deploymentConfig.PresetID, deploymentConfig.FeeToken) {
-					capturedClient := sdkClient
-					s.taskManager.AddTask(fmt.Sprintf("aa-operator-%s", stackId.String()), func(ctx context.Context) {
-						thanos.StartAAOperatorFromConfig(ctx, capturedClient)
-					})
-				}
+				// NOTE: AA Operator is intentionally NOT started here.
+				// It is started in deploy() after CrossTrade auto-install completes,
+				// to prevent the AA Operator from consuming L2 deployer nonces before
+				// CrossTrade contract addresses can be predicted accurately.
 			} else {
 				infraErr = thanos.DeployAWSInfrastructure(ctx, sdkClient, &deployInfraConfig)
 			}
@@ -641,13 +652,15 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 // CrossTrade local auto-install helpers
 // ---------------------------------------------------------------------------
 
-// crossTradeSepoliaL1CrossTradeProxy is the pre-deployed L1CrossTradeProxy address on Sepolia.
-// Used for local L2 deployments: setChainInfo is called against this L1 proxy via deposit tx.
-const crossTradeSepoliaL1CrossTradeProxy = "0xf3473E20F1d9EB4468C72454a27aA1C65B67AB35"
+// crossTradeSepoliaL1CrossTradeProxy is the L1CrossTradeProxy address on Sepolia.
+// Deployed by 0x7220c734653ae8Ca014d4D82A84041EE4169499c (our admin key) so we can call setChainInfo.
+// Implementation: 0x40dF470B38c744963CC6599C31166624B3e4d38A (reused from original)
+const crossTradeSepoliaL1CrossTradeProxy = "0x5AbbFe2468F3bb34B3D5B3F72714b73aa3c1D3EB"
 
-// crossTradeSepoliaL2toL2CrossTradeL1 is the pre-deployed L2toL2CrossTradeL1 address on Sepolia.
-// Used for local L2 deployments: L2toL2 setChainInfo points at this L1 contract.
-const crossTradeSepoliaL2toL2CrossTradeL1 = "0xDa2CbF69352cB46d9816dF934402b421d93b6BC2"
+// crossTradeSepoliaL2toL2CrossTradeL1 is the L2toL2CrossTradeProxyL1 address on Sepolia.
+// Deployed by 0x7220c734653ae8Ca014d4D82A84041EE4169499c (our admin key) so we can call setChainInfo.
+// Implementation: 0x21BAF7126d2257edcCC9bfa7920b8c06A1E45e46 (reused from original)
+const crossTradeSepoliaL2toL2CrossTradeL1 = "0xF09Af74810010a0e9A452f71B3921641350c21D0"
 
 // autoInstallCrossTradeLocal deploys CrossTrade contracts on the local L2 via L1 deposit txs.
 // It reads L1 contract addresses from the deployment artifacts and calls SDK DeployCrossTradeLocal.
@@ -693,11 +706,17 @@ func (s *ThanosStackDeploymentService) autoInstallCrossTradeLocal(
 		return nil, fmt.Errorf("failed to create SDK client for CrossTrade local deploy: %w", err)
 	}
 
+	// L2 RPC URL for use inside the backend Docker container.
+	// The L2 op-geth container maps port 8545 to the host; access via host gateway.
+	// host.docker.internal resolves to the Docker host on macOS/Windows (Docker Desktop).
+	l2RpcUrl := "http://host.docker.internal:8545"
+
 	return thanos.DeployCrossTradeLocal(
 		ctx,
 		sdkClient,
 		stackConfig.AdminAccount,
 		stackConfig.L1RpcUrl,
+		l2RpcUrl,
 		uint64(chainInfo.L1ChainID),
 		uint64(chainInfo.L2ChainID),
 		contracts.OptimismPortalProxy,
@@ -706,4 +725,152 @@ func (s *ThanosStackDeploymentService) autoInstallCrossTradeLocal(
 		crossTradeSepoliaL2toL2CrossTradeL1,
 		[]thanosSDKStack.TokenPair{},
 	)
+}
+
+// RetriggerCrossTradeLocal re-runs the CrossTrade local deployment flow on an already-deployed
+// local stack whose CrossTrade integration previously failed.
+// It resets the Failed integration record, re-deploys L2 contracts, registers on L1, and
+// starts the dApp container — matching the auto-install flow in executeDeployments.
+func (s *ThanosStackDeploymentService) RetriggerCrossTradeLocal(ctx context.Context, stackIdStr string) (*entities.Response, error) {
+	stack, err := s.stackRepo.GetStackByID(stackIdStr)
+	if err != nil || stack == nil {
+		return &entities.Response{Status: 404, Message: "stack not found"}, nil
+	}
+	if stack.Status != entities.StackStatusDeployed {
+		return &entities.Response{Status: 400, Message: "stack is not in Deployed status"}, nil
+	}
+
+	var stackConfig dtos.DeployThanosRequest
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		return &entities.Response{Status: 500, Message: "failed to unmarshal stack config"}, err
+	}
+	if stackConfig.InfraProvider != "local" {
+		return &entities.Response{Status: 400, Message: "RetriggerCrossTradeLocal is only for local infra stacks"}, nil
+	}
+
+	chainInfo := thanos.BuildLocalChainInformation(stack.DeploymentPath)
+	if chainInfo == nil || chainInfo.L1ChainID == 0 {
+		return &entities.Response{Status: 500, Message: "failed to read chain information from deployment artifacts"}, nil
+	}
+
+	// Find existing integration (may be Failed) and reset it to Pending.
+	crossTradeIntegration, getErr := s.integrationRepo.GetIntegration(stackIdStr, enum.IntegrationTypeCrossTrade.String())
+	if getErr != nil || crossTradeIntegration == nil {
+		return &entities.Response{Status: 404, Message: "cross-trade integration record not found"}, nil
+	}
+	if err := s.integrationRepo.UpdateIntegrationStatus(crossTradeIntegration.ID.String(), entities.DeploymentStatusPending); err != nil {
+		return &entities.Response{Status: 500, Message: "failed to reset integration status"}, err
+	}
+
+	taskId := fmt.Sprintf("retrigger-cross-trade-local-%s", stackIdStr)
+	stackId := stack.ID
+	s.taskManager.AddTask(taskId, func(bgCtx context.Context) {
+		// 30-minute timeout for the full CrossTrade install flow.
+		taskCtx, cancel := context.WithTimeout(bgCtx, 30*60*1000000000)
+		defer cancel()
+
+		if updateErr := s.integrationRepo.UpdateIntegrationStatus(crossTradeIntegration.ID.String(), entities.DeploymentStatusInProgress); updateErr != nil {
+			logger.Error("retrigger: failed to set InProgress", zap.String("stackId", stackIdStr), zap.Error(updateErr))
+		}
+
+		ctOutput, ctErr := s.autoInstallCrossTradeLocal(taskCtx, stack, &stackConfig, chainInfo)
+		if ctErr != nil {
+			logger.Error("retrigger: CrossTrade deploy failed", zap.String("stackId", stackIdStr), zap.Error(ctErr))
+			_ = s.integrationRepo.UpdateIntegrationStatusWithReason(crossTradeIntegration.ID.String(), entities.DeploymentStatusFailed, ctErr.Error())
+			return
+		}
+
+		// Read L1 bridge addresses for L2toL2 setChainInfo.
+		l1Contracts, contractsErr := trhSDKUtils.ReadDeployementConfigFromJSONFile(stack.DeploymentPath, uint64(chainInfo.L1ChainID))
+		l1StandardBridge, l1USDCBridge := "", ""
+		if contractsErr != nil {
+			logger.Warn("retrigger: failed to read L1 bridge addresses (non-fatal)", zap.String("stackId", stackIdStr), zap.Error(contractsErr))
+		} else {
+			l1StandardBridge = l1Contracts.L1StandardBridgeProxy
+			l1USDCBridge = l1Contracts.L1UsdcBridgeProxy
+		}
+
+		regInput := &integrations.CrossTradeL1RegistrationInput{
+			L1RPCURL:              stackConfig.L1RpcUrl,
+			L1ChainID:             uint64(chainInfo.L1ChainID),
+			L2ChainID:             uint64(chainInfo.L2ChainID),
+			DeployerPrivKey:       stackConfig.AdminAccount,
+			L2CrossTradeProxy:     ctOutput.L2CrossTradeProxy,
+			L2toL2CrossTradeProxy: ctOutput.L2toL2CrossTradeProxy,
+			L1StandardBridge:      l1StandardBridge,
+			L1USDCBridge:          l1USDCBridge,
+		}
+		regOutput, regErr := integrations.RegisterCrossTradeL2(taskCtx, regInput, 3)
+		if regErr != nil {
+			logger.Error("retrigger: L1 registration failed", zap.String("stackId", stackIdStr), zap.Error(regErr))
+			_ = s.integrationRepo.UpdateIntegrationStatusWithReason(crossTradeIntegration.ID.String(), entities.DeploymentStatusFailed, regErr.Error())
+			return
+		}
+
+		ctMetaBytes, _ := json.Marshal(map[string]interface{}{
+			"url":                     "http://localhost:3004",
+			"contracts":               ctOutput,
+			"l1_registration_tx_hash": regOutput.L2L1TxHash,
+			"l1_l2l2_tx_hash":         regOutput.L2L2TxHash,
+		})
+		if updateErr := s.integrationRepo.UpdateMetadataAfterInstalled(crossTradeIntegration.ID.String(), entities.IntegrationInfo(ctMetaBytes)); updateErr != nil {
+			logger.Error("retrigger: failed to mark as installed", zap.String("stackId", stackIdStr), zap.Error(updateErr))
+			return
+		}
+
+		// Write .env.crosstrade and start dApp container.
+		envCfg := &integrations.CrossTradeDAppConfig{
+			L1ChainID:              uint64(chainInfo.L1ChainID),
+			L2ChainID:              uint64(chainInfo.L2ChainID),
+			L2ChainName:            stackConfig.ChainName,
+			L2RPCURL:               chainInfo.L2RpcUrl,
+			L2BlockExplorerURL:     chainInfo.BlockExplorer,
+			DeployOutput:           ctOutput,
+			L1CrossTradeProxyAddr:  crossTradeSepoliaL1CrossTradeProxy,
+			L2toL2CrossTradeL1Addr: crossTradeSepoliaL2toL2CrossTradeL1,
+		}
+		envPath := filepath.Join(stack.DeploymentPath, "config", ".env.crosstrade")
+		if envErr := integrations.BuildDAppEnvConfig(envPath, envCfg); envErr != nil {
+			logger.Warn("retrigger: failed to write .env.crosstrade (non-fatal)", zap.String("stackId", stackIdStr), zap.Error(envErr))
+		}
+
+		crossTradeComposePath := filepath.Join(stack.DeploymentPath, "docker-compose.crosstrade.yml")
+		crossTradeComposeContent := `version: "3.8"
+
+services:
+  crosstrade-dapp:
+    image: tokamaknetwork/cross-trade-app:latest
+    container_name: trh-crosstrade-dapp
+    ports:
+      - "3004:3000"
+    env_file:
+      - ./config/.env.crosstrade
+    restart: unless-stopped
+`
+		if writeErr := os.WriteFile(crossTradeComposePath, []byte(crossTradeComposeContent), 0644); writeErr != nil {
+			logger.Warn("retrigger: failed to write compose file (non-fatal)", zap.String("stackId", stackIdStr), zap.Error(writeErr))
+		} else {
+			startOut, startErr := exec.CommandContext(taskCtx, "docker", "compose", "-f", crossTradeComposePath, "up", "-d").CombinedOutput()
+			if startErr != nil {
+				logger.Warn("retrigger: failed to start dApp container (non-fatal)", zap.String("stackId", stackIdStr), zap.Error(startErr), zap.String("output", string(startOut)))
+			} else {
+				logger.Info("retrigger: CrossTrade dApp container started", zap.String("stackId", stackIdStr))
+			}
+		}
+
+		if stack.Metadata == nil {
+			stack.Metadata = &entities.StackMetadata{}
+		}
+		stack.Metadata.CrossTradeUrl = "http://localhost:3004"
+		if metaErr := s.stackRepo.UpdateMetadata(stackId.String(), stack.Metadata); metaErr != nil {
+			logger.Warn("retrigger: failed to update stack metadata (non-fatal)", zap.String("stackId", stackIdStr), zap.Error(metaErr))
+		}
+
+		logger.Info("retrigger: CrossTrade install completed",
+			zap.String("stackId", stackIdStr),
+			zap.String("l2CrossTradeProxy", ctOutput.L2CrossTradeProxy),
+		)
+	})
+
+	return &entities.Response{Status: 200, Message: "CrossTrade local re-deployment started"}, nil
 }

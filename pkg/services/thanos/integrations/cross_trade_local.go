@@ -256,7 +256,7 @@ func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationIn
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		l2l1TxHash, l2l1Err = sendL1SetChainInfoTx(
 			ctx, l1Client, privKey,
-			common.HexToAddress("0xf3473E20F1d9EB4468C72454a27aA1C65B67AB35"),
+			common.HexToAddress("0x5AbbFe2468F3bb34B3D5B3F72714b73aa3c1D3EB"),
 			l1Calldata, input.L1ChainID,
 		)
 		if l2l1Err == nil {
@@ -294,7 +294,7 @@ func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationIn
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		l2l2TxHash, l2l2Err = sendL1SetChainInfoTx(
 			ctx, l1Client, privKey,
-			common.HexToAddress("0xDa2CbF69352cB46d9816dF934402b421d93b6BC2"),
+			common.HexToAddress("0xF09Af74810010a0e9A452f71B3921641350c21D0"),
 			l2l2Calldata, input.L1ChainID,
 		)
 		if l2l2Err == nil {
