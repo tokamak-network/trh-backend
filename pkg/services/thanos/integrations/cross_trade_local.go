@@ -1,11 +1,22 @@
 package integrations
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	thanosTypes "github.com/tokamak-network/trh-sdk/pkg/stacks/thanos"
 )
 
@@ -126,4 +137,179 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 		return fmt.Errorf("write .env.crosstrade: %w", err)
 	}
 	return nil
+}
+
+// Sepolia L1 CrossTrade 컨트랙트 상수 (BE-10, BE-11 관련)
+const (
+	l2CrossDomainMessenger = "0x4200000000000000000000000000000000000007"
+	sepoliaTONAddress      = "0xa30fe40285b8f5c0457dbc3b7c8a280373c40044"
+)
+
+// ABI 문자열: L1CrossTradeProxy.setChainInfo (3-param)
+const l1CrossTradeProxySetChainInfoABI = `[{"name":"setChainInfo","type":"function","inputs":[{"name":"_crossDomainMessenger","type":"address"},{"name":"_l2CrossTrade","type":"address"},{"name":"_l2chainId","type":"uint256"}],"outputs":[]}]`
+
+// ABI 문자열: L2toL2CrossTradeL1.setChainInfo (7-param)
+const l2toL2CrossTradeL1SetChainInfoABI = `[{"name":"setChainInfo","type":"function","inputs":[{"name":"_crossDomainMessenger","type":"address"},{"name":"_l2CrossTrade","type":"address"},{"name":"_l2NativeTokenAddressOnL1","type":"address"},{"name":"_l1StandardBridge","type":"address"},{"name":"_l1USDCBridge","type":"address"},{"name":"_l2ChainId","type":"uint256"},{"name":"_useCustomBridge","type":"bool"}],"outputs":[]}]`
+
+// CrossTradeL1RegistrationInput은 RegisterCrossTradeL2() 호출에 필요한 입력 데이터다 (BE-11).
+type CrossTradeL1RegistrationInput struct {
+	L1RPCURL              string // L1 Sepolia RPC (예: "https://rpc.sepolia.org")
+	L1ChainID             uint64 // 11155111 (Sepolia)
+	L2ChainID             uint64 // 새로 배포된 L2 chain ID
+	DeployerPrivKey       string // hex-encoded private key (0x prefix 없음), admin key (index 0)
+	L2CrossTradeProxy     string // SDK 배포 결과: L2CrossTradeProxy 주소
+	L2toL2CrossTradeProxy string // SDK 배포 결과: L2toL2CrossTradeProxy 주소
+	L1StandardBridge      string // deploy.json의 L1StandardBridgeProxy (L1 주소, L2 predeploy 아님)
+	L1USDCBridge          string // deploy.json의 L1UsdcBridgeProxy
+}
+
+// CrossTradeL1RegistrationOutput은 L1 등록 완료 후 반환되는 결과다 (BE-11).
+type CrossTradeL1RegistrationOutput struct {
+	L2L1TxHash string // L1CrossTradeProxy.setChainInfo() tx hash
+	L2L2TxHash string // L2toL2CrossTradeL1.setChainInfo() tx hash
+}
+
+// CrossTradePresetConfig는 DeFi/Full preset에서 L1 CrossTrade 관련 설정을 담는다 (BE-10).
+type CrossTradePresetConfig struct {
+	L1CrossTradeProxy      string // sepoliaL1CrossTradeProxy 상수 사용
+	L2toL2CrossTradeL1Addr string // sepoliaL2toL2CrossTradeL1 상수 사용
+	OwnerPrivKey           string // deployer/owner private key (Phase 1에서는 admin key와 동일)
+}
+
+// sendL1SetChainInfoTx는 L1 컨트랙트에 calldata를 전송하고 receipt를 기다린다.
+// 매 호출마다 최신 nonce를 조회하여 재시도 시 nonce 충돌을 방지한다.
+func sendL1SetChainInfoTx(
+	ctx context.Context,
+	client *ethclient.Client,
+	privKey *ecdsa.PrivateKey,
+	contractAddr common.Address,
+	calldata []byte,
+	l1ChainID uint64,
+) (string, error) {
+	senderAddr := crypto.PubkeyToAddress(privKey.PublicKey)
+	chainID := new(big.Int).SetUint64(l1ChainID)
+	signer := types.NewEIP155Signer(chainID)
+
+	nonce, err := client.PendingNonceAt(ctx, senderAddr)
+	if err != nil {
+		return "", fmt.Errorf("get nonce: %w", err)
+	}
+	gasPrice, err := client.SuggestGasPrice(ctx)
+	if err != nil {
+		return "", fmt.Errorf("suggest gas price: %w", err)
+	}
+	// setChainInfo 예상 가스: ~120,000. safety margin 포함해 200,000 고정.
+	tx := types.NewTransaction(nonce, contractAddr, big.NewInt(0), 200_000, gasPrice, calldata)
+	signedTx, err := types.SignTx(tx, signer, privKey)
+	if err != nil {
+		return "", fmt.Errorf("sign tx: %w", err)
+	}
+	if err := client.SendTransaction(ctx, signedTx); err != nil {
+		return "", fmt.Errorf("send tx: %w", err)
+	}
+	receipt, err := bind.WaitMined(ctx, client, signedTx)
+	if err != nil {
+		return "", fmt.Errorf("wait mined: %w", err)
+	}
+	if receipt.Status == 0 {
+		return "", fmt.Errorf("tx reverted: %s", signedTx.Hash().Hex())
+	}
+	return signedTx.Hash().Hex(), nil
+}
+
+// RegisterCrossTradeL2는 Sepolia L1의 CrossTrade 컨트랙트 2개에 새 L2를 등록한다 (BE-04, BE-05, BE-06).
+// L1CrossTradeProxy.setChainInfo (3-param)와 L2toL2CrossTradeL1.setChainInfo (7-param)를 순차 호출한다.
+// 각 호출은 maxRetries회까지 재시도하며 attempt*5s 간격을 둔다.
+func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationInput, maxRetries int) (*CrossTradeL1RegistrationOutput, error) {
+	if input.DeployerPrivKey == "" {
+		return nil, fmt.Errorf("deployer private key is required for CrossTrade L1 registration")
+	}
+
+	privKey, err := crypto.HexToECDSA(strings.TrimPrefix(input.DeployerPrivKey, "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("parse deployer private key: %w", err)
+	}
+
+	// L1 ethclient 신규 생성 (SDK client와 분리하여 독립적으로 관리)
+	l1Client, err := ethclient.DialContext(ctx, input.L1RPCURL)
+	if err != nil {
+		return nil, fmt.Errorf("connect to L1 RPC %s: %w", input.L1RPCURL, err)
+	}
+	defer l1Client.Close()
+
+	// ── L1CrossTradeProxy.setChainInfo (3-param) ──
+	l1ABI, err := abi.JSON(strings.NewReader(l1CrossTradeProxySetChainInfoABI))
+	if err != nil {
+		return nil, fmt.Errorf("parse L1CrossTradeProxy ABI: %w", err)
+	}
+	l1Calldata, err := l1ABI.Pack("setChainInfo",
+		common.HexToAddress(l2CrossDomainMessenger),
+		common.HexToAddress(input.L2CrossTradeProxy),
+		new(big.Int).SetUint64(input.L2ChainID),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("encode L1CrossTradeProxy.setChainInfo calldata: %w", err)
+	}
+
+	var l2l1TxHash string
+	var l2l1Err error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		l2l1TxHash, l2l1Err = sendL1SetChainInfoTx(
+			ctx, l1Client, privKey,
+			common.HexToAddress("0xf3473E20F1d9EB4468C72454a27aA1C65B67AB35"),
+			l1Calldata, input.L1ChainID,
+		)
+		if l2l1Err == nil {
+			break
+		}
+		if attempt < maxRetries {
+			time.Sleep(time.Duration(attempt) * 5 * time.Second)
+		}
+	}
+	if l2l1Err != nil {
+		return nil, fmt.Errorf("L1CrossTradeProxy.setChainInfo failed after %d attempts: %w", maxRetries, l2l1Err)
+	}
+
+	// ── L2toL2CrossTradeL1.setChainInfo (7-param) ──
+	l2l2ABI, err := abi.JSON(strings.NewReader(l2toL2CrossTradeL1SetChainInfoABI))
+	if err != nil {
+		return nil, fmt.Errorf("parse L2toL2CrossTradeL1 ABI: %w", err)
+	}
+	// Pitfall 방어: _l1StandardBridge는 L1 배포 주소 (L2 predeploy 0x4200...0010 아님)
+	l2l2Calldata, err := l2l2ABI.Pack("setChainInfo",
+		common.HexToAddress(l2CrossDomainMessenger),
+		common.HexToAddress(input.L2toL2CrossTradeProxy),
+		common.HexToAddress(sepoliaTONAddress),
+		common.HexToAddress(input.L1StandardBridge),
+		common.HexToAddress(input.L1USDCBridge),
+		new(big.Int).SetUint64(input.L2ChainID),
+		false, // useCustomBridge: Phase 1 TON fee mode
+	)
+	if err != nil {
+		return nil, fmt.Errorf("encode L2toL2CrossTradeL1.setChainInfo calldata: %w", err)
+	}
+
+	var l2l2TxHash string
+	var l2l2Err error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		l2l2TxHash, l2l2Err = sendL1SetChainInfoTx(
+			ctx, l1Client, privKey,
+			common.HexToAddress("0xDa2CbF69352cB46d9816dF934402b421d93b6BC2"),
+			l2l2Calldata, input.L1ChainID,
+		)
+		if l2l2Err == nil {
+			break
+		}
+		if attempt < maxRetries {
+			time.Sleep(time.Duration(attempt) * 5 * time.Second)
+		}
+	}
+	if l2l2Err != nil {
+		return nil, fmt.Errorf("L2toL2CrossTradeL1.setChainInfo failed after %d attempts: %w", maxRetries, l2l2Err)
+	}
+
+	return &CrossTradeL1RegistrationOutput{
+		L2L1TxHash: l2l1TxHash,
+		L2L2TxHash: l2l2TxHash,
+	}, nil
 }
