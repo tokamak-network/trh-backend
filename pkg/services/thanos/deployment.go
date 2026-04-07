@@ -522,11 +522,11 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 
 // crossTradeSepoliaL1CrossTradeProxy is the pre-deployed L1CrossTradeProxy address on Sepolia.
 // Used for local L2 deployments: setChainInfo is called against this L1 proxy via deposit tx.
-const crossTradeSepoliaL1CrossTradeProxy = ""
+const crossTradeSepoliaL1CrossTradeProxy = "0xf3473E20F1d9EB4468C72454a27aA1C65B67AB35"
 
 // crossTradeSepoliaL2toL2CrossTradeL1 is the pre-deployed L2toL2CrossTradeL1 address on Sepolia.
 // Used for local L2 deployments: L2toL2 setChainInfo points at this L1 contract.
-const crossTradeSepoliaL2toL2CrossTradeL1 = ""
+const crossTradeSepoliaL2toL2CrossTradeL1 = "0xDa2CbF69352cB46d9816dF934402b421d93b6BC2"
 
 // autoInstallCrossTradeLocal deploys CrossTrade contracts on the local L2 via L1 deposit txs.
 // It reads L1 contract addresses from the deployment artifacts and calls SDK DeployCrossTradeLocal.
