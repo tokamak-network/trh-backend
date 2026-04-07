@@ -1571,6 +1571,230 @@ const docTemplate = `{
                 }
             }
         },
+        "/stacks/thanos/{id}/integrations/backup/attach": {
+            "post": {
+                "description": "Backup Attach",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Backup Attach",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/backup/checkpoints": {
+            "get": {
+                "description": "Backup Checkpoints",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Backup Checkpoints",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/backup/cleanup": {
+            "delete": {
+                "description": "Backup Cleanup",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Backup Cleanup",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/backup/configure": {
+            "post": {
+                "description": "Backup Configure",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Backup Configure",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/backup/restore": {
+            "post": {
+                "description": "Backup Restore",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Backup Restore",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/backup/snapshot": {
+            "post": {
+                "description": "Backup Snapshot",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Backup Snapshot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/backup/status": {
+            "get": {
+                "description": "Backup Status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Backup Status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/stacks/thanos/{id}/integrations/block-explorer": {
             "post": {
                 "description": "Install Block Explorer",
@@ -1704,6 +1928,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/stacks/thanos/{id}/integrations/cross-trade": {
+            "post": {
+                "description": "Install Cross Chain Bridge",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Install Cross Chain Bridge",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Install Cross Chain Bridge Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.InstallCrossChainBridgeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Uninstall Cross Chain Bridge",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Uninstall Cross Chain Bridge",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/stacks/thanos/{id}/integrations/monitoring": {
             "post": {
                 "description": "Install Monitoring",
@@ -1756,6 +2051,214 @@ const docTemplate = `{
                     "Thanos Stack"
                 ],
                 "summary": "Uninstall Monitoring",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/monitoring/disable-email": {
+            "delete": {
+                "description": "Disable Email Alert Configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Disable Email Alert",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/monitoring/disable-telegram": {
+            "delete": {
+                "description": "Disable Telegram Alert Configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Disable Telegram Alert",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/monitoring/update-email": {
+            "put": {
+                "description": "Update Email Alert Configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Update Email Alert Configuration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update Email Config Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.UpdateEmailConfigRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/monitoring/update-telegram": {
+            "put": {
+                "description": "Update Telegram Alert Configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Update Telegram Alert Configuration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update Telegram Config Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.UpdateTelegramConfigRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stacks/thanos/{id}/integrations/system-pulse": {
+            "post": {
+                "description": "Install Uptime Service",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Install Uptime Service",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thanos Stack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entities.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Uninstall Uptime Service",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Thanos Stack"
+                ],
+                "summary": "Uninstall Uptime Service",
                 "parameters": [
                     {
                         "type": "string",
@@ -2323,13 +2826,7 @@ const docTemplate = `{
         "dtos.EmailConfig": {
             "type": "object",
             "properties": {
-                "criticalReceivers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "defaultReceivers": {
+                "alertReceivers": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -2339,9 +2836,6 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "smtpAuthPassword": {
-                    "type": "string"
-                },
-                "smtpAuthUsername": {
                     "type": "string"
                 },
                 "smtpFrom": {
@@ -2375,9 +2869,13 @@ const docTemplate = `{
                 }
             }
         },
+        "dtos.InstallCrossChainBridgeRequest": {
+            "type": "object"
+        },
         "dtos.InstallMonitoringRequest": {
             "type": "object",
             "required": [
+                "alertManager",
                 "grafanaPassword"
             ],
             "properties": {
@@ -2519,6 +3017,32 @@ const docTemplate = `{
                 }
             }
         },
+        "dtos.UpdateEmailConfigRequest": {
+            "type": "object",
+            "required": [
+                "alertReceivers",
+                "smtpAuthPassword",
+                "smtpFrom",
+                "smtpSmarthost"
+            ],
+            "properties": {
+                "alertReceivers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "smtpAuthPassword": {
+                    "type": "string"
+                },
+                "smtpFrom": {
+                    "type": "string"
+                },
+                "smtpSmarthost": {
+                    "type": "string"
+                }
+            }
+        },
         "dtos.UpdateNetworkRequest": {
             "type": "object",
             "properties": {
@@ -2544,6 +3068,24 @@ const docTemplate = `{
                 },
                 "type": {
                     "$ref": "#/definitions/entities.RPCType"
+                }
+            }
+        },
+        "dtos.UpdateTelegramConfigRequest": {
+            "type": "object",
+            "required": [
+                "apiToken",
+                "criticalReceivers"
+            ],
+            "properties": {
+                "apiToken": {
+                    "type": "string"
+                },
+                "criticalReceivers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dtos.TelegramReceiver"
+                    }
                 }
             }
         },

@@ -498,6 +498,38 @@ func UninstallCrossTradeBridge(ctx context.Context, s *thanosStack.ThanosStack) 
 	return s.UninstallCrossTrade(ctx)
 }
 
+// DeployCrossTradeLocal deploys CrossTrade contracts on a local Docker Compose L2
+// via L1 OptimismPortal depositTransaction calls (Go-native, no Foundry).
+// This is the local-infra path; the AWS path uses InstallCrossTradeBridge.
+// l1CrossTradeProxy and l2ToL2CrossTradeL1 are the pre-deployed L1 contract addresses.
+// supportedTokens may be empty for Phase 1 (no token pairs registered on deploy).
+func DeployCrossTradeLocal(
+	ctx context.Context,
+	sdkClient *thanosStack.ThanosStack,
+	deployerPrivKey string,
+	l1RpcUrl string,
+	l1ChainID uint64,
+	l2ChainID uint64,
+	optimismPortalProxy string,
+	crossDomainMessenger string,
+	l1CrossTradeProxy string,
+	l2ToL2CrossTradeL1 string,
+	supportedTokens []thanosStack.TokenPair,
+) (*thanosStack.DeployCrossTradeLocalOutput, error) {
+	return sdkClient.DeployCrossTradeLocal(ctx, &thanosStack.DeployCrossTradeLocalInput{
+		L1RPCUrl:             l1RpcUrl,
+		L1ChainID:            l1ChainID,
+		DeployerPrivateKey:   deployerPrivKey,
+		L2RPCUrl:             "http://localhost:8545",
+		L2ChainID:            l2ChainID,
+		OptimismPortalProxy:  optimismPortalProxy,
+		CrossDomainMessenger: crossDomainMessenger,
+		L1CrossTradeProxy:    l1CrossTradeProxy,
+		L2toL2CrossTradeL1:   l2ToL2CrossTradeL1,
+		SupportedTokens:      supportedTokens,
+	})
+}
+
 func InstallUptimeService(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallUptimeServiceRequest) (string, error) {
 	config, err := s.GetUptimeServiceConfig(ctx)
 	if err != nil {

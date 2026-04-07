@@ -173,19 +173,13 @@ definitions:
     type: object
   dtos.EmailConfig:
     properties:
-      criticalReceivers:
-        items:
-          type: string
-        type: array
-      defaultReceivers:
+      alertReceivers:
         items:
           type: string
         type: array
       enabled:
         type: boolean
       smtpAuthPassword:
-        type: string
-      smtpAuthUsername:
         type: string
       smtpFrom:
         type: string
@@ -208,6 +202,8 @@ definitions:
     - databaseUsername
     - walletConnectId
     type: object
+  dtos.InstallCrossChainBridgeRequest:
+    type: object
   dtos.InstallMonitoringRequest:
     properties:
       alertManager:
@@ -217,6 +213,7 @@ definitions:
       loggingEnabled:
         type: boolean
     required:
+    - alertManager
     - grafanaPassword
     type: object
   dtos.LoginRequest:
@@ -302,6 +299,24 @@ definitions:
       type:
         type: string
     type: object
+  dtos.UpdateEmailConfigRequest:
+    properties:
+      alertReceivers:
+        items:
+          type: string
+        type: array
+      smtpAuthPassword:
+        type: string
+      smtpFrom:
+        type: string
+      smtpSmarthost:
+        type: string
+    required:
+    - alertReceivers
+    - smtpAuthPassword
+    - smtpFrom
+    - smtpSmarthost
+    type: object
   dtos.UpdateNetworkRequest:
     properties:
       l1BeaconUrl:
@@ -319,6 +334,18 @@ definitions:
         type: string
       type:
         $ref: '#/definitions/entities.RPCType'
+    type: object
+  dtos.UpdateTelegramConfigRequest:
+    properties:
+      apiToken:
+        type: string
+      criticalReceivers:
+        items:
+          $ref: '#/definitions/dtos.TelegramReceiver'
+        type: array
+    required:
+    - apiToken
+    - criticalReceivers
     type: object
   dtos.UserResponse:
     properties:
@@ -1379,6 +1406,153 @@ paths:
       summary: Get Integration By ID
       tags:
       - Thanos Stack
+  /stacks/thanos/{id}/integrations/backup/attach:
+    post:
+      consumes:
+      - application/json
+      description: Backup Attach
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Backup Attach
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/backup/checkpoints:
+    get:
+      consumes:
+      - application/json
+      description: Backup Checkpoints
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Backup Checkpoints
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/backup/cleanup:
+    delete:
+      consumes:
+      - application/json
+      description: Backup Cleanup
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Backup Cleanup
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/backup/configure:
+    post:
+      consumes:
+      - application/json
+      description: Backup Configure
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Backup Configure
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/backup/restore:
+    post:
+      consumes:
+      - application/json
+      description: Backup Restore
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Backup Restore
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/backup/snapshot:
+    post:
+      consumes:
+      - application/json
+      description: Backup Snapshot
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Backup Snapshot
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/backup/status:
+    get:
+      consumes:
+      - application/json
+      description: Backup Status
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Backup Status
+      tags:
+      - Thanos Stack
   /stacks/thanos/{id}/integrations/block-explorer:
     delete:
       consumes:
@@ -1467,6 +1641,53 @@ paths:
       summary: Install Bridge
       tags:
       - Thanos Stack
+  /stacks/thanos/{id}/integrations/cross-trade:
+    delete:
+      consumes:
+      - application/json
+      description: Uninstall Cross Chain Bridge
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Uninstall Cross Chain Bridge
+      tags:
+      - Thanos Stack
+    post:
+      consumes:
+      - application/json
+      description: Install Cross Chain Bridge
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Install Cross Chain Bridge Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.InstallCrossChainBridgeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Install Cross Chain Bridge
+      tags:
+      - Thanos Stack
   /stacks/thanos/{id}/integrations/monitoring:
     delete:
       consumes:
@@ -1512,6 +1733,143 @@ paths:
           schema:
             $ref: '#/definitions/entities.Response'
       summary: Install Monitoring
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/monitoring/disable-email:
+    delete:
+      consumes:
+      - application/json
+      description: Disable Email Alert Configuration
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Disable Email Alert
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/monitoring/disable-telegram:
+    delete:
+      consumes:
+      - application/json
+      description: Disable Telegram Alert Configuration
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Disable Telegram Alert
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/monitoring/update-email:
+    put:
+      consumes:
+      - application/json
+      description: Update Email Alert Configuration
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update Email Config Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.UpdateEmailConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Update Email Alert Configuration
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/monitoring/update-telegram:
+    put:
+      consumes:
+      - application/json
+      description: Update Telegram Alert Configuration
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update Telegram Config Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.UpdateTelegramConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Update Telegram Alert Configuration
+      tags:
+      - Thanos Stack
+  /stacks/thanos/{id}/integrations/system-pulse:
+    delete:
+      consumes:
+      - application/json
+      description: Uninstall Uptime Service
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Uninstall Uptime Service
+      tags:
+      - Thanos Stack
+    post:
+      consumes:
+      - application/json
+      description: Install Uptime Service
+      parameters:
+      - description: Thanos Stack ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entities.Response'
+      summary: Install Uptime Service
       tags:
       - Thanos Stack
   /stacks/thanos/{id}/logs:
