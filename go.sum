@@ -375,12 +375,8 @@ github.com/tklauser/go-sysconf v0.3.14 h1:g5vzr9iPFFz24v2KZXs/pvpvh8/V9Fw6vQK5ZZ
 github.com/tklauser/go-sysconf v0.3.14/go.mod h1:1ym4lWMLUOhuBOPGtRcJm7tEGX4SCYNEEEtghGG/8uY=
 github.com/tklauser/numcpus v0.9.0 h1:lmyCHtANi8aRUgkckBgoDk1nHCux3n2cgkJLXdQGPDo=
 github.com/tklauser/numcpus v0.9.0/go.mod h1:SN6Nq1O3VychhC1npsWostA+oW+VOQTxZrS604NSRyI=
-github.com/tokamak-network/trh-sdk v1.0.5-0.20260407001521-da7b22796dad h1:HFdOVdD32l9j5hq+ifdNA50kx6gh7tRovmIo8AG1hns=
-github.com/tokamak-network/trh-sdk v1.0.5-0.20260407001521-da7b22796dad/go.mod h1:wNrceLNaZmJ6+/R9ozOPT2nl0239IwSIwun+OZltbv8=
-github.com/tokamak-network/trh-sdk v1.0.5-0.20260407135844-570ba7925cc0 h1:D5SCCHblzEvuLONgJlereqHIb0tYvsL7/ABCfdtlVVY=
-github.com/tokamak-network/trh-sdk v1.0.5-0.20260407135844-570ba7925cc0/go.mod h1:wNrceLNaZmJ6+/R9ozOPT2nl0239IwSIwun+OZltbv8=
-github.com/tokamak-network/trh-sdk v1.0.5-0.20260407142359-cd490fe88f01 h1:uQfwTTyeFiu/ZdGgh9ri0+ibRE5nc0AOHRfwnQ3G82M=
-github.com/tokamak-network/trh-sdk v1.0.5-0.20260407142359-cd490fe88f01/go.mod h1:wNrceLNaZmJ6+/R9ozOPT2nl0239IwSIwun+OZltbv8=
+github.com/tokamak-network/trh-sdk v1.0.5-0.20260407162601-257e91c9fe88 h1:gXdVuz+RHshhNgNA57pzHgsqu6Wjn2gGwEbseFh8jvA=
+github.com/tokamak-network/trh-sdk v1.0.5-0.20260407162601-257e91c9fe88/go.mod h1:wNrceLNaZmJ6+/R9ozOPT2nl0239IwSIwun+OZltbv8=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/tyler-smith/go-bip32 v1.0.0 h1:sDR9juArbUgX+bO/iblgZnMPeWY1KZMUC2AFUJdv5KE=
@@ -391,8 +387,6 @@ github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65E
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/urfave/cli/v2 v2.27.5 h1:WoHEJLdsXr6dDWoJgMq/CboDmyY/8HMMH1fTECbih+w=
 github.com/urfave/cli/v2 v2.27.5/go.mod h1:3Sevf16NykTbInEnD0yKkjDAeZDS0A6bzhBH5hrMvTQ=
-github.com/urfave/cli/v3 v3.0.0-beta1 h1:6DTaaUarcM0wX7qj5Hcvs+5Dm3dyUTBbEwIWAjcw9Zg=
-github.com/urfave/cli/v3 v3.0.0-beta1/go.mod h1:FnIeEMYu+ko8zP1F9Ypr3xkZMIDqW3DR92yUtY39q1Y=
 github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 h1:gEOO8jv9F4OT7lGCjxCBTO/36wtF6j2nSip77qHd4x4=
 github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1/go.mod h1:Ohn+xnUBiLI6FVj/9LpzZWtj1/D6lUovWYBkxHVV3aM=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
