@@ -55,13 +55,56 @@ func TestBuildDAppEnvConfig(t *testing.T) {
 			if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
 				t.Fatalf("NEXT_PUBLIC_CHAIN_CONFIG_L2_L1 is not valid JSON: %v", err)
 			}
-			// L1 체인 키가 있는지 확인
 			if _, ok := parsed["11155111"]; !ok {
 				t.Error("missing Sepolia (11155111) key in L2L1 config")
 			}
-			// L2 체인 키가 있는지 확인
 			if _, ok := parsed["17001"]; !ok {
 				t.Error("missing L2 (17001) key in L2L1 config")
+			}
+			// L2 RPC URL must use host.docker.internal (not localhost)
+			l2Entry := parsed["17001"].(map[string]interface{})
+			if rpcURL, _ := l2Entry["rpc_url"].(string); strings.Contains(rpcURL, "localhost") {
+				t.Errorf("L2_L1 L2 rpc_url must not contain localhost, got: %s", rpcURL)
+			}
+		}
+	}
+
+	// NEXT_PUBLIC_CHAIN_CONFIG_L2_L2 검증
+	for _, line := range lines {
+		if strings.HasPrefix(line, "NEXT_PUBLIC_CHAIN_CONFIG_L2_L2=") {
+			jsonStr := strings.TrimPrefix(line, "NEXT_PUBLIC_CHAIN_CONFIG_L2_L2=")
+			var parsed map[string]interface{}
+			if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+				t.Fatalf("NEXT_PUBLIC_CHAIN_CONFIG_L2_L2 is not valid JSON: %v", err)
+			}
+			if _, ok := parsed["11155111"]; !ok {
+				t.Error("missing Sepolia (11155111) key in L2L2 config")
+			}
+			l2Entry, ok := parsed["17001"].(map[string]interface{})
+			if !ok {
+				t.Fatal("missing L2 (17001) key in L2L2 config")
+			}
+			// L2 RPC URL must use host.docker.internal
+			if rpcURL, _ := l2Entry["rpc_url"].(string); strings.Contains(rpcURL, "localhost") {
+				t.Errorf("L2_L2 L2 rpc_url must not contain localhost, got: %s", rpcURL)
+			}
+			if rpcURL, _ := l2Entry["rpc_url"].(string); !strings.Contains(rpcURL, "host.docker.internal") {
+				t.Errorf("L2_L2 L2 rpc_url must contain host.docker.internal, got: %s", rpcURL)
+			}
+			// L2 tokens must be an array (not a map) with destination_chains field
+			tokens, ok := l2Entry["tokens"].([]interface{})
+			if !ok {
+				t.Fatalf("L2_L2 L2 tokens must be an array, got: %T", l2Entry["tokens"])
+			}
+			if len(tokens) == 0 {
+				t.Error("L2_L2 L2 tokens array must not be empty")
+			}
+			firstToken, ok := tokens[0].(map[string]interface{})
+			if !ok {
+				t.Fatalf("L2_L2 L2 tokens[0] must be an object, got: %T", tokens[0])
+			}
+			if _, ok := firstToken["destination_chains"]; !ok {
+				t.Error("L2_L2 L2 tokens[0] must have destination_chains field")
 			}
 		}
 	}

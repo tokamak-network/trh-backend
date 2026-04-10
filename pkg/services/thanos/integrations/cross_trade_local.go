@@ -41,7 +41,22 @@ type chainConfigEntry struct {
 	RPCURL            string            `json:"rpc_url"`
 	BlockExplorerURL  string            `json:"block_explorer_url"`
 	Contracts         map[string]string `json:"contracts"`
-	Tokens            map[string]string `json:"tokens"`
+	Tokens            interface{}       `json:"tokens"`
+}
+
+// l2TokenEntry is the per-token JSON structure used in L2_L2 config's L2 chain entry.
+// The CrossTrade dApp expects an array of these (not a flat map) for source L2 chains.
+type l2TokenEntry struct {
+	Name              string   `json:"name"`
+	Address           string   `json:"address"`
+	DestinationChains []uint64 `json:"destination_chains"`
+}
+
+// dockerizeRPCURL replaces localhost/127.0.0.1 with host.docker.internal so that
+// the CrossTrade dApp container can reach the host machine's L2 RPC endpoint.
+func dockerizeRPCURL(rpcURL string) string {
+	r := strings.ReplaceAll(rpcURL, "localhost", "host.docker.internal")
+	return strings.ReplaceAll(r, "127.0.0.1", "host.docker.internal")
 }
 
 // BuildDAppEnvConfig generates config/.env.crosstrade for the CrossTrade dApp container (BE-07).
@@ -56,12 +71,23 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 		"USDT": "",
 		"TON":  "",
 	}
-	l2Tokens := map[string]string{
+	// L2_L1 config uses flat map format for L2 tokens.
+	l2l1Tokens := map[string]string{
 		"ETH":  "0x0000000000000000000000000000000000000000",
 		"USDC": "0x4200000000000000000000000000000000000778", // L2 USDC predeploy
 		"USDT": "",
 		"TON":  "",
 	}
+	// L2_L2 config uses array format for L2 tokens so the CrossTrade dApp can
+	// resolve destination_chains correctly when displaying the source chain selector.
+	l2l2Tokens := []l2TokenEntry{
+		{Name: "ETH", Address: "0x0000000000000000000000000000000000000000", DestinationChains: []uint64{cfg.L2ChainID}},
+		{Name: "USDC", Address: "", DestinationChains: []uint64{cfg.L2ChainID}},
+	}
+
+	// Replace localhost with host.docker.internal so the CrossTrade dApp container
+	// (which runs inside Docker) can reach the host machine's L2 RPC endpoint.
+	dockerL2RPCURL := dockerizeRPCURL(cfg.L2RPCURL)
 
 	// NEXT_PUBLIC_CHAIN_CONFIG_L2_L1:
 	// L1 side: l1_cross_trade = L1CrossTradeProxy address
@@ -82,10 +108,10 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 			DisplayName:       cfg.L2ChainName,
 			NativeTokenName:   "Tokamak Network",
 			NativeTokenSymbol: "TON",
-			RPCURL:            cfg.L2RPCURL,
+			RPCURL:            dockerL2RPCURL,
 			BlockExplorerURL:  cfg.L2BlockExplorerURL,
 			Contracts:         map[string]string{"l2_cross_trade": cfg.DeployOutput.L2CrossTradeProxy},
-			Tokens:            l2Tokens,
+			Tokens:            l2l1Tokens,
 		},
 	}
 
@@ -108,10 +134,10 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 			DisplayName:       cfg.L2ChainName,
 			NativeTokenName:   "Tokamak Network",
 			NativeTokenSymbol: "TON",
-			RPCURL:            cfg.L2RPCURL,
+			RPCURL:            dockerL2RPCURL,
 			BlockExplorerURL:  cfg.L2BlockExplorerURL,
 			Contracts:         map[string]string{"l2_cross_trade": cfg.DeployOutput.L2toL2CrossTradeProxy},
-			Tokens:            l2Tokens,
+			Tokens:            l2l2Tokens,
 		},
 	}
 
