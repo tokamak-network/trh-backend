@@ -80,9 +80,17 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 	}
 	// L2_L2 config uses array format for L2 tokens so the CrossTrade dApp can
 	// resolve destination_chains correctly when displaying the source chain selector.
+	// destination_chains points to Thanos Sepolia (the fixed bridge partner), not itself.
 	l2l2Tokens := []l2TokenEntry{
-		{Name: "ETH", Address: "0x0000000000000000000000000000000000000000", DestinationChains: []uint64{cfg.L2ChainID}},
-		{Name: "USDC", Address: "", DestinationChains: []uint64{cfg.L2ChainID}},
+		{Name: "ETH", Address: "0x0000000000000000000000000000000000000000", DestinationChains: []uint64{thanosSepolia}},
+		{Name: "USDC", Address: "", DestinationChains: []uint64{thanosSepolia}},
+	}
+	// Thanos Sepolia tokens: ETH is at a predeploy address (TON is the native gas token).
+	// destination_chains points to the newly deployed L2.
+	thanosL2L2Tokens := []l2TokenEntry{
+		{Name: "ETH", Address: "0x4200000000000000000000000000000000000486", DestinationChains: []uint64{cfg.L2ChainID}},
+		{Name: "TON", Address: "0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000", DestinationChains: []uint64{cfg.L2ChainID}},
+		{Name: "USDC", Address: "0x4200000000000000000000000000000000000778", DestinationChains: []uint64{cfg.L2ChainID}},
 	}
 
 	// Replace localhost with host.docker.internal so the CrossTrade dApp container
@@ -118,6 +126,7 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 	// NEXT_PUBLIC_CHAIN_CONFIG_L2_L2:
 	// L1 side: l1_cross_trade = L2toL2CrossTradeL1 address (different from L2L1 config!)
 	// L2 side: l2_cross_trade = L2toL2CrossTradeProxy address
+	// Thanos Sepolia is always included as a fixed bridge partner for L2-L2 bridging.
 	l2l2Config := map[string]chainConfigEntry{
 		l1ChainIDStr: {
 			Name:              "Ethereum Sepolia",
@@ -138,6 +147,16 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 			BlockExplorerURL:  cfg.L2BlockExplorerURL,
 			Contracts:         map[string]string{"l2_cross_trade": cfg.DeployOutput.L2toL2CrossTradeProxy},
 			Tokens:            l2l2Tokens,
+		},
+		fmt.Sprintf("%d", thanosSepolia): {
+			Name:              "Thanos Sepolia",
+			DisplayName:       "Thanos Sepolia",
+			NativeTokenName:   "Tokamak Network",
+			NativeTokenSymbol: "TON",
+			RPCURL:            thanosSepoliaRPCURL,
+			BlockExplorerURL:  thanosSepoliaExplorerURL,
+			Contracts:         map[string]string{"l2_cross_trade": thanosSepoliaL2CTProxy},
+			Tokens:            thanosL2L2Tokens,
 		},
 	}
 
@@ -169,6 +188,14 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 const (
 	l2CrossDomainMessenger = "0x4200000000000000000000000000000000000007"
 	sepoliaTONAddress      = "0xa30fe40285b8f5c0457dbc3b7c8a280373c40044"
+)
+
+// Thanos Sepolia 고정 파트너 L2 상수 (L2-L2 브릿지용)
+const (
+	thanosSepolia            uint64 = 111551119090
+	thanosSepoliaL2CTProxy          = "0x7BbEC445F9BDF6c579e81EAda5df86654184BcE3"
+	thanosSepoliaRPCURL             = "https://rpc.thanos-sepolia.tokamak.network"
+	thanosSepoliaExplorerURL        = "https://explorer.thanos-sepolia-test.tokamak.network"
 )
 
 // ABI 문자열: L1CrossTradeProxy.setChainInfo (3-param)

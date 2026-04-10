@@ -106,6 +106,50 @@ func TestBuildDAppEnvConfig(t *testing.T) {
 			if _, ok := firstToken["destination_chains"]; !ok {
 				t.Error("L2_L2 L2 tokens[0] must have destination_chains field")
 			}
+			// new L2's destination_chains must point to Thanos Sepolia (111551119090), not itself
+			destChains, ok := firstToken["destination_chains"].([]interface{})
+			if !ok || len(destChains) == 0 {
+				t.Error("L2_L2 L2 tokens[0] destination_chains must be a non-empty array")
+			} else {
+				foundThanos := false
+				for _, c := range destChains {
+					if uint64(c.(float64)) == 111551119090 {
+						foundThanos = true
+					}
+				}
+				if !foundThanos {
+					t.Error("new L2 ETH destination_chains must include Thanos Sepolia (111551119090)")
+				}
+			}
+
+			// Thanos Sepolia (111551119090) must be present in L2L2 config
+			thanosEntry, ok := parsed["111551119090"].(map[string]interface{})
+			if !ok {
+				t.Fatal("missing Thanos Sepolia (111551119090) key in L2L2 config")
+			}
+			// Thanos Sepolia tokens must be an array with destination_chains pointing to new L2
+			thanosTokens, ok := thanosEntry["tokens"].([]interface{})
+			if !ok || len(thanosTokens) == 0 {
+				t.Fatal("Thanos Sepolia tokens must be a non-empty array")
+			}
+			thanosFirstToken, ok := thanosTokens[0].(map[string]interface{})
+			if !ok {
+				t.Fatalf("Thanos Sepolia tokens[0] must be an object, got: %T", thanosTokens[0])
+			}
+			thanosDestChains, ok := thanosFirstToken["destination_chains"].([]interface{})
+			if !ok || len(thanosDestChains) == 0 {
+				t.Error("Thanos Sepolia tokens[0] destination_chains must be a non-empty array")
+			} else {
+				foundNewL2 := false
+				for _, c := range thanosDestChains {
+					if uint64(c.(float64)) == 17001 {
+						foundNewL2 = true
+					}
+				}
+				if !foundNewL2 {
+					t.Error("Thanos Sepolia token destination_chains must include new L2 (17001)")
+				}
+			}
 		}
 	}
 
