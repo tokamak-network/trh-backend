@@ -17,10 +17,56 @@ import (
 	"go.uber.org/zap"
 )
 
+// activeLocalStatuses are stack statuses that indicate a local stack is
+// occupying fixed ports and must not be overlapped by a new local deployment.
+var activeLocalStatuses = map[entities.StackStatus]bool{
+	entities.StackStatusPending:   true,
+	entities.StackStatusDeploying: true,
+	entities.StackStatusDeployed:  true,
+	entities.StackStatusUpdating:  true,
+}
+
+// checkNoActiveLocalStack returns a 409 response if any existing local stack is
+// in an active state. Local deployments use fixed ports, so concurrent deploys
+// would cause port conflicts.
+func (s *ThanosStackDeploymentService) checkNoActiveLocalStack() *entities.Response {
+	stacks, err := s.stackRepo.GetAllStacks()
+	if err != nil {
+		// If we can't query, fail open — don't block the deploy on a DB read error.
+		logger.Warn("checkNoActiveLocalStack: failed to query stacks, skipping check", zap.Error(err))
+		return nil
+	}
+	for _, st := range stacks {
+		if !activeLocalStatuses[st.Status] {
+			continue
+		}
+		var cfg struct {
+			InfraProvider string `json:"infraProvider"`
+		}
+		if err := json.Unmarshal(st.Config, &cfg); err != nil {
+			continue
+		}
+		if cfg.InfraProvider == "local" {
+			return &entities.Response{
+				Status:  http.StatusConflict,
+				Message: fmt.Sprintf("a local stack is already active (stackId: %s, status: %s): stop it before starting a new local deployment", st.ID, st.Status),
+			}
+		}
+	}
+	return nil
+}
+
 func (s *ThanosStackDeploymentService) CreateThanosStack(
 	ctx context.Context,
 	request dtos.DeployThanosRequest,
 ) (*entities.Response, error) {
+	// Guard: local deployments use fixed ports — block if another local stack is active.
+	if request.InfraProvider == "local" {
+		if conflict := s.checkNoActiveLocalStack(); conflict != nil {
+			return conflict, nil
+		}
+	}
+
 	stackId := uuid.New()
 	deploymentPath := utils.GetDeploymentPath(s.name, request.Network, stackId.String())
 	request.DeploymentPath = deploymentPath
