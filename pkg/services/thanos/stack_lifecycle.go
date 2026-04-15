@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -29,6 +32,11 @@ var activeLocalStatuses = map[entities.StackStatus]bool{
 // checkNoActiveLocalStack returns a 409 response if any existing local stack is
 // in an active state. Local deployments use fixed ports, so concurrent deploys
 // would cause port conflicts.
+//
+// Before blocking, it reconciles DB state with Docker reality: if a stack is
+// marked active in DB but has no running containers, it was likely removed
+// manually outside the app. In that case the DB record is auto-corrected to
+// Terminated so a new deployment is not blocked.
 func (s *ThanosStackDeploymentService) checkNoActiveLocalStack() *entities.Response {
 	stacks, err := s.stackRepo.GetAllStacks()
 	if err != nil {
@@ -46,14 +54,48 @@ func (s *ThanosStackDeploymentService) checkNoActiveLocalStack() *entities.Respo
 		if err := json.Unmarshal(st.Config, &cfg); err != nil {
 			continue
 		}
-		if cfg.InfraProvider == "local" {
-			return &entities.Response{
-				Status:  http.StatusConflict,
-				Message: fmt.Sprintf("a local stack is already active (stackId: %s, status: %s): stop it before starting a new local deployment", st.ID, st.Status),
+		if cfg.InfraProvider != "local" {
+			continue
+		}
+
+		// Reconcile: check whether Docker containers are actually running.
+		// If the stack was manually torn down outside the app, DB state is stale.
+		projectName := filepath.Base(st.DeploymentPath)
+		if projectName != "" && projectName != "." {
+			running, checkErr := hasRunningContainersForProject(projectName)
+			if checkErr != nil {
+				logger.Warn("checkNoActiveLocalStack: docker check failed, treating stack as active",
+					zap.String("stackId", st.ID.String()),
+					zap.Error(checkErr))
+			} else if !running {
+				logger.Warn("checkNoActiveLocalStack: DB shows active but no containers running; auto-correcting to Terminated",
+					zap.String("stackId", st.ID.String()),
+					zap.String("status", string(st.Status)))
+				if updateErr := s.stackRepo.UpdateStatus(st.ID.String(), entities.StackStatusTerminated, "auto-terminated: no containers found"); updateErr != nil {
+					logger.Error("checkNoActiveLocalStack: failed to auto-correct stale stack status", zap.Error(updateErr))
+				}
+				continue
 			}
+		}
+
+		return &entities.Response{
+			Status:  http.StatusConflict,
+			Message: fmt.Sprintf("a local stack is already active (stackId: %s, status: %s): stop it before starting a new local deployment", st.ID, st.Status),
 		}
 	}
 	return nil
+}
+
+// hasRunningContainersForProject returns true if any Docker container belonging
+// to the given compose project is currently running.
+func hasRunningContainersForProject(projectName string) (bool, error) {
+	out, err := exec.Command("docker", "ps",
+		"--filter", "label=com.docker.compose.project="+projectName,
+		"-q").Output()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) != "", nil
 }
 
 func (s *ThanosStackDeploymentService) CreateThanosStack(
