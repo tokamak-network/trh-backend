@@ -30,6 +30,11 @@ type CrossTradeDAppConfig struct {
 	DeployOutput           *thanosTypes.DeployCrossTradeLocalOutput
 	L1CrossTradeProxyAddr  string
 	L2toL2CrossTradeL1Addr string
+	// L2NativeTokenName and L2NativeTokenSymbol describe the gas token of the new L2.
+	// Defaults to "Tokamak Network" / "TON" when empty (standard Thanos preset).
+	// Set to "Ethereum" / "ETH" for defi-eth presets where ETH is the fee token.
+	L2NativeTokenName   string
+	L2NativeTokenSymbol string
 }
 
 // chainConfigEntry is the per-chain JSON structure for NEXT_PUBLIC_CHAIN_CONFIG_* env vars.
@@ -65,6 +70,16 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 	l2ChainIDStr := fmt.Sprintf("%d", cfg.L2ChainID)
 	l1ChainIDStr := fmt.Sprintf("%d", cfg.L1ChainID)
 
+	// Resolve native token metadata with fallback to standard Thanos (TON) values.
+	l2NativeTokenName := cfg.L2NativeTokenName
+	if l2NativeTokenName == "" {
+		l2NativeTokenName = "Tokamak Network"
+	}
+	l2NativeTokenSymbol := cfg.L2NativeTokenSymbol
+	if l2NativeTokenSymbol == "" {
+		l2NativeTokenSymbol = "TON"
+	}
+
 	sepoliaTokens := map[string]string{
 		"ETH":  "0x0000000000000000000000000000000000000000",
 		"USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -86,11 +101,14 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 		{Name: "USDC", Address: "", DestinationChains: []uint64{thanosSepolia}},
 	}
 	// Thanos Sepolia tokens: ETH is at a predeploy address (TON is the native gas token).
-	// destination_chains points to the newly deployed L2.
+	// destination_chains is intentionally empty: the Thanos Sepolia L2toL2CrossTradeProxy
+	// does not have the newly deployed L2's chainId registered, so Thanos→new-L2 requests
+	// would fail at gas estimation (wallet refuses to sign). Disabling this direction until
+	// the Thanos team registers the chain. The reverse direction (new-L2→Thanos) still works.
 	thanosL2L2Tokens := []l2TokenEntry{
-		{Name: "ETH", Address: "0x4200000000000000000000000000000000000486", DestinationChains: []uint64{cfg.L2ChainID}},
-		{Name: "TON", Address: "0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000", DestinationChains: []uint64{cfg.L2ChainID}},
-		{Name: "USDC", Address: "0x4200000000000000000000000000000000000778", DestinationChains: []uint64{cfg.L2ChainID}},
+		{Name: "ETH", Address: "0x4200000000000000000000000000000000000486", DestinationChains: []uint64{}},
+		{Name: "TON", Address: "0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000", DestinationChains: []uint64{}},
+		{Name: "USDC", Address: "0x4200000000000000000000000000000000000778", DestinationChains: []uint64{}},
 	}
 
 	// Replace localhost with host.docker.internal so the CrossTrade dApp container
@@ -114,8 +132,8 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 		l2ChainIDStr: {
 			Name:              cfg.L2ChainName,
 			DisplayName:       cfg.L2ChainName,
-			NativeTokenName:   "Tokamak Network",
-			NativeTokenSymbol: "TON",
+			NativeTokenName:   l2NativeTokenName,
+			NativeTokenSymbol: l2NativeTokenSymbol,
 			RPCURL:            dockerL2RPCURL,
 			BlockExplorerURL:  cfg.L2BlockExplorerURL,
 			Contracts:         map[string]string{"l2_cross_trade": cfg.DeployOutput.L2CrossTradeProxy},
@@ -141,8 +159,8 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 		l2ChainIDStr: {
 			Name:              cfg.L2ChainName,
 			DisplayName:       cfg.L2ChainName,
-			NativeTokenName:   "Tokamak Network",
-			NativeTokenSymbol: "TON",
+			NativeTokenName:   l2NativeTokenName,
+			NativeTokenSymbol: l2NativeTokenSymbol,
 			RPCURL:            dockerL2RPCURL,
 			BlockExplorerURL:  cfg.L2BlockExplorerURL,
 			Contracts:         map[string]string{"l2_cross_trade": cfg.DeployOutput.L2toL2CrossTradeProxy},
