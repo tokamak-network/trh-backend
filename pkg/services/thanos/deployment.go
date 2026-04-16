@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -579,6 +580,16 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 			ingestCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, deployment.ID, deployment.LogPath)
+
+			// Open deployment log file for appending tokamak-deployer output
+			logFile, err := os.OpenFile(deployment.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				logger.Warn("failed to open deployment log file for binary output", zap.Error(err))
+				// non-fatal: continue without file tee
+			} else {
+				defer logFile.Close()
+				sdkClient.SetOutput(io.MultiWriter(os.Stdout, logFile))
+			}
 
 			if err := thanos.DeployL1Contracts(ctx, sdkClient, &deployL1ContractsConfig); err != nil {
 				if err == context.Canceled {
