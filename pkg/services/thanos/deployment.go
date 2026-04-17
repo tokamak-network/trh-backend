@@ -752,7 +752,14 @@ func (s *ThanosStackDeploymentService) autoInstallCrossTradeLocal(
 		contracts.L1CrossDomainMessengerProxy,
 		crossTradeSepoliaL1CrossTradeProxy,
 		crossTradeSepoliaL2toL2CrossTradeL1,
-		[]thanosSDKStack.TokenPair{},
+		[]thanosSDKStack.TokenPair{
+			{
+				L1Token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Sepolia USDC
+				L2Token: "0x4200000000000000000000000000000000000778", // L2 USDC predeploy (Thanos)
+				Symbol:  "USDC",
+			},
+			// TODO(usdt): Add USDT once Sepolia USDT address and L2 representation are confirmed.
+		},
 	)
 }
 

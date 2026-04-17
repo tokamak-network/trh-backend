@@ -83,14 +83,14 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 	sepoliaTokens := map[string]string{
 		"ETH":  "0x0000000000000000000000000000000000000000",
 		"USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-		"USDT": "",
+		"USDT": "", // TODO(usdt): Add Sepolia USDT address once confirmed
 		"TON":  "",
 	}
 	// L2_L1 config uses flat map format for L2 tokens.
 	l2l1Tokens := map[string]string{
 		"ETH":  "0x0000000000000000000000000000000000000000",
 		"USDC": "0x4200000000000000000000000000000000000778", // L2 USDC predeploy
-		"USDT": "",
+		"USDT": "", // TODO(usdt): Add L2 USDT address once confirmed
 		"TON":  "",
 	}
 	// L2_L2 config uses array format for L2 tokens so the CrossTrade dApp can
@@ -98,7 +98,7 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 	// destination_chains points to Thanos Sepolia (the fixed bridge partner), not itself.
 	l2l2Tokens := []l2TokenEntry{
 		{Name: "ETH", Address: "0x0000000000000000000000000000000000000000", DestinationChains: []uint64{thanosSepolia}},
-		{Name: "USDC", Address: "", DestinationChains: []uint64{thanosSepolia}},
+		{Name: "USDC", Address: "0x4200000000000000000000000000000000000778", DestinationChains: []uint64{thanosSepolia}},
 	}
 	// Thanos Sepolia tokens: ETH is at a predeploy address (TON is the native gas token).
 	// destination_chains is intentionally empty: the Thanos Sepolia L2toL2CrossTradeProxy
