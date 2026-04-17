@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -591,7 +592,14 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				sdkClient.SetOutput(io.MultiWriter(os.Stdout, logFile))
 			}
 
-			if err := thanos.DeployL1Contracts(ctx, sdkClient, &deployL1ContractsConfig); err != nil {
+			// 60-min cap on the whole L1 deploy step (Foundry + Cannon builds +
+			// tokamak-deployer). Normal runs finish in ~5 min; the cap is a final
+			// safety net so a deployer-level hang (e.g., all gas-bump retries
+			// exhausted) can't leave this step InProgress indefinitely.
+			deployCtx, deployCancel := context.WithTimeout(ctx, 60*time.Minute)
+			err = thanos.DeployL1Contracts(deployCtx, sdkClient, &deployL1ContractsConfig)
+			deployCancel()
+			if err != nil {
 				if err == context.Canceled {
 					logger.Info("deployment cancelled",
 						zap.String("deploymentId", deployment.ID.String()),
@@ -599,10 +607,16 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 					// Keep run status as-is on cancel; no explicit Stopped state in run status
 					return err
 				}
-				logger.Error("deployment failed",
-					zap.String("deploymentId", deployment.ID.String()),
-					zap.String("step", deployment.Step),
-					zap.Error(err))
+				if errors.Is(err, context.DeadlineExceeded) {
+					logger.Error("deployment timed out (60 min cap)",
+						zap.String("deploymentId", deployment.ID.String()),
+						zap.String("step", deployment.Step))
+				} else {
+					logger.Error("deployment failed",
+						zap.String("deploymentId", deployment.ID.String()),
+						zap.String("step", deployment.Step),
+						zap.Error(err))
+				}
 				statusChan <- entities.DeploymentStatusWithID{
 					DeploymentID: deployment.ID,
 					Status:       entities.DeploymentRunStatusFailed,
