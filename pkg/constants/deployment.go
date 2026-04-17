@@ -2,7 +2,8 @@ package constants
 
 const (
 	DeployL1ContractsStep         = "deploy-l1-contracts"
-	DeployInfraStep               = "deploy-aws-infra"
+	DeployAWSInfraStep            = "deploy-aws-infra"
+	DeployLocalInfraStep          = "deploy-local-infra"
 	DestroyChainStep              = "destroy-chain"
 	InstallBlockExplorerStep      = "install-block-explorer"
 	UninstallBlockExplorerStep    = "uninstall-block-explorer"
@@ -18,3 +19,11 @@ const (
 	UninstallUptimeServiceStep    = "uninstall-system-pulse"
 	UninstallDRBStep              = "uninstall-drb"
 )
+
+// GetDeployInfraStepName returns the appropriate infra deployment step name based on provider
+func GetDeployInfraStepName(infraProvider string) string {
+	if infraProvider == "local" {
+		return DeployLocalInfraStep
+	}
+	return DeployAWSInfraStep
+}

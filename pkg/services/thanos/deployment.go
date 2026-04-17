@@ -484,7 +484,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				l1Step = d
 			}
 		}
-		if d.Step == constants.DeployInfraStep {
+		if d.Step == constants.DeployAWSInfraStep || d.Step == constants.DeployLocalInfraStep {
 			if awsStep == nil || (awsStep.Status == entities.DeploymentRunStatusSuccess && d.Status != entities.DeploymentRunStatusSuccess) {
 				awsStep = d
 			}
@@ -627,7 +627,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 				DeploymentID: deployment.ID,
 				Status:       entities.DeploymentRunStatusSuccess,
 			}
-		case "deploy-aws-infra":
+		case constants.DeployAWSInfraStep, constants.DeployLocalInfraStep:
 			var deployInfraConfig dtos.DeployThanosAWSInfraRequest
 			if err := json.Unmarshal(deployment.Config, &deployInfraConfig); err != nil {
 				return fmt.Errorf("failed to unmarshal deployment config: %w", err)

@@ -149,7 +149,7 @@ func TestCreateThanosStackFromPreset_PropagatesSeedPhraseToDeploymentConfigs(t *
 			if err := json.Unmarshal(deployment.Config, &deployContractsConfig); err != nil {
 				t.Fatalf("failed to unmarshal deploy contracts config: %v", err)
 			}
-		case constants.DeployInfraStep:
+		case constants.DeployAWSInfraStep, constants.DeployLocalInfraStep:
 			if err := json.Unmarshal(deployment.Config, &deployInfraConfig); err != nil {
 				t.Fatalf("failed to unmarshal deploy infra config: %v", err)
 			}

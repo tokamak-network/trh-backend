@@ -69,9 +69,10 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 	}
 
 	thanosInfrastructureDeploymentID := uuid.New()
+	infraStepName := constants.GetDeployInfraStepName(config.InfraProvider)
 	thanosInfrastructureDeploymentLogPath := utils.GetLogPath(
 		stackId,
-		constants.DeployInfraStep,
+		infraStepName,
 	)
 	thanosInfrastructureDeploymentConfig, err := json.Marshal(dtos.DeployThanosAWSInfraRequest{
 		ChainName:     config.ChainName,
@@ -86,7 +87,7 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 	thanosInfrastructureDeployment := &entities.DeploymentEntity{
 		ID:      thanosInfrastructureDeploymentID,
 		StackID: &stackId,
-		Step:    constants.DeployInfraStep,
+		Step:    infraStepName,
 		Status:  entities.DeploymentRunStatusPending,
 		LogPath: thanosInfrastructureDeploymentLogPath,
 		Config:  thanosInfrastructureDeploymentConfig,
