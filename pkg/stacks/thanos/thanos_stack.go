@@ -61,6 +61,7 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 	deployInfraInput := thanosStack.DeployInfraInput{
 		ChainName:   req.ChainName,
 		L1BeaconURL: req.L1BeaconUrl,
+		Mnemonic:    req.SeedPhrase,
 	}
 	if req.BackupConfig != nil {
 		deployInfraInput.BackupConfig = &thanosStack.BackupConfig{
@@ -93,6 +94,7 @@ func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.Thano
 	deployInfraInput := &thanosStack.DeployInfraInput{
 		ChainName:   req.ChainName,
 		L1BeaconURL: req.L1BeaconUrl,
+		Mnemonic:    req.SeedPhrase,
 		BackupConfig: &thanosStack.BackupConfig{
 			Enabled: backupEnabled,
 		},
@@ -152,6 +154,7 @@ func DeployL1Contracts(ctx context.Context, sdkClient *thanosStack.ThanosStack, 
 		EnableFaultProof:   req.EnableFaultProof,
 		Preset:             req.Preset,
 		FeeToken:           req.FeeToken,
+		Mnemonic:           req.SeedPhrase,
 	}
 
 	if req.RegisterCandidate && req.RegisterCandidateParams != nil {

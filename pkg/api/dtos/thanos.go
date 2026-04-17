@@ -79,7 +79,7 @@ type DeployThanosRequest struct {
 	BackupConfig             *BackupConfig              `json:"backupConfig,omitempty"`        // Backup configuration
 	// Preset fields (optional)
 	PresetID      string `json:"presetId,omitempty"`
-	FeeToken      string `json:"feeToken,omitempty"`      // "TON", "ETH", "USDT", "USDC"
+	FeeToken      string `json:"feeToken,omitempty"` // "TON", "ETH", "USDT", "USDC"
 	SeedPhrase    string `json:"seedPhrase,omitempty"`
 	InfraProvider string `json:"infraProvider,omitempty"` // "aws" or "local"
 }
@@ -199,6 +199,7 @@ type DeployL1ContractsRequest struct {
 	ReuseDeployment          bool                      `json:"reuseDeployment"`
 	Preset                   string                    `json:"preset,omitempty"`
 	FeeToken                 string                    `json:"feeToken,omitempty"`
+	SeedPhrase               string                    `json:"seedPhrase,omitempty"`
 	MainnetConfirmation      *MainnetConfirmation      `json:"mainnetConfirmation,omitempty"` // Required for Mainnet
 }
 
@@ -207,6 +208,7 @@ type DeployThanosAWSInfraRequest struct {
 	L1BeaconUrl   string        `json:"l1BeaconUrl"    binding:"required" validate:"url"`
 	BackupConfig  *BackupConfig `json:"backupConfig,omitempty"`
 	InfraProvider string        `json:"infraProvider"` // "aws" or "local"
+	SeedPhrase    string        `json:"seedPhrase,omitempty"`
 }
 
 type InstallBlockExplorerRequest struct {
@@ -541,19 +543,19 @@ type PresetFieldOverride struct {
 // credentials. Role accounts are derived automatically via BIP44 HD wallet paths.
 // For infraProvider="local", AWS credentials are not required.
 type PresetDeployRequest struct {
-	PresetID      string                     `json:"presetId"      binding:"required"`
-	ChainName     string                     `json:"chainName"     binding:"required"`
-	Network       entities.DeploymentNetwork `json:"network"       binding:"required"`
-	SeedPhrase    string                     `json:"seedPhrase"    binding:"required"`
-	InfraProvider string                     `json:"infraProvider" binding:"required"`
-	AwsAccessKey  string                     `json:"awsAccessKey"`
-	AwsSecretKey  string                     `json:"awsSecretKey"`
-	AwsRegion     string                     `json:"awsRegion"`
-	L1RpcUrl      string                     `json:"l1RpcUrl"      binding:"required"`
-	L1BeaconUrl   string                     `json:"l1BeaconUrl"   binding:"required"`
-	FeeToken         string                     `json:"feeToken"`
-	ReuseDeployment  *bool                      `json:"reuseDeployment,omitempty"`
-	Overrides        []PresetFieldOverride      `json:"overrides,omitempty"`
+	PresetID        string                     `json:"presetId"      binding:"required"`
+	ChainName       string                     `json:"chainName"     binding:"required"`
+	Network         entities.DeploymentNetwork `json:"network"       binding:"required"`
+	SeedPhrase      string                     `json:"seedPhrase"    binding:"required"`
+	InfraProvider   string                     `json:"infraProvider" binding:"required"`
+	AwsAccessKey    string                     `json:"awsAccessKey"`
+	AwsSecretKey    string                     `json:"awsSecretKey"`
+	AwsRegion       string                     `json:"awsRegion"`
+	L1RpcUrl        string                     `json:"l1RpcUrl"      binding:"required"`
+	L1BeaconUrl     string                     `json:"l1BeaconUrl"   binding:"required"`
+	FeeToken        string                     `json:"feeToken"`
+	ReuseDeployment *bool                      `json:"reuseDeployment,omitempty"`
+	Overrides       []PresetFieldOverride      `json:"overrides,omitempty"`
 }
 
 // Validate checks provider-specific required fields.

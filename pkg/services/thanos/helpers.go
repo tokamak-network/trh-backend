@@ -51,6 +51,7 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 			RegisterCandidateParams:  registerCandidateParams,
 			Preset:                   config.PresetID,
 			FeeToken:                 config.FeeToken,
+			SeedPhrase:               config.SeedPhrase,
 			ReuseDeployment:          config.ReuseDeployment,
 		})
 		if err != nil {
@@ -77,6 +78,7 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 		L1BeaconUrl:   config.L1BeaconUrl,
 		BackupConfig:  config.BackupConfig,
 		InfraProvider: config.InfraProvider,
+		SeedPhrase:    config.SeedPhrase,
 	})
 	if err != nil {
 		return nil, err
