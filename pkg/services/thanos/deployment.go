@@ -282,20 +282,22 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 							stack.DeploymentPath,
 							uint64(chainInformation.L1ChainID),
 						)
-						l1StandardBridge := ""
-						l1USDCBridge := ""
 						if contractsErr != nil {
-							logger.Warn("failed to read L1 bridge addresses for CrossTrade registration (non-fatal, using empty)",
+							logger.Error("failed to read L1 contracts for CrossTrade registration",
 								zap.String("stackId", stackId.String()), zap.Error(contractsErr))
-						} else {
-							l1StandardBridge = l1Contracts.L1StandardBridgeProxy
-							l1USDCBridge = l1Contracts.L1UsdcBridgeProxy
+							if updateErr := s.integrationRepo.UpdateIntegrationStatusWithReason(
+								crossTradeIntegration.ID.String(),
+								entities.DeploymentStatusFailed,
+								fmt.Sprintf("read L1 contracts: %v", contractsErr),
+							); updateErr != nil {
+								logger.Error("failed to update crossTrade integration status",
+									zap.String("stackId", stackId.String()), zap.Error(updateErr))
+							}
+							return
 						}
-
-						l1CrossDomainMessenger := ""
-						if contractsErr == nil {
-							l1CrossDomainMessenger = l1Contracts.L1CrossDomainMessengerProxy
-						}
+						l1StandardBridge := l1Contracts.L1StandardBridgeProxy
+						l1USDCBridge := l1Contracts.L1UsdcBridgeProxy
+						l1CrossDomainMessenger := l1Contracts.L1CrossDomainMessengerProxy
 						// BE-04, BE-05, BE-06: L1 CrossTrade 컨트랙트에 새 L2 등록 (setChainInfo x2, max 3 retries)
 						regInput := &integrations.CrossTradeL1RegistrationInput{
 							L1RPCURL:               stackConfig.L1RpcUrl,
@@ -823,18 +825,16 @@ func (s *ThanosStackDeploymentService) RetriggerCrossTradeLocal(ctx context.Cont
 
 		// Read L1 bridge addresses for L2toL2 setChainInfo.
 		l1Contracts, contractsErr := trhSDKUtils.ReadDeployementConfigFromJSONFile(stack.DeploymentPath, uint64(chainInfo.L1ChainID))
-		l1StandardBridge, l1USDCBridge := "", ""
 		if contractsErr != nil {
-			logger.Warn("retrigger: failed to read L1 bridge addresses (non-fatal)", zap.String("stackId", stackIdStr), zap.Error(contractsErr))
-		} else {
-			l1StandardBridge = l1Contracts.L1StandardBridgeProxy
-			l1USDCBridge = l1Contracts.L1UsdcBridgeProxy
+			logger.Error("retrigger: failed to read L1 contracts for CrossTrade registration",
+				zap.String("stackId", stackIdStr), zap.Error(contractsErr))
+			_ = s.integrationRepo.UpdateIntegrationStatusWithReason(crossTradeIntegration.ID.String(),
+				entities.DeploymentStatusFailed, fmt.Sprintf("read L1 contracts: %v", contractsErr))
+			return
 		}
-
-		l1CrossDomainMessenger := ""
-		if contractsErr == nil {
-			l1CrossDomainMessenger = l1Contracts.L1CrossDomainMessengerProxy
-		}
+		l1StandardBridge := l1Contracts.L1StandardBridgeProxy
+		l1USDCBridge := l1Contracts.L1UsdcBridgeProxy
+		l1CrossDomainMessenger := l1Contracts.L1CrossDomainMessengerProxy
 		regInput := &integrations.CrossTradeL1RegistrationInput{
 			L1RPCURL:               stackConfig.L1RpcUrl,
 			L1ChainID:              uint64(chainInfo.L1ChainID),

@@ -302,6 +302,9 @@ func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationIn
 	if input.DeployerPrivKey == "" {
 		return nil, fmt.Errorf("deployer private key is required for CrossTrade L1 registration")
 	}
+	if input.L1CrossDomainMessenger == "" {
+		return nil, fmt.Errorf("L1CrossDomainMessenger is required for CrossTrade registration")
+	}
 
 	privKey, err := crypto.HexToECDSA(strings.TrimPrefix(input.DeployerPrivKey, "0x"))
 	if err != nil {
@@ -353,13 +356,23 @@ func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationIn
 	// The adapter wraps the selector difference.
 	l1USDCBridgeForChainInfo := input.L1USDCBridge
 	if input.L1USDCBridge != "" {
-		adapterAddr, adapterErr := deployL1UsdcBridgeAdapter(
-			ctx, l1Client, privKey,
-			input.L1USDCBridge,
-			input.L1ChainID,
-		)
+		var adapterAddr string
+		var adapterErr error
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			adapterAddr, adapterErr = deployL1UsdcBridgeAdapter(
+				ctx, l1Client, privKey,
+				input.L1USDCBridge,
+				input.L1ChainID,
+			)
+			if adapterErr == nil {
+				break
+			}
+			if attempt < maxRetries {
+				time.Sleep(time.Duration(attempt) * 5 * time.Second)
+			}
+		}
 		if adapterErr != nil {
-			return nil, fmt.Errorf("deploy L1UsdcBridgeAdapter: %w", adapterErr)
+			return nil, fmt.Errorf("deploy L1UsdcBridgeAdapter after %d attempts: %w", maxRetries, adapterErr)
 		}
 		l1USDCBridgeForChainInfo = adapterAddr
 	}
