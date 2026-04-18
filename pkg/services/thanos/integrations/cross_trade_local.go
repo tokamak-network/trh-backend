@@ -3,6 +3,7 @@ package integrations
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -204,8 +205,7 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 
 // Sepolia L1 CrossTrade 컨트랙트 상수 (BE-10, BE-11 관련)
 const (
-	l2CrossDomainMessenger = "0x4200000000000000000000000000000000000007"
-	sepoliaTONAddress      = "0xa30fe40285b8f5c0457dbc3b7c8a280373c40044"
+	sepoliaTONAddress = "0xa30fe40285b8f5c0457dbc3b7c8a280373c40044"
 )
 
 // Thanos Sepolia 고정 파트너 L2 상수 (L2-L2 브릿지용)
@@ -222,16 +222,23 @@ const l1CrossTradeProxySetChainInfoABI = `[{"name":"setChainInfo","type":"functi
 // ABI 문자열: L2toL2CrossTradeL1.setChainInfo (7-param)
 const l2toL2CrossTradeL1SetChainInfoABI = `[{"name":"setChainInfo","type":"function","inputs":[{"name":"_crossDomainMessenger","type":"address"},{"name":"_l2CrossTrade","type":"address"},{"name":"_l2NativeTokenAddressOnL1","type":"address"},{"name":"_l1StandardBridge","type":"address"},{"name":"_l1USDCBridge","type":"address"},{"name":"_l2ChainId","type":"uint256"},{"name":"_useCustomBridge","type":"bool"}],"outputs":[]}]`
 
+// l1UsdcBridgeAdapterBytecode is the compiled creation bytecode of L1UsdcBridgeAdapter.sol.
+// Source: crossTrade/artifacts/L1/L1UsdcBridgeAdapter.sol/L1UsdcBridgeAdapter.json .bytecode.object
+// Constructor: constructor(address _l1UsdcBridge)
+// Purpose: wraps L1UsdcBridge.depositERC20To() as bridgeERC20To() (IL1StandardBridge interface).
+const l1UsdcBridgeAdapterBytecode = "60a034606d57601f6104f438819003918201601f19168301916001600160401b03831184841017607157808492602094604052833981010312606d57516001600160a01b0381168103606d5760805260405161046e9081610086823960805181818161012601526102b30152f35b5f80fd5b634e487b7160e01b5f52604160045260245ffdfe6080806040526004361015610012575f80fd5b5f905f3560e01c908163385a6970146102a1575063540abf7314610034575f80fd5b346102205760c0366003190112610220576004356001600160a01b03811690819003610220576024356001600160a01b03811690819003610220576044356001600160a01b0381169081900361022057606435926084359263ffffffff84168094036102205760a43567ffffffffffffffff811161022057366023820112156102205780600401359467ffffffffffffffff8611610220573660248784010111610220576101126040516323b872dd60e01b60208201523360248201523060448201528860648201526064815261010c6084826102e2565b85610330565b60405163095ea7b360e01b602082019081527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03166024830181905260448084018b905283529591905f9081906101716064856102e2565b83519082865af161018061039b565b81610272575b5080610268575b15610224575b50843b1561022057865f976024899560e4956040519c8d9b8c9a8b9863041c592960e51b8a5260048a01528589015260448801526064870152608486015260c060a48601528260c486015201848401378181018301849052601f01601f191681010301925af1801561021515610207575080f35b61021391505f906102e2565b005b6040513d5f823e3d90fd5b5f80fd5b6102629061025c60405163095ea7b360e01b60208201528860248201525f6044820152604481526102566064826102e2565b84610330565b82610330565b5f610193565b50813b151561018d565b8051801592508215610287575b50505f610186565b61029a9250602080918301019101610318565b5f8061027f565b34610220575f366003190112610220577f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b90601f8019910116810190811067ffffffffffffffff82111761030457604052565b634e487b7160e01b5f52604160045260245ffd5b90816020910312610220575180151581036102205790565b5f806103589260018060a01b03169360208151910182865af161035161039b565b90836103da565b8051908115159182610380575b505061036e5750565b635274afe760e01b5f5260045260245ffd5b6103939250602080918301019101610318565b155f80610365565b3d156103d5573d9067ffffffffffffffff821161030457604051916103ca601f8201601f1916602001846102e2565b82523d5f602084013e565b606090565b906103fe57508051156103ef57805190602001fd5b630a12f52160e11b5f5260045ffd5b8151158061042f575b61040f575090565b639996b31560e01b5f9081526001600160a01b0391909116600452602490fd5b50803b1561040756fea264697066735822122043099adb46c82344de445ae6fa40265a6265f7ef3b397d6af9c1e68210d0c28f64736f6c63430008210033"
+
 // CrossTradeL1RegistrationInput은 RegisterCrossTradeL2() 호출에 필요한 입력 데이터다 (BE-11).
 type CrossTradeL1RegistrationInput struct {
-	L1RPCURL              string // L1 Sepolia RPC (예: "https://rpc.sepolia.org")
-	L1ChainID             uint64 // 11155111 (Sepolia)
-	L2ChainID             uint64 // 새로 배포된 L2 chain ID
-	DeployerPrivKey       string // hex-encoded private key (0x prefix 없음), admin key (index 0)
-	L2CrossTradeProxy     string // SDK 배포 결과: L2CrossTradeProxy 주소
-	L2toL2CrossTradeProxy string // SDK 배포 결과: L2toL2CrossTradeProxy 주소
-	L1StandardBridge      string // deploy.json의 L1StandardBridgeProxy (L1 주소, L2 predeploy 아님)
-	L1USDCBridge          string // deploy.json의 L1UsdcBridgeProxy
+	L1RPCURL               string // L1 Sepolia RPC (예: "https://rpc.sepolia.org")
+	L1ChainID              uint64 // 11155111 (Sepolia)
+	L2ChainID              uint64 // 새로 배포된 L2 chain ID
+	DeployerPrivKey        string // hex-encoded private key (0x prefix 없음), admin key (index 0)
+	L2CrossTradeProxy      string // SDK 배포 결과: L2CrossTradeProxy 주소
+	L2toL2CrossTradeProxy  string // SDK 배포 결과: L2toL2CrossTradeProxy 주소
+	L1StandardBridge       string // deploy.json의 L1StandardBridgeProxy (L1 주소, L2 predeploy 아님)
+	L1USDCBridge           string // deploy.json의 L1UsdcBridgeProxy
+	L1CrossDomainMessenger string // deploy.json의 L1CrossDomainMessengerProxy (L1 주소; 0x4200...0007 L2 predeploy 금지)
 }
 
 // CrossTradeL1RegistrationOutput은 L1 등록 완료 후 반환되는 결과다 (BE-11).
@@ -314,7 +321,7 @@ func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationIn
 		return nil, fmt.Errorf("parse L1CrossTradeProxy ABI: %w", err)
 	}
 	l1Calldata, err := l1ABI.Pack("setChainInfo",
-		common.HexToAddress(l2CrossDomainMessenger),
+		common.HexToAddress(input.L1CrossDomainMessenger),
 		common.HexToAddress(input.L2CrossTradeProxy),
 		new(big.Int).SetUint64(input.L2ChainID),
 	)
@@ -341,6 +348,22 @@ func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationIn
 		return nil, fmt.Errorf("L1CrossTradeProxy.setChainInfo failed after %d attempts: %w", maxRetries, l2l1Err)
 	}
 
+	// Deploy L1UsdcBridgeAdapter if USDC bridge is configured.
+	// L1UsdcBridge exposes depositERC20To; CrossTrade calls bridgeERC20To.
+	// The adapter wraps the selector difference.
+	l1USDCBridgeForChainInfo := input.L1USDCBridge
+	if input.L1USDCBridge != "" {
+		adapterAddr, adapterErr := deployL1UsdcBridgeAdapter(
+			ctx, l1Client, privKey,
+			input.L1USDCBridge,
+			input.L1ChainID,
+		)
+		if adapterErr != nil {
+			return nil, fmt.Errorf("deploy L1UsdcBridgeAdapter: %w", adapterErr)
+		}
+		l1USDCBridgeForChainInfo = adapterAddr
+	}
+
 	// ── L2toL2CrossTradeL1.setChainInfo (7-param) ──
 	l2l2ABI, err := abi.JSON(strings.NewReader(l2toL2CrossTradeL1SetChainInfoABI))
 	if err != nil {
@@ -348,11 +371,11 @@ func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationIn
 	}
 	// Pitfall 방어: _l1StandardBridge는 L1 배포 주소 (L2 predeploy 0x4200...0010 아님)
 	l2l2Calldata, err := l2l2ABI.Pack("setChainInfo",
-		common.HexToAddress(l2CrossDomainMessenger),
+		common.HexToAddress(input.L1CrossDomainMessenger),
 		common.HexToAddress(input.L2toL2CrossTradeProxy),
 		common.HexToAddress(sepoliaTONAddress),
 		common.HexToAddress(input.L1StandardBridge),
-		common.HexToAddress(input.L1USDCBridge),
+		common.HexToAddress(l1USDCBridgeForChainInfo),
 		new(big.Int).SetUint64(input.L2ChainID),
 		false, // useCustomBridge: Phase 1 TON fee mode
 	)
@@ -383,4 +406,55 @@ func RegisterCrossTradeL2(ctx context.Context, input *CrossTradeL1RegistrationIn
 		L2L1TxHash: l2l1TxHash,
 		L2L2TxHash: l2l2TxHash,
 	}, nil
+}
+
+// deployL1UsdcBridgeAdapter deploys L1UsdcBridgeAdapter on L1 and returns its address.
+// L1UsdcBridge exposes depositERC20To; CrossTrade expects bridgeERC20To (IL1StandardBridge).
+// The adapter bridges the selector gap. Deployed once per L2 registration.
+func deployL1UsdcBridgeAdapter(
+	ctx context.Context,
+	client *ethclient.Client,
+	privKey *ecdsa.PrivateKey,
+	l1UsdcBridgeAddr string,
+	l1ChainID uint64,
+) (string, error) {
+	bytecodeBytes, err := hex.DecodeString(l1UsdcBridgeAdapterBytecode)
+	if err != nil {
+		return "", fmt.Errorf("decode adapter bytecode: %w", err)
+	}
+
+	// ABI-encode constructor(address): 32-byte left-padded address.
+	constructorArg := make([]byte, 32)
+	copy(constructorArg[12:32], common.HexToAddress(l1UsdcBridgeAddr).Bytes())
+	initCode := append(bytecodeBytes, constructorArg...)
+
+	senderAddr := crypto.PubkeyToAddress(privKey.PublicKey)
+	chainID := new(big.Int).SetUint64(l1ChainID)
+	signer := types.NewEIP155Signer(chainID)
+
+	nonce, err := client.PendingNonceAt(ctx, senderAddr)
+	if err != nil {
+		return "", fmt.Errorf("get nonce for adapter deploy: %w", err)
+	}
+	gasPrice, err := client.SuggestGasPrice(ctx)
+	if err != nil {
+		return "", fmt.Errorf("suggest gas price for adapter deploy: %w", err)
+	}
+	// Adapter deploy: estimated ~200k gas; 400k for safety.
+	tx := types.NewContractCreation(nonce, big.NewInt(0), 400_000, gasPrice, initCode)
+	signedTx, err := types.SignTx(tx, signer, privKey)
+	if err != nil {
+		return "", fmt.Errorf("sign adapter deploy tx: %w", err)
+	}
+	if err := client.SendTransaction(ctx, signedTx); err != nil {
+		return "", fmt.Errorf("send adapter deploy tx: %w", err)
+	}
+	receipt, err := bind.WaitMined(ctx, client, signedTx)
+	if err != nil {
+		return "", fmt.Errorf("wait for adapter deploy receipt: %w", err)
+	}
+	if receipt.Status == 0 {
+		return "", fmt.Errorf("adapter deploy tx reverted: %s", signedTx.Hash().Hex())
+	}
+	return receipt.ContractAddress.Hex(), nil
 }
