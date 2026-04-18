@@ -292,16 +292,21 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 							l1USDCBridge = l1Contracts.L1UsdcBridgeProxy
 						}
 
+						l1CrossDomainMessenger := ""
+						if contractsErr == nil {
+							l1CrossDomainMessenger = l1Contracts.L1CrossDomainMessengerProxy
+						}
 						// BE-04, BE-05, BE-06: L1 CrossTrade 컨트랙트에 새 L2 등록 (setChainInfo x2, max 3 retries)
 						regInput := &integrations.CrossTradeL1RegistrationInput{
-							L1RPCURL:              stackConfig.L1RpcUrl,
-							L1ChainID:             uint64(chainInformation.L1ChainID),
-							L2ChainID:             uint64(chainInformation.L2ChainID),
-							DeployerPrivKey:       stackConfig.AdminAccount,
-							L2CrossTradeProxy:     crossTradeOutput.L2CrossTradeProxy,
-							L2toL2CrossTradeProxy: crossTradeOutput.L2toL2CrossTradeProxy,
-							L1StandardBridge:      l1StandardBridge,
-							L1USDCBridge:          l1USDCBridge,
+							L1RPCURL:               stackConfig.L1RpcUrl,
+							L1ChainID:              uint64(chainInformation.L1ChainID),
+							L2ChainID:              uint64(chainInformation.L2ChainID),
+							DeployerPrivKey:        stackConfig.AdminAccount,
+							L2CrossTradeProxy:      crossTradeOutput.L2CrossTradeProxy,
+							L2toL2CrossTradeProxy:  crossTradeOutput.L2toL2CrossTradeProxy,
+							L1StandardBridge:       l1StandardBridge,
+							L1USDCBridge:           l1USDCBridge,
+							L1CrossDomainMessenger: l1CrossDomainMessenger,
 						}
 						regOutput, regErr := integrations.RegisterCrossTradeL2(ctx, regInput, 3)
 						if regErr != nil {
@@ -826,15 +831,20 @@ func (s *ThanosStackDeploymentService) RetriggerCrossTradeLocal(ctx context.Cont
 			l1USDCBridge = l1Contracts.L1UsdcBridgeProxy
 		}
 
+		l1CrossDomainMessenger := ""
+		if contractsErr == nil {
+			l1CrossDomainMessenger = l1Contracts.L1CrossDomainMessengerProxy
+		}
 		regInput := &integrations.CrossTradeL1RegistrationInput{
-			L1RPCURL:              stackConfig.L1RpcUrl,
-			L1ChainID:             uint64(chainInfo.L1ChainID),
-			L2ChainID:             uint64(chainInfo.L2ChainID),
-			DeployerPrivKey:       stackConfig.AdminAccount,
-			L2CrossTradeProxy:     ctOutput.L2CrossTradeProxy,
-			L2toL2CrossTradeProxy: ctOutput.L2toL2CrossTradeProxy,
-			L1StandardBridge:      l1StandardBridge,
-			L1USDCBridge:          l1USDCBridge,
+			L1RPCURL:               stackConfig.L1RpcUrl,
+			L1ChainID:              uint64(chainInfo.L1ChainID),
+			L2ChainID:              uint64(chainInfo.L2ChainID),
+			DeployerPrivKey:        stackConfig.AdminAccount,
+			L2CrossTradeProxy:      ctOutput.L2CrossTradeProxy,
+			L2toL2CrossTradeProxy:  ctOutput.L2toL2CrossTradeProxy,
+			L1StandardBridge:       l1StandardBridge,
+			L1USDCBridge:           l1USDCBridge,
+			L1CrossDomainMessenger: l1CrossDomainMessenger,
 		}
 		regOutput, regErr := integrations.RegisterCrossTradeL2(taskCtx, regInput, 3)
 		if regErr != nil {
