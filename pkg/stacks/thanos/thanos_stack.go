@@ -190,10 +190,10 @@ func BuildLocalChainInformation(deploymentPath string) *thanosTypes.ChainInforma
 		BridgeUrl:      "http://localhost:3001",
 		BlockExplorer:  "http://localhost:4001",
 		MonitoringUrl:  "http://localhost:3002",
-		RollupFilePath: deploymentPath + "/tokamak-thanos/build/rollup.json",
+		RollupFilePath: deploymentPath + "/rollup.json",
 	}
 
-	rollupPath := deploymentPath + "/tokamak-thanos/build/rollup.json"
+	rollupPath := deploymentPath + "/rollup.json"
 	if data, err := os.ReadFile(rollupPath); err == nil {
 		var rollup struct {
 			L1ChainID int `json:"l1_chain_id"`
