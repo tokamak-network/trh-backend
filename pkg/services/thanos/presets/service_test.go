@@ -121,12 +121,15 @@ func TestPresetDefinitions_OverridableFieldsNotEmpty(t *testing.T) {
 
 func TestPresetDefinitions_GenesisPredeploys(t *testing.T) {
 	// Every preset must include the base OP Stack contracts.
+	// EntryPoint and Paymaster are included in all presets (opPredeploys) to support non-TON fee tokens.
 	baseContracts := []string{
 		"L2ToL1MessagePasser",
 		"L2CrossDomainMessenger",
 		"L2StandardBridge",
 		"L1Block",
 		"GasPriceOracle",
+		"EntryPoint",
+		"Paymaster",
 	}
 
 	// DeFi-specific contracts expected in "defi" and "full" presets.
@@ -140,8 +143,6 @@ func TestPresetDefinitions_GenesisPredeploys(t *testing.T) {
 	gamingContracts := []string{
 		"VRF",
 		"VRFCoordinator",
-		"EntryPoint",
-		"Paymaster",
 	}
 
 	containsAll := func(predeploys []string, required []string) bool {

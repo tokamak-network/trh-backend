@@ -55,9 +55,10 @@ var fullPredeploys = append(opPredeploys,
 // DefaultPresetDefinitions holds all backend-owned preset definitions.
 var DefaultPresetDefinitions = map[string]Definition{
 	"general": {
-		ID:          "general",
-		Name:        "General Purpose",
-		Description: "Baseline rollup preset for standard application workloads.",
+		ID:                "general",
+		Name:              "General Purpose",
+		Description:       "Baseline rollup preset for standard application workloads.",
+		FaultProofEnabled: true,
 		Modules: map[string]bool{
 			"bridge":        true,
 			"blockExplorer": true,
@@ -67,7 +68,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 		},
 		GenesisPredeploys: opPredeploys,
 		EstimatedTime: map[string]string{
-			"deploy":      "20-30m",
+			"deploy":      "35-45m",
 			"fundingWait": "5-15m",
 		},
 		ChainDefaults: map[string]any{
@@ -94,9 +95,10 @@ var DefaultPresetDefinitions = map[string]Definition{
 		AvailableFeeTokens: []string{"TON", "ETH", "USDT", "USDC"},
 	},
 	"defi": {
-		ID:          "defi",
-		Name:        "DeFi",
-		Description: "Preset for exchange, liquidity, and settlement-heavy workloads.",
+		ID:                "defi",
+		Name:              "DeFi",
+		Description:       "Preset for exchange, liquidity, and settlement-heavy workloads.",
+		FaultProofEnabled: true,
 		Modules: map[string]bool{
 			"bridge":        true,
 			"blockExplorer": true,
@@ -106,7 +108,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 		},
 		GenesisPredeploys: defiPredeploys,
 		EstimatedTime: map[string]string{
-			"deploy":      "30-40m",
+			"deploy":      "45-55m",
 			"fundingWait": "5-15m",
 		},
 		ChainDefaults: map[string]any{
@@ -133,9 +135,10 @@ var DefaultPresetDefinitions = map[string]Definition{
 		AvailableFeeTokens: []string{"TON", "ETH", "USDT", "USDC"},
 	},
 	"gaming": {
-		ID:          "gaming",
-		Name:        "Gaming",
-		Description: "Preset optimized for higher throughput and player-facing observability.",
+		ID:                "gaming",
+		Name:              "Gaming",
+		Description:       "Preset optimized for higher throughput and player-facing observability.",
+		FaultProofEnabled: true,
 		Modules: map[string]bool{
 			"bridge":        true,
 			"blockExplorer": true,
@@ -146,7 +149,7 @@ var DefaultPresetDefinitions = map[string]Definition{
 		},
 		GenesisPredeploys: gamingPredeploys,
 		EstimatedTime: map[string]string{
-			"deploy":      "35-45m",
+			"deploy":      "50-60m",
 			"fundingWait": "5-15m",
 		},
 		ChainDefaults: map[string]any{
