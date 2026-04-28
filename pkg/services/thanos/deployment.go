@@ -541,7 +541,7 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 		sdkClient, err := thanos.NewThanosSDKClient(
 			ctx,
 			deployment.LogPath,
-			strings.ToLower(string(stack.Network)),
+			toSDKNetwork(stack.Network),
 			stack.DeploymentPath,
 			deploymentConfig.RegisterCandidate,
 			deploymentConfig.AwsAccessKey,

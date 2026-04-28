@@ -2,6 +2,7 @@ package thanos
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/utils"
@@ -95,6 +96,21 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 	deployments = append(deployments, thanosInfrastructureDeployment)
 
 	return deployments, nil
+}
+
+// toSDKNetwork maps a DeploymentNetwork entity value to the SDK network constant string.
+// strings.ToLower alone is insufficient: "LocalDevnet" → "localdevnet" but SDK expects "local_devnet".
+func toSDKNetwork(n entities.DeploymentNetwork) string {
+	switch n {
+	case entities.DeploymentNetworkLocalDevnet:
+		return "local_devnet"
+	case entities.DeploymentNetworkTestnet:
+		return "testnet"
+	case entities.DeploymentNetworkMainnet:
+		return "mainnet"
+	default:
+		return strings.ToLower(string(n))
+	}
 }
 
 // RegisterCandidate moved to pkg/services/thanos/integrations/register_candidate.go and is exposed via
