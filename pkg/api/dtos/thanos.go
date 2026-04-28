@@ -553,9 +553,10 @@ type PresetDeployRequest struct {
 	AwsRegion       string                     `json:"awsRegion"`
 	L1RpcUrl        string                     `json:"l1RpcUrl"      binding:"required"`
 	L1BeaconUrl     string                     `json:"l1BeaconUrl"   binding:"required"`
-	FeeToken        string                     `json:"feeToken"`
-	ReuseDeployment *bool                      `json:"reuseDeployment,omitempty"`
-	Overrides       []PresetFieldOverride      `json:"overrides,omitempty"`
+	FeeToken         string                `json:"feeToken"`
+	ReuseDeployment  *bool                 `json:"reuseDeployment,omitempty"`
+	Overrides        []PresetFieldOverride `json:"overrides,omitempty"`
+	EnableFaultProof bool                  `json:"enableFaultProof"`
 }
 
 // Validate checks provider-specific required fields.

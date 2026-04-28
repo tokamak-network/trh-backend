@@ -124,7 +124,7 @@ func (s *ThanosStackDeploymentService) CreateThanosStackFromPreset(
 		BatcherAccount:           utils.TrimPrivateKey(batcherKey),
 		ProposerAccount:          utils.TrimPrivateKey(proposerKey),
 		ChallengerAccount:        utils.TrimPrivateKey(challengerKey),
-		EnableFaultProof:         true,
+		EnableFaultProof:         req.EnableFaultProof,
 		AwsAccessKey:             req.AwsAccessKey,
 		AwsSecretAccessKey:       req.AwsSecretKey,
 		AwsRegion:                req.AwsRegion,
