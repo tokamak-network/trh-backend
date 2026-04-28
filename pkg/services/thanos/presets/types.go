@@ -12,4 +12,5 @@ type Definition struct {
 	HelmValues         map[string]any    `json:"helmValues"`
 	OverridableFields  []string          `json:"overridableFields"`
 	AvailableFeeTokens []string          `json:"availableFeeTokens"`
+	FaultProofEnabled  bool              `json:"faultProofEnabled"`
 }

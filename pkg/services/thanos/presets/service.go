@@ -173,9 +173,10 @@ var DefaultPresetDefinitions = map[string]Definition{
 		AvailableFeeTokens: []string{"TON", "ETH", "USDT", "USDC"},
 	},
 	"full": {
-		ID:          "full",
-		Name:        "Full Suite",
-		Description: "All recommended modules enabled for demos, staging, or high-touch managed environments.",
+		ID:                "full",
+		Name:              "Full Suite",
+		Description:       "All recommended modules enabled for demos, staging, or high-touch managed environments.",
+		FaultProofEnabled: true,
 		Modules: map[string]bool{
 			"bridge":        true,
 			"blockExplorer": true,
