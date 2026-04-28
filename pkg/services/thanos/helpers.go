@@ -34,7 +34,9 @@ func (s *ThanosStackDeploymentService) getThanosStackDeployments(
 			deployedContracts = true
 		}
 	}
-	if !deployedContracts {
+	// Local devnet deploys L1+L2 together in the deploy-local-infra step via SDK.Deploy().
+	// The SDK blocks DeployContracts() for local_devnet, so skip this step entirely.
+	if !deployedContracts && config.InfraProvider != "local" {
 
 		l1ContractDeploymentConfig, err := json.Marshal(dtos.DeployL1ContractsRequest{
 			L1RpcUrl:                 config.L1RpcUrl,
