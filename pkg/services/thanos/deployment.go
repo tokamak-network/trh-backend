@@ -429,15 +429,23 @@ services:
 			}
 
 			if enabled, ok := def.Modules["monitoring"]; ok && enabled {
-				monitoringIntegration, getErr := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeMonitoring.String())
-				if getErr != nil || monitoringIntegration == nil {
-					logger.Error("failed to get monitoring integration for AWS auto-mark",
-						zap.String("stackId", stackId.String()), zap.Error(getErr))
+				if chainInformation.MonitoringUrl == "" {
+					logger.Warn("monitoring URL empty after AWS deployment; skipping installed mark",
+						zap.String("stackId", stackId.String()))
 				} else {
-					metaBytes, _ := json.Marshal(map[string]string{"url": chainInformation.MonitoringUrl})
-					if err := s.integrationRepo.UpdateMetadataAfterInstalled(monitoringIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
-						logger.Error("failed to mark monitoring as installed for AWS",
-							zap.String("stackId", stackId.String()), zap.Error(err))
+					monitoringIntegration, getErr := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeMonitoring.String())
+					if getErr != nil || monitoringIntegration == nil {
+						logger.Error("failed to get monitoring integration for AWS auto-mark",
+							zap.String("stackId", stackId.String()), zap.Error(getErr))
+					} else {
+						metaBytes, metaErr := json.Marshal(map[string]string{"url": chainInformation.MonitoringUrl})
+						if metaErr != nil {
+							logger.Error("failed to marshal monitoring metadata for AWS",
+								zap.String("stackId", stackId.String()), zap.Error(metaErr))
+						} else if err := s.integrationRepo.UpdateMetadataAfterInstalled(monitoringIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
+							logger.Error("failed to mark monitoring as installed for AWS",
+								zap.String("stackId", stackId.String()), zap.Error(err))
+						}
 					}
 				}
 			}
@@ -448,8 +456,11 @@ services:
 					logger.Error("failed to get DRB integration for AWS auto-mark",
 						zap.String("stackId", stackId.String()), zap.Error(getErr))
 				} else {
-					metaBytes, _ := json.Marshal(map[string]string{"url": ""})
-					if err := s.integrationRepo.UpdateMetadataAfterInstalled(drbIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
+					metaBytes, metaErr := json.Marshal(map[string]string{"url": ""})
+					if metaErr != nil {
+						logger.Error("failed to marshal DRB metadata for AWS",
+							zap.String("stackId", stackId.String()), zap.Error(metaErr))
+					} else if err := s.integrationRepo.UpdateMetadataAfterInstalled(drbIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
 						logger.Error("failed to mark DRB as installed for AWS",
 							zap.String("stackId", stackId.String()), zap.Error(err))
 					}
