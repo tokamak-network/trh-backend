@@ -419,9 +419,40 @@ services:
 				}
 			}
 		} else {
+			// AWS path: modules are deployed by SDK's installPresetModules() via Helm.
+			// uptimeService uses the full service layer (creates SDK client, marks DB).
+			// monitoring and DRB are already running via Helm — mark them installed in DB directly.
 			if enabled, ok := def.Modules["uptimeService"]; ok && enabled {
 				if _, err := s.InstallUptimeService(ctx, stackId.String()); err != nil {
 					logger.Error("failed to auto-install uptime service after deployment", zap.String("stackId", stackId.String()), zap.Error(err))
+				}
+			}
+
+			if enabled, ok := def.Modules["monitoring"]; ok && enabled {
+				monitoringIntegration, getErr := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeMonitoring.String())
+				if getErr != nil || monitoringIntegration == nil {
+					logger.Error("failed to get monitoring integration for AWS auto-mark",
+						zap.String("stackId", stackId.String()), zap.Error(getErr))
+				} else {
+					metaBytes, _ := json.Marshal(map[string]string{"url": chainInformation.MonitoringUrl})
+					if err := s.integrationRepo.UpdateMetadataAfterInstalled(monitoringIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
+						logger.Error("failed to mark monitoring as installed for AWS",
+							zap.String("stackId", stackId.String()), zap.Error(err))
+					}
+				}
+			}
+
+			if enabled, ok := def.Modules["drb"]; ok && enabled {
+				drbIntegration, getErr := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeDRB.String())
+				if getErr != nil || drbIntegration == nil {
+					logger.Error("failed to get DRB integration for AWS auto-mark",
+						zap.String("stackId", stackId.String()), zap.Error(getErr))
+				} else {
+					metaBytes, _ := json.Marshal(map[string]string{"url": ""})
+					if err := s.integrationRepo.UpdateMetadataAfterInstalled(drbIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
+						logger.Error("failed to mark DRB as installed for AWS",
+							zap.String("stackId", stackId.String()), zap.Error(err))
+					}
 				}
 			}
 		}
