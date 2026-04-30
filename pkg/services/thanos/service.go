@@ -78,7 +78,11 @@ func NewThanosService(
 
 	thanosDeploymentSrv.taskManager.Start()
 	thanosDeploymentSrv.startBackupCleanupScheduler()
-	go thanosDeploymentSrv.restoreAAOperators(context.Background())
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		thanosDeploymentSrv.restoreAAOperators(ctx)
+	}()
 
 	return thanosDeploymentSrv
 }
