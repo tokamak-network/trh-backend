@@ -495,7 +495,7 @@ services:
 		// completed. Starting it earlier would allow the operator to consume L2 deployer
 		// nonces before CrossTrade's CREATE address predictions are resolved, causing
 		// waitForContractCode to poll the wrong address and time out.
-		if stackConfig.InfraProvider == "local" && thanosSDKConstants.NeedsAASetup(stackConfig.PresetID, stackConfig.FeeToken) {
+		if thanosSDKConstants.NeedsAASetup(stackConfig.PresetID, stackConfig.FeeToken) {
 			capturedClient := sdkClient
 			s.taskManager.AddTask(fmt.Sprintf("aa-operator-%s", stackId.String()), func(ctx context.Context) {
 				thanos.StartAAOperatorFromConfig(ctx, capturedClient)

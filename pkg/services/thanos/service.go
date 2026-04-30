@@ -15,6 +15,8 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/services/thanos/integrations"
+	stackThanos "github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
+	thanosSDKConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
 	"go.uber.org/zap"
 )
 
@@ -76,6 +78,7 @@ func NewThanosService(
 
 	thanosDeploymentSrv.taskManager.Start()
 	thanosDeploymentSrv.startBackupCleanupScheduler()
+	go thanosDeploymentSrv.restoreAAOperators(context.Background())
 
 	return thanosDeploymentSrv
 }
@@ -115,6 +118,43 @@ func (s *ThanosStackDeploymentService) startBackupCleanupScheduler() {
 			}
 		}
 	}()
+}
+
+func (s *ThanosStackDeploymentService) restoreAAOperators(ctx context.Context) {
+	stacks, err := s.stackRepo.GetAllStacks()
+	if err != nil {
+		logger.Error("Failed to list stacks for AA operator restoration", zap.Error(err))
+		return
+	}
+
+	for _, stack := range stacks {
+		if stack == nil || stack.Status != entities.StackStatusDeployed {
+			continue
+		}
+		if stack.DeploymentPath == "" {
+			continue
+		}
+
+		sdkClient, err := stackThanos.NewThanosSDKClient(ctx, "", string(stack.Network), stack.DeploymentPath, false, "", "", "")
+		if err != nil {
+			logger.Warn("Failed to create SDK client for stack", zap.String("stackId", stack.ID.String()), zap.Error(err))
+			continue
+		}
+
+		stackConfig := sdkClient.GetDeployConfig()
+		if stackConfig == nil || !thanosSDKConstants.NeedsAASetup(stackConfig.Preset, stackConfig.FeeToken) {
+			continue
+		}
+
+		stackID := stack.ID
+		capturedClient := sdkClient
+		s.taskManager.AddTask(
+			fmt.Sprintf("aa-operator-%s", stackID.String()),
+			func(ctx context.Context) {
+				stackThanos.StartAAOperatorFromConfig(ctx, capturedClient)
+			},
+		)
+	}
 }
 
 // InstallBridge installs a bridge for the given stack
