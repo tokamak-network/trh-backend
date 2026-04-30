@@ -60,7 +60,7 @@ func TestListPresets_ResponseContainsRequiredFields(t *testing.T) {
 
 	for _, item := range data {
 		preset := item.(map[string]any)
-		for _, field := range []string{"ID", "Name", "Description", "Modules", "ChainDefaults"} {
+		for _, field := range []string{"id", "name", "description", "modules", "chainDefaults"} {
 			if _, ok := preset[field]; !ok {
 				t.Errorf("preset missing field %q: %v", field, preset)
 			}
@@ -92,8 +92,8 @@ func TestGetPresetByID_KnownID_Returns200(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected data to be an object for preset %q", id)
 			}
-			if data["ID"] != id {
-				t.Errorf("expected ID %q in response, got %v", id, data["ID"])
+			if data["id"] != id {
+				t.Errorf("expected ID %q in response, got %v", id, data["id"])
 			}
 		})
 	}

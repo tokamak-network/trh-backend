@@ -235,7 +235,7 @@ func (r *RegisterCandidateIntegration) registerTask(ctx context.Context, newInte
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeRegisterCandidate.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
 		deploymentStatus := entities.DeploymentRunStatusFailed
-		if errors.Is(err, context.Canceled) {
+		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped
 		}
 		_ = r.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)

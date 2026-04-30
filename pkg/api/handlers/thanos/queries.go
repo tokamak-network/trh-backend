@@ -1,6 +1,7 @@
 package thanos
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -173,4 +174,204 @@ func (h *ThanosDeploymentHandler) DownloadRollupConfig(c *gin.Context) {
 		// At this point headers are already sent, so we can't send a JSON error response
 		return
 	}
+}
+
+// @Summary     Get Contracts File Content
+// @Description Fetches the contracts file stored in stack metadata and returns its contents
+// @Tags        Thanos Stack
+// @Accept      json
+// @Produce     application/octet-stream
+// @Param       id path string true "Thanos Stack ID"
+// @Success     200 {file} file "Contracts file content"
+// @Failure     400 {object} entities.Response
+// @Failure     404 {object} entities.Response
+// @Failure     500 {object} entities.Response
+// @Router      /stacks/thanos/{id}/contracts [get]
+func (h *ThanosDeploymentHandler) GetContractsFile(c *gin.Context) {
+	stackIdStr := c.Param("id")
+	if stackIdStr == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	stackId, err := uuid.Parse(stackIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack ID format",
+			Data:    nil,
+		})
+		return
+	}
+
+	contracts, err := h.ThanosDeploymentService.GetContractsFileContent(stackId)
+	if err != nil {
+		logger.Error("failed to read contracts file",
+			zap.String("stackId", stackIdStr),
+			zap.Error(err))
+
+		var statusCode int
+		switch err.Error() {
+		case "stack not found":
+			statusCode = http.StatusNotFound
+		case "stack metadata not found",
+			"contracts file not available for this stack",
+			"contracts file not found on filesystem":
+			statusCode = http.StatusNotFound
+		default:
+			statusCode = http.StatusInternalServerError
+		}
+
+		c.JSON(statusCode, &entities.Response{
+			Status:  uint64(statusCode),
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Success",
+		Data:    contracts,
+	})
+}
+
+// @Summary     Get Deploy Config File Content
+// @Description Fetches the deploy config file stored in stack metadata and returns its contents
+// @Tags        Thanos Stack
+// @Accept      json
+// @Produce     json
+// @Param       id path string true "Thanos Stack ID"
+// @Success     200 {object} entities.Response
+// @Failure     400 {object} entities.Response
+// @Failure     404 {object} entities.Response
+// @Failure     500 {object} entities.Response
+// @Router      /stacks/thanos/{id}/deployconfig [get]
+func (h *ThanosDeploymentHandler) GetDeployConfigFile(c *gin.Context) {
+	stackIdStr := c.Param("id")
+	if stackIdStr == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	stackId, err := uuid.Parse(stackIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack ID format",
+			Data:    nil,
+		})
+		return
+	}
+
+	content, err := h.ThanosDeploymentService.GetDeployConfigFileContent(stackId)
+	if err != nil {
+		logger.Error("failed to read deploy config file",
+			zap.String("stackId", stackIdStr),
+			zap.Error(err))
+
+		var statusCode int
+		switch err.Error() {
+		case "stack not found":
+			statusCode = http.StatusNotFound
+		case "stack metadata not found",
+			"deploy config file not available for this stack",
+			"deploy config file not found on filesystem":
+			statusCode = http.StatusNotFound
+		default:
+			statusCode = http.StatusInternalServerError
+		}
+
+		c.JSON(statusCode, &entities.Response{
+			Status:  uint64(statusCode),
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	var deployConfigData interface{}
+	if err := json.Unmarshal(content, &deployConfigData); err != nil {
+		logger.Warn("deploy config file is not valid JSON, returning as string",
+			zap.String("stackId", stackIdStr),
+			zap.Error(err))
+		deployConfigData = string(content)
+	}
+
+	c.JSON(http.StatusOK, &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Success",
+		Data:    deployConfigData,
+	})
+}
+
+// @Summary		Get Default Contract Addresses
+// @Description	Get Default Contract Addresses
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Success		200	{object}	entities.Response
+// @Failure		401	{object}	map[string]interface{}
+// @Router			/stacks/thanos/default-contract-addresses [get]
+func (h *ThanosDeploymentHandler) GetDefaultContractAddresses(c *gin.Context) {
+	response, err := h.ThanosDeploymentService.GetDefaultContractAddresses()
+	if err != nil {
+		logger.Error("failed to get default contract addresses", zap.Error(err))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Get Deployed L2 Chain Configuration For Cross Trade
+// @Description	Get Deployed L2 Chain Configuration For Cross Trade
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			id		path		string	true	"Thanos Stack ID"
+// @Param			mode	query		string	true	"Cross Trade Deploy Mode (l2_to_l1 or l2_to_l2)"
+// @Success		200		{object}	entities.Response
+// @Failure		400		{object}	entities.Response
+// @Failure		401		{object}	map[string]interface{}
+// @Failure		404		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/cross-trade/l2-chain-config [get]
+func (h *ThanosDeploymentHandler) GetDeployedL2ChainConfigurationForCrossTrade(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	mode := c.Query("mode")
+	if mode == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "mode query parameter is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.GetDeployedL2ChainConfigurationForCrossTrade(
+		c.Request.Context(),
+		uuid.MustParse(id),
+		mode,
+	)
+	if err != nil {
+		logger.Error("failed to get deployed L2 chain configuration", zap.Error(err), zap.String("id", id), zap.String("mode", mode))
+	}
+	c.JSON(int(response.Status), response)
 }

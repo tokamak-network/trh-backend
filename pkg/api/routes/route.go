@@ -225,6 +225,8 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		adminRoutes.POST("/:id/integrations/cross-trade", handler.InstallCrossChainBridge)
 		adminRoutes.DELETE("/:id/integrations/cross-trade", handler.UninstallCrossChainBridge)
 		adminRoutes.POST("/:id/integrations/cross-trade-local", handler.RetriggerCrossTradeLocal)
+		adminRoutes.POST("/:id/cross-trade/deploy-l2-chain", handler.DeployNewL2Chain)
+		adminRoutes.POST("/:id/cross-trade/register-tokens", handler.RegisterTokens)
 
 		adminRoutes.POST("/:id/integrations/:integrationId/cancel", handler.CancelIntegration)
 		adminRoutes.POST("/:id/integrations/:integrationId/retry", handler.RetryIntegration)
@@ -241,9 +243,12 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 
 		// Read-only operations
 		authenticatedRoutes.GET("", handler.GetAllStacks)
+		authenticatedRoutes.GET("/default-contract-addresses", handler.GetDefaultContractAddresses)
 		authenticatedRoutes.GET("/:id", handler.GetStackByID)
 		authenticatedRoutes.GET("/:id/status", handler.GetStackStatus)
 		authenticatedRoutes.GET("/:id/rollupconfig", handler.DownloadRollupConfig)
+		authenticatedRoutes.GET("/:id/contracts", handler.GetContractsFile)
+		authenticatedRoutes.GET("/:id/deployconfig", handler.GetDeployConfigFile)
 		authenticatedRoutes.GET("/:id/deployments", handler.GetDeployments)
 		authenticatedRoutes.GET("/:id/integrations", handler.GetIntegrations)
 		authenticatedRoutes.GET("/:id/integrations/register-metadata-dao", handler.GetRegisterMetadataDAO)
@@ -254,6 +259,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 		authenticatedRoutes.GET("/:id/deployments/:deploymentId/logs/download", handler.DownloadDeploymentLogFile)
 		authenticatedRoutes.GET("/:id/logs", handler.GetStackLogs)
 		authenticatedRoutes.GET("/:id/funding-status", handler.GetFundingStatus)
+		authenticatedRoutes.GET("/:id/cross-trade/l2-chain-config", handler.GetDeployedL2ChainConfigurationForCrossTrade)
 	}
 }
 

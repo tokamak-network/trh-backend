@@ -156,8 +156,13 @@ func TestCreateThanosStackFromPreset_PropagatesSeedPhraseToDeploymentConfigs(t *
 		}
 	}
 
-	if deployContractsConfig.SeedPhrase != drbTestMnemonic {
-		t.Fatalf("deploy contracts seedPhrase = %q, want %q", deployContractsConfig.SeedPhrase, drbTestMnemonic)
+	// For local provider, the deploy-l1-contracts step is skipped entirely (L1+L2 are
+	// deployed together in deploy-local-infra), so no L1 contracts config is emitted.
+	if deployContractsConfig.SeedPhrase != "" {
+		// If somehow a deploy-contracts step appears for local, its seed phrase must match.
+		if deployContractsConfig.SeedPhrase != drbTestMnemonic {
+			t.Fatalf("deploy contracts seedPhrase = %q, want %q", deployContractsConfig.SeedPhrase, drbTestMnemonic)
+		}
 	}
 	if deployInfraConfig.SeedPhrase != drbTestMnemonic {
 		t.Fatalf("deploy infra seedPhrase = %q, want %q", deployInfraConfig.SeedPhrase, drbTestMnemonic)

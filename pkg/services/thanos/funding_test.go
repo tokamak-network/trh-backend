@@ -65,12 +65,20 @@ type account struct {
 	balance string // wei string
 }
 
-// validAddresses returns four dummy but non-empty ETH addresses.
-var validAddresses = map[string]string{
-	"admin":     "0x1111111111111111111111111111111111111111",
-	"sequencer": "0x2222222222222222222222222222222222222222",
-	"batcher":   "0x3333333333333333333333333333333333333333",
-	"proposer":  "0x4444444444444444444444444444444444444444",
+// validPrivateKeys are well-known Hardhat test private keys (no 0x prefix).
+var validPrivateKeys = map[string]string{
+	"admin":     "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	"sequencer": "59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+	"batcher":   "5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
+	"proposer":  "7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
+}
+
+// derivedAddresses are the Ethereum addresses derived from validPrivateKeys.
+var derivedAddresses = map[string]string{
+	"admin":     "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+	"sequencer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+	"batcher":   "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+	"proposer":  "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
 }
 
 func makeStackConfig(t *testing.T, network entities.DeploymentNetwork, overrides map[string]string) *entities.StackEntity {
@@ -78,10 +86,10 @@ func makeStackConfig(t *testing.T, network entities.DeploymentNetwork, overrides
 	cfg := dtos.DeployThanosRequest{
 		Network:          network,
 		L1RpcUrl:         "http://localhost:8545",
-		AdminAccount:     validAddresses["admin"],
-		SequencerAccount: validAddresses["sequencer"],
-		BatcherAccount:   validAddresses["batcher"],
-		ProposerAccount:  validAddresses["proposer"],
+		AdminAccount:     validPrivateKeys["admin"],
+		SequencerAccount: validPrivateKeys["sequencer"],
+		BatcherAccount:   validPrivateKeys["batcher"],
+		ProposerAccount:  validPrivateKeys["proposer"],
 	}
 	for role, addr := range overrides {
 		switch role {
@@ -241,10 +249,10 @@ func TestGetFundingStatus_AllAccountsFunded_AllFulfilledTrue(t *testing.T) {
 	// Give each address more than the testnet requirement.
 	aboveReq := new(big.Int).Mul(big.NewInt(10), new(big.Int).SetUint64(1e18)) // 10 ETH
 	balances := map[string]*big.Int{
-		addrHex(validAddresses["admin"]):     new(big.Int).Set(aboveReq),
-		addrHex(validAddresses["sequencer"]): new(big.Int).Set(aboveReq),
-		addrHex(validAddresses["batcher"]):   new(big.Int).Set(aboveReq),
-		addrHex(validAddresses["proposer"]):  new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["admin"]):     new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["sequencer"]): new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["batcher"]):   new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["proposer"]):  new(big.Int).Set(aboveReq),
 	}
 	svc := newServiceWithStubs(repo, &stubEthClient{balances: balances})
 
@@ -272,10 +280,10 @@ func TestGetFundingStatus_OneAccountUnderfunded_AllFulfilledFalse(t *testing.T) 
 
 	aboveReq := new(big.Int).Mul(big.NewInt(10), new(big.Int).SetUint64(1e18))
 	balances := map[string]*big.Int{
-		addrHex(validAddresses["admin"]):     new(big.Int).Set(aboveReq),
-		addrHex(validAddresses["sequencer"]): new(big.Int).Set(aboveReq),
-		addrHex(validAddresses["batcher"]):   big.NewInt(1), // underfunded
-		addrHex(validAddresses["proposer"]):  new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["admin"]):     new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["sequencer"]): new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["batcher"]):   big.NewInt(1), // underfunded
+		addrHex(derivedAddresses["proposer"]):  new(big.Int).Set(aboveReq),
 	}
 	svc := newServiceWithStubs(repo, &stubEthClient{balances: balances})
 
@@ -306,10 +314,10 @@ func TestGetFundingStatus_ResponseContainsStackIDAndNetwork(t *testing.T) {
 
 	aboveReq := new(big.Int).Mul(big.NewInt(10), new(big.Int).SetUint64(1e18))
 	balances := map[string]*big.Int{
-		addrHex(validAddresses["admin"]):     new(big.Int).Set(aboveReq),
-		addrHex(validAddresses["sequencer"]): new(big.Int).Set(aboveReq),
-		addrHex(validAddresses["batcher"]):   new(big.Int).Set(aboveReq),
-		addrHex(validAddresses["proposer"]):  new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["admin"]):     new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["sequencer"]): new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["batcher"]):   new(big.Int).Set(aboveReq),
+		addrHex(derivedAddresses["proposer"]):  new(big.Int).Set(aboveReq),
 	}
 	svc := newServiceWithStubs(repo, &stubEthClient{balances: balances})
 

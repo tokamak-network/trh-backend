@@ -339,7 +339,7 @@ func (m *MonitoringIntegration) installTask(ctx context.Context, newIntegrationI
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeMonitoring.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
 		deploymentStatus := entities.DeploymentRunStatusFailed
-		if errors.Is(err, context.Canceled) {
+		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped
 		}
 		_ = m.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)

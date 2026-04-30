@@ -313,7 +313,7 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, newIntegrati
 		}
 
 		deploymentStatus := entities.DeploymentRunStatusFailed
-		if errors.Is(err, context.Canceled) {
+		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped
 		}
 		_ = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)

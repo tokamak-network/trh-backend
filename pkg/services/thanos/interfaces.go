@@ -94,6 +94,11 @@ type IntegrationRepository interface {
 		id string,
 		config json.RawMessage,
 	) error
+	GetIntegrationByStatus(
+		stackId string,
+		integrationType string,
+		status entities.DeploymentStatus,
+	) (*entities.IntegrationEntity, error)
 }
 
 type LogRepository interface {

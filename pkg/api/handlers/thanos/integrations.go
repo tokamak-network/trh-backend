@@ -34,7 +34,16 @@ func (h *ThanosDeploymentHandler) GetIntegrations(c *gin.Context) {
 		})
 		return
 	}
-	response, err := h.ThanosDeploymentService.GetIntegrations(uuid.MustParse(id))
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+	response, err := h.ThanosDeploymentService.GetIntegrations(stackUUID)
 	if err != nil {
 		logger.Error("failed to get integrations", zap.Error(err), zap.String("id", id))
 	}
@@ -69,9 +78,27 @@ func (h *ThanosDeploymentHandler) GetIntegrationById(c *gin.Context) {
 		})
 		return
 	}
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+	integrationUUID, err := uuid.Parse(integrationId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid integration id format",
+			Data:    nil,
+		})
+		return
+	}
 	response, err := h.ThanosDeploymentService.GetIntegration(
-		uuid.MustParse(id),
-		uuid.MustParse(integrationId),
+		stackUUID,
+		integrationUUID,
 	)
 	if err != nil {
 		logger.Error("failed to get integration", zap.Error(err), zap.String("id", id), zap.String("integrationId", integrationId))
@@ -232,8 +259,17 @@ func (h *ThanosDeploymentHandler) InstallMonitoring(c *gin.Context) {
 		})
 		return
 	}
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
 
-	response, err := h.ThanosDeploymentService.InstallMonitoring(c.Request.Context(), uuid.MustParse(id), request)
+	response, err := h.ThanosDeploymentService.InstallMonitoring(c.Request.Context(), stackUUID, request)
 	if err != nil {
 		logger.Error("failed to install monitoring", zap.Error(err), zap.String("id", id))
 	}
@@ -259,7 +295,17 @@ func (h *ThanosDeploymentHandler) UninstallMonitoring(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.UninstallMonitoring(c.Request.Context(), uuid.MustParse(id))
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UninstallMonitoring(c.Request.Context(), stackUUID)
 	if err != nil {
 		logger.Error("failed to uninstall monitoring", zap.Error(err), zap.String("id", id))
 	}
@@ -285,7 +331,17 @@ func (h *ThanosDeploymentHandler) BackupStatus(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.BackupStatus(c.Request.Context(), uuid.MustParse(id))
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupStatus(c.Request.Context(), stackUUID)
 	if err != nil {
 		logger.Error("failed to get backup status", zap.Error(err), zap.String("id", id))
 	}
@@ -321,7 +377,17 @@ func (h *ThanosDeploymentHandler) BackupCheckpoints(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.BackupCheckpoints(c.Request.Context(), uuid.MustParse(id), request)
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupCheckpoints(c.Request.Context(), stackUUID, request)
 	if err != nil {
 		logger.Error("failed to get backup checkpoints", zap.Error(err), zap.String("id", id))
 	}
@@ -347,7 +413,17 @@ func (h *ThanosDeploymentHandler) BackupSnapshot(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.BackupSnapshot(c.Request.Context(), uuid.MustParse(id))
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupSnapshot(c.Request.Context(), stackUUID)
 	if err != nil {
 		logger.Error("failed to backup snapshot", zap.Error(err), zap.String("id", id))
 	}
@@ -383,7 +459,17 @@ func (h *ThanosDeploymentHandler) BackupRestore(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.BackupRestore(c.Request.Context(), uuid.MustParse(id), request)
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupRestore(c.Request.Context(), stackUUID, request)
 	if err != nil {
 		logger.Error("failed to backup restore", zap.Error(err), zap.String("id", id))
 	}
@@ -419,7 +505,17 @@ func (h *ThanosDeploymentHandler) BackupConfigure(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.BackupConfigure(c.Request.Context(), uuid.MustParse(id), request)
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupConfigure(c.Request.Context(), stackUUID, request)
 	if err != nil {
 		logger.Error("failed to backup configure", zap.Error(err), zap.String("id", id))
 	}
@@ -455,7 +551,17 @@ func (h *ThanosDeploymentHandler) BackupAttach(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.BackupAttach(c.Request.Context(), uuid.MustParse(id), request)
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupAttach(c.Request.Context(), stackUUID, request)
 	if err != nil {
 		logger.Error("failed to backup attach", zap.Error(err), zap.String("id", id))
 	}
@@ -549,7 +655,17 @@ func (h *ThanosDeploymentHandler) BackupCleanup(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.BackupCleanup(c.Request.Context(), uuid.MustParse(id))
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.BackupCleanup(c.Request.Context(), stackUUID)
 	if err != nil {
 		logger.Error("failed to backup cleanup", zap.Error(err), zap.String("id", id))
 	}
@@ -575,7 +691,17 @@ func (h *ThanosDeploymentHandler) DisableEmailAlert(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.DisableEmailAlert(c.Request.Context(), uuid.MustParse(id))
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.DisableEmailAlert(c.Request.Context(), stackUUID)
 	if err != nil {
 		logger.Error("failed to disable email alert", zap.Error(err), zap.String("id", id))
 	}
@@ -601,7 +727,17 @@ func (h *ThanosDeploymentHandler) DisableTelegramAlert(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.DisableTelegramAlert(c.Request.Context(), uuid.MustParse(id))
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.DisableTelegramAlert(c.Request.Context(), stackUUID)
 	if err != nil {
 		logger.Error("failed to disable telegram alert", zap.Error(err), zap.String("id", id))
 	}
@@ -638,7 +774,17 @@ func (h *ThanosDeploymentHandler) UpdateEmailAlert(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.UpdateEmailAlert(c.Request.Context(), uuid.MustParse(id), request)
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UpdateEmailAlert(c.Request.Context(), stackUUID, request)
 	if err != nil {
 		logger.Error("failed to update email alert", zap.Error(err), zap.String("id", id))
 	}
@@ -675,7 +821,17 @@ func (h *ThanosDeploymentHandler) UpdateTelegramAlert(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.UpdateTelegramAlert(c.Request.Context(), uuid.MustParse(id), request)
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UpdateTelegramAlert(c.Request.Context(), stackUUID, request)
 	if err != nil {
 		logger.Error("failed to update telegram alert", zap.Error(err), zap.String("id", id))
 	}
@@ -712,7 +868,16 @@ func (h *ThanosDeploymentHandler) InstallCrossChainBridge(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.InstallCrossChainBridge(c.Request.Context(), uuid.MustParse(id), request)
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+	response, err := h.ThanosDeploymentService.InstallCrossChainBridge(c.Request.Context(), stackUUID, request)
 	if err != nil {
 		logger.Error("failed to install cross chain bridge", zap.Error(err), zap.String("id", id))
 	}
@@ -726,7 +891,7 @@ func (h *ThanosDeploymentHandler) InstallCrossChainBridge(c *gin.Context) {
 // @Produce		json
 // @Param			id	path		string	true	"Thanos Stack ID"
 // @Success		200	{object}	entities.Response
-// @Router			/stacks/thanos/{id}/integrations/cross-trade [delete]
+// @Router			/stacks/thanos/{id}/integrations/cross-trade/{integrationID} [delete]
 func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -738,7 +903,27 @@ func (h *ThanosDeploymentHandler) UninstallCrossChainBridge(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.UninstallCrossChainBridge(c.Request.Context(), uuid.MustParse(id))
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	mode := c.Query("mode")
+	if mode == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "mode is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UninstallCrossChainBridge(c.Request.Context(), stackUUID, mode)
 	if err != nil {
 		logger.Error("failed to uninstall cross chain bridge", zap.Error(err), zap.String("id", id))
 	}
@@ -865,6 +1050,135 @@ func (h *ThanosDeploymentHandler) RetriggerCrossTradeLocal(c *gin.Context) {
 	response, err := h.ThanosDeploymentService.RetriggerCrossTradeLocal(c.Request.Context(), id)
 	if err != nil {
 		logger.Error("failed to retrigger cross trade local", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Deploy New L2 Chain
+// @Description	Deploy New L2 Chain for Cross Trade
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			id		path		string						true	"Thanos Stack ID"
+// @Param			request	body		dtos.DeployNewL2ChainRequest	true	"Deploy New L2 Chain Request"
+// @Success		200		{object}	entities.Response
+// @Failure		400		{object}	entities.Response
+// @Failure		401		{object}	map[string]interface{}
+// @Failure		404		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/cross-trade/deploy-l2-chain [post]
+func (h *ThanosDeploymentHandler) DeployNewL2Chain(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+	var request dtos.DeployNewL2ChainRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	if err := request.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.DeployNewL2Chain(
+		c.Request.Context(),
+		stackUUID,
+		string(request.Mode),
+		request,
+	)
+	if err != nil {
+		logger.Error("failed to deploy new L2 chain", zap.Error(err), zap.String("id", id), zap.String("mode", string(request.Mode)))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+// @Summary		Register Tokens
+// @Description	Register Tokens for Cross Trade
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Security		BearerAuth
+// @Param			id		path		string						true	"Thanos Stack ID"
+// @Param			request	body		dtos.RegisterTokensAPIRequest	true	"Register Tokens Request"
+// @Success		200		{object}	entities.Response
+// @Failure		400		{object}	entities.Response
+// @Failure		401		{object}	map[string]interface{}
+// @Failure		404		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/cross-trade/register-tokens [post]
+func (h *ThanosDeploymentHandler) RegisterTokens(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	var request dtos.RegisterTokensAPIRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	if err := request.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	stackUUID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "invalid stack id format",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.RegisterTokens(
+		c.Request.Context(),
+		stackUUID,
+		string(request.Mode),
+		request,
+	)
+	if err != nil {
+		logger.Error("failed to register tokens", zap.Error(err), zap.String("id", id), zap.String("mode", string(request.Mode)))
 	}
 	c.JSON(int(response.Status), response)
 }

@@ -179,6 +179,18 @@ func (r *IntegrationRepository) GetIntegrationsByStackID(
 	return integrationEntities, nil
 }
 
+func (r *IntegrationRepository) GetIntegrationByStatus(
+	stackId string,
+	integrationType string,
+	status entities.DeploymentStatus,
+) (*entities.IntegrationEntity, error) {
+	var integration schemas.Integration
+	if err := r.db.Where("stack_id = ?", stackId).Where("type = ?", integrationType).Where("status = ?", status).First(&integration).Error; err != nil {
+		return nil, err
+	}
+	return ToIntegrationEntity(&integration), nil
+}
+
 func (r *IntegrationRepository) GetActiveIntegrationsByStackID(
 	stackId string,
 	exceptTypes []string,
@@ -186,7 +198,11 @@ func (r *IntegrationRepository) GetActiveIntegrationsByStackID(
 	var integrations []schemas.Integration
 	query := r.db.Where("stack_id = ?", stackId).Where("status != ?", entities.DeploymentStatusTerminated).Order("created_at asc")
 	if len(exceptTypes) > 0 {
-		query = query.Where("type NOT IN (?)", exceptTypes)
+		query = query.Where("status IN (?)", []string{
+			string(entities.DeploymentStatusPending),
+			string(entities.DeploymentStatusCompleted),
+			string(entities.DeploymentStatusInProgress),
+		}).Where("type NOT IN (?)", exceptTypes)
 	}
 	if err := query.Find(&integrations).Error; err != nil {
 		return nil, err

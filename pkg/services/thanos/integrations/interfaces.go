@@ -44,6 +44,7 @@ func NewIntegrationManager(
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
+		GetIntegrationByStatus(stackId string, integrationType string, status entities.DeploymentStatus) (*entities.IntegrationEntity, error)
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},
 	logRepo interface {
@@ -189,8 +190,20 @@ func (im *IntegrationManager) InstallCrossChainBridge(ctx context.Context, stack
 	return im.crossTrade.Install(ctx, stackId, request)
 }
 
-func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID) (*entities.Response, error) {
-	return im.crossTrade.Uninstall(ctx, stackId.String())
+func (im *IntegrationManager) UninstallCrossChainBridge(ctx context.Context, stackId uuid.UUID, mode string) (*entities.Response, error) {
+	return im.crossTrade.Uninstall(ctx, stackId.String(), mode)
+}
+
+func (im *IntegrationManager) RegisterTokens(ctx context.Context, stackId uuid.UUID, mode string, request dtos.RegisterTokensAPIRequest) (*entities.Response, error) {
+	return im.crossTrade.RegisterTokens(ctx, stackId, mode, request)
+}
+
+func (im *IntegrationManager) DeployNewL2Chain(ctx context.Context, stackId uuid.UUID, mode string, request dtos.DeployNewL2ChainRequest) (*entities.Response, error) {
+	return im.crossTrade.DeployNewL2Chain(ctx, stackId, mode, request)
+}
+
+func (im *IntegrationManager) AutoInstallCrossTradeAWS(ctx context.Context, stackId uuid.UUID, stackConfig *dtos.DeployThanosRequest, l2RPC string, l2ChainID uint64, l1ChainID uint64) {
+	im.crossTrade.autoInstallCrossTradeAWS(ctx, stackId, stackConfig, l2RPC, l2ChainID, l1ChainID)
 }
 
 // InstallUptimeService installs an uptime service for the given stack

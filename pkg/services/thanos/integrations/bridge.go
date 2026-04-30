@@ -280,7 +280,7 @@ func (b *BridgeIntegration) installTask(ctx context.Context, newIntegrationID uu
 			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
 		}
 		deploymentStatus := entities.DeploymentRunStatusFailed
-		if errors.Is(err, context.Canceled) {
+		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped
 		}
 		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)

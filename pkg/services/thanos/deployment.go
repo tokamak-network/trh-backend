@@ -466,6 +466,29 @@ services:
 					}
 				}
 			}
+
+			if enabled, ok := def.Modules["crossTrade"]; ok && enabled {
+				pendingCT, ctErr := s.integrationRepo.GetIntegrationByStatus(
+					stackId.String(),
+					enum.IntegrationTypeCrossTrade.String(),
+					entities.DeploymentStatusPending,
+				)
+				if ctErr == nil && pendingCT != nil {
+					capturedConfig := stackConfig
+					capturedL1ChainID := uint64(chainInformation.L1ChainID)
+					capturedL2RPC := chainInformation.L2RpcUrl
+					capturedL2ChainID := uint64(chainInformation.L2ChainID)
+					go s.integrationMgr.AutoInstallCrossTradeAWS(
+						context.Background(),
+						stackId,
+						&capturedConfig,
+						capturedL2RPC,
+						capturedL2ChainID,
+						capturedL1ChainID,
+					)
+					logger.Info("CrossTrade auto-install goroutine launched", zap.String("stackId", stackId.String()))
+				}
+			}
 		}
 
 		// Start AA Operator AFTER all preset auto-installs (including CrossTrade) have
