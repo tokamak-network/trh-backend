@@ -40,6 +40,8 @@ type BlockExplorerIntegration struct {
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -71,6 +73,8 @@ func NewBlockExplorerIntegration(
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -253,7 +257,7 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-block-explorer")
 
-	blockExplorerIntegration, _ := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBlockExplorer.String())
+	blockExplorerIntegration, _ := b.integrationRepo.GetUninstallableIntegration(stack.ID.String(), enum.IntegrationTypeBlockExplorer.String())
 	if blockExplorerIntegration == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
@@ -334,9 +338,21 @@ func (b *BlockExplorerIntegration) installTask(ctx context.Context, newIntegrati
 	if err != nil {
 		logger.Error("failed to install block explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
 
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
+		// Auto cleanup: attempt to remove any partially created resources
+		logger.Info("attempting automatic cleanup of failed block explorer installation", zap.String("integrationId", newIntegrationID.String()))
+		if cleanupErr := thanos.UninstallBlockExplorer(taskCtx, sdkClient); cleanupErr != nil {
+			logger.Warn("automatic cleanup failed", zap.String("integrationId", newIntegrationID.String()), zap.Error(cleanupErr))
+			reason := fmt.Sprintf("installation failed: %s; cleanup failed: %s", err.Error(), cleanupErr.Error())
+			if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, reason); updateErr != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
+			}
+		} else {
+			logger.Info("automatic cleanup successful, removing integration record", zap.String("integrationId", newIntegrationID.String()))
+			if deleteErr := b.integrationRepo.DeleteIntegration(newIntegrationID.String()); deleteErr != nil {
+				logger.Error("failed to delete integration after cleanup", zap.String("integrationId", newIntegrationID.String()), zap.Error(deleteErr))
+			}
 		}
+
 		deploymentStatus := entities.DeploymentRunStatusFailed
 		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped

@@ -62,6 +62,11 @@ type IntegrationRepository interface {
 		stackId string,
 		integrationType string,
 	) (*entities.IntegrationEntity, error)
+	GetUninstallableIntegration(
+		stackId string,
+		integrationType string,
+	) (*entities.IntegrationEntity, error)
+	DeleteIntegration(id string) error
 	GetActiveIntegrations(
 		stackId string,
 		integrationType string,

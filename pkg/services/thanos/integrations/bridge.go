@@ -40,6 +40,8 @@ type BridgeIntegration struct {
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -71,6 +73,8 @@ func NewBridgeIntegration(
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -193,7 +197,7 @@ func (b *BridgeIntegration) Uninstall(ctx context.Context, stackId string) (*ent
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-bridge")
 
-	bridgeIntegration, _ := b.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeBridge.String())
+	bridgeIntegration, _ := b.integrationRepo.GetUninstallableIntegration(stack.ID.String(), enum.IntegrationTypeBridge.String())
 	if bridgeIntegration == nil {
 		return &entities.Response{
 			Status:  http.StatusNotFound,
@@ -276,9 +280,23 @@ func (b *BridgeIntegration) installTask(ctx context.Context, newIntegrationID uu
 	if err != nil {
 		logger.Error("failed to install bridge", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(err))
 
-		if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
+		// Auto cleanup: attempt to remove any partially created resources
+		logger.Info("attempting automatic cleanup of failed bridge installation", zap.String("integrationId", newIntegrationID.String()))
+		if cleanupErr := thanos.UninstallBridge(taskCtx, sdkClient); cleanupErr != nil {
+			logger.Warn("automatic cleanup failed", zap.String("integrationId", newIntegrationID.String()), zap.Error(cleanupErr))
+			// Cleanup failed - mark as Failed so user can manually uninstall
+			reason := fmt.Sprintf("installation failed: %s; cleanup failed: %s", err.Error(), cleanupErr.Error())
+			if updateErr := b.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, reason); updateErr != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBridge.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
+			}
+		} else {
+			logger.Info("automatic cleanup successful, removing integration record", zap.String("integrationId", newIntegrationID.String()))
+			// Cleanup succeeded - delete the integration record
+			if deleteErr := b.integrationRepo.DeleteIntegration(newIntegrationID.String()); deleteErr != nil {
+				logger.Error("failed to delete integration after cleanup", zap.String("integrationId", newIntegrationID.String()), zap.Error(deleteErr))
+			}
 		}
+
 		deploymentStatus := entities.DeploymentRunStatusFailed
 		if utils.IsContextCanceled(err) {
 			deploymentStatus = entities.DeploymentRunStatusStopped

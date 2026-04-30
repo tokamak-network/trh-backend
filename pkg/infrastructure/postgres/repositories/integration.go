@@ -3,6 +3,7 @@ package repositories
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/schemas"
@@ -33,7 +34,15 @@ func (r *IntegrationRepository) UpdateIntegrationStatus(
 	id string,
 	status entities.DeploymentStatus,
 ) error {
-	return r.db.Model(&schemas.Integration{}).Where("id = ?", id).Update("status", status).Error
+	updates := map[string]interface{}{
+		"status": status,
+	}
+	//Sets started_at when transitioning to inprogress (for timeout tracking)
+	if status == entities.DeploymentStatusInProgress {
+		now := time.Now().UTC()
+		updates["started_at"] = &now
+	}
+	return r.db.Model(&schemas.Integration{}).Where("id = ?", id).Updates(updates).Error
 }
 
 func (r *IntegrationRepository) UpdateIntegrationStatusByStackID(
@@ -106,6 +115,24 @@ func (r *IntegrationRepository) GetInstalledIntegration(
 	var integration schemas.Integration
 	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status IN (?)", []string{
 		string(entities.DeploymentStatusCompleted),
+	}).First(&integration).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // No integration found
+		}
+		return nil, err
+	}
+	return ToIntegrationEntity(&integration), nil
+}
+
+// GetUninstallableIntegration returns integrations that can be uninstalled (Completed or Failed)
+func (r *IntegrationRepository) GetUninstallableIntegration(
+	stackId string,
+	integrationType string,
+) (*entities.IntegrationEntity, error) {
+	var integration schemas.Integration
+	if err := r.db.Where("stack_id = ?", stackId).Where("type", integrationType).Where("status IN (?)", []string{
+		string(entities.DeploymentStatusCompleted),
+		string(entities.DeploymentStatusFailed),
 	}).First(&integration).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No integration found
@@ -241,4 +268,9 @@ func ToIntegrationEntity(
 		LogPath: integration.LogPath,
 		Reason:  integration.Reason,
 	}
+}
+
+// DeleteIntegration removes an integration record from the database
+func (r *IntegrationRepository) DeleteIntegration(id string) error {
+	return r.db.Delete(&schemas.Integration{}, "id = ?", id).Error
 }

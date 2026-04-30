@@ -42,6 +42,8 @@ func NewIntegrationManager(
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationByStatus(stackId string, integrationType string, status entities.DeploymentStatus) (*entities.IntegrationEntity, error)

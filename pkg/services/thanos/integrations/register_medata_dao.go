@@ -39,6 +39,8 @@ type RegisterMetadataDAOIntegration struct {
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 	}
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error
@@ -64,6 +66,8 @@ func NewRegisterMetadataDAOIntegration(
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 	},
 	logRepo interface {
 		CreateLog(log *entities.LogEntity) error

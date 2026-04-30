@@ -39,6 +39,8 @@ type RegisterCandidateIntegration struct {
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	}
@@ -68,6 +70,8 @@ func NewRegisterCandidateIntegration(
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
 	},

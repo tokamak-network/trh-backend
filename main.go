@@ -14,6 +14,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/api/routes"
 	"github.com/tokamak-network/trh-backend/pkg/api/servers"
 	"github.com/tokamak-network/trh-backend/pkg/infrastructure/postgres/connection"
+	"github.com/tokamak-network/trh-backend/pkg/workers"
 
 	"github.com/gin-contrib/cors"
 	"github.com/joho/godotenv"
@@ -56,6 +57,9 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to connect to postgres", zap.Error(err))
 	}
+
+	//Recovers integrations interrupted by server restart
+	workers.RecoverInterruptedIntegrations(postgresDB)
 
 	// programmatically set swagger info
 	docs.SwaggerInfo.Title = "TRH Backend"

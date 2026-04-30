@@ -40,6 +40,8 @@ type UptimeServiceIntegration struct {
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -71,6 +73,8 @@ func NewUptimeServiceIntegration(
 		UpdateIntegrationStatus(id string, status entities.DeploymentStatus) error
 		UpdateIntegrationStatusWithReason(id string, status entities.DeploymentStatus, reason string) error
 		GetInstalledIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		GetUninstallableIntegration(stackId, integrationType string) (*entities.IntegrationEntity, error)
+		DeleteIntegration(id string) error
 		UpdateConfig(id string, config json.RawMessage) error
 		UpdateMetadataAfterInstalled(id string, metadata entities.IntegrationInfo) error
 		GetIntegrationById(id string) (*entities.IntegrationEntity, error)
@@ -215,7 +219,7 @@ func (u *UptimeServiceIntegration) Uninstall(ctx context.Context, stackId string
 
 	logPath := utils.GetLogPath(stack.ID, "uninstall-system-pulse")
 
-	uptimeServiceIntegration, err := u.integrationRepo.GetInstalledIntegration(stack.ID.String(), enum.IntegrationTypeUptimeService.String())
+	uptimeServiceIntegration, err := u.integrationRepo.GetUninstallableIntegration(stack.ID.String(), enum.IntegrationTypeUptimeService.String())
 	if err != nil {
 		logger.Error("failed to get integration", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
 		return &entities.Response{
@@ -308,8 +312,19 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, newIntegrati
 	if err != nil {
 		logger.Error("failed to install uptime service", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(err))
 
-		if updateErr := u.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, err.Error()); updateErr != nil {
-			logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
+		// Auto cleanup: attempt to remove any partially created resources
+		logger.Info("attempting automatic cleanup of failed uptime service installation", zap.String("integrationId", newIntegrationID.String()))
+		if cleanupErr := thanos.UninstallUptimeService(taskCtx, sdkClient); cleanupErr != nil {
+			logger.Warn("automatic cleanup failed", zap.String("integrationId", newIntegrationID.String()), zap.Error(cleanupErr))
+			reason := fmt.Sprintf("installation failed: %s; cleanup failed: %s", err.Error(), cleanupErr.Error())
+			if updateErr := u.integrationRepo.UpdateIntegrationStatusWithReason(newIntegrationID.String(), entities.DeploymentStatusFailed, reason); updateErr != nil {
+				logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeUptimeService.String()), zap.Error(updateErr), zap.String("integrationId", newIntegrationID.String()))
+			}
+		} else {
+			logger.Info("automatic cleanup successful, removing integration record", zap.String("integrationId", newIntegrationID.String()))
+			if deleteErr := u.integrationRepo.DeleteIntegration(newIntegrationID.String()); deleteErr != nil {
+				logger.Error("failed to delete integration after cleanup", zap.String("integrationId", newIntegrationID.String()), zap.Error(deleteErr))
+			}
 		}
 
 		deploymentStatus := entities.DeploymentRunStatusFailed

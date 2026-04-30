@@ -19,6 +19,7 @@ type Integration struct {
 	Config    datatypes.JSON            `gorm:"column:config;type:jsonb;default:null"`
 	Info      datatypes.JSON            `gorm:"column:info;type:jsonb;default:null"`
 	Reason    string                    `gorm:"column:reason;default:null"`
+	StartedAt *time.Time                `gorm:"column:started_at;default:null"`
 	CreatedAt time.Time                 `gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt time.Time                 `gorm:"autoUpdateTime;column:updated_at"`
 	DeletedAt gorm.DeletedAt            `gorm:"column:deleted_at;default:null"`
