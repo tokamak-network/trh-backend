@@ -81,3 +81,57 @@ func TestDeriveRoleAccounts_DifferentMnemonics(t *testing.T) {
 		t.Error("different mnemonics produced the same admin key")
 	}
 }
+
+func TestDeriveDRBAccountsReturnsLeaderAndThreeRegulars(t *testing.T) {
+	leader, regulars, err := DeriveDRBAccounts(drbTestMnemonic)
+	if err != nil {
+		t.Fatalf("DeriveDRBAccounts error: %v", err)
+	}
+	if leader == "" {
+		t.Error("leader key is empty")
+	}
+	if len(regulars) != 3 {
+		t.Errorf("expected 3 regulars, got %d", len(regulars))
+	}
+	for i, r := range regulars {
+		if r == "" {
+			t.Errorf("regular[%d] key is empty", i)
+		}
+	}
+}
+
+func TestDeriveDRBAccountsLeaderMatchesAdmin(t *testing.T) {
+	// DRB leader (BIP44 index 0) must match the admin account (also index 0).
+	admin, _, _, _, _, err := DeriveRoleAccounts(drbTestMnemonic)
+	if err != nil {
+		t.Fatalf("DeriveRoleAccounts error: %v", err)
+	}
+	leader, _, err := DeriveDRBAccounts(drbTestMnemonic)
+	if err != nil {
+		t.Fatalf("DeriveDRBAccounts error: %v", err)
+	}
+	if admin != leader {
+		t.Errorf("DRB leader key (%s...) does not match admin key (%s...)", leader[:8], admin[:8])
+	}
+}
+
+func TestDeriveDRBAccountsRegularsAreDistinct(t *testing.T) {
+	_, regulars, err := DeriveDRBAccounts(drbTestMnemonic)
+	if err != nil {
+		t.Fatalf("DeriveDRBAccounts error: %v", err)
+	}
+	seen := map[string]bool{}
+	for i, r := range regulars {
+		if seen[r] {
+			t.Errorf("regular[%d] key is duplicate", i)
+		}
+		seen[r] = true
+	}
+}
+
+func TestDeriveDRBAccountsInvalidMnemonic(t *testing.T) {
+	_, _, err := DeriveDRBAccounts("not a valid mnemonic")
+	if err == nil {
+		t.Error("expected error for invalid mnemonic")
+	}
+}

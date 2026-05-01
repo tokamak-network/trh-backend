@@ -26,6 +26,7 @@ const (
 	RegisterTokensL2L2Step        = "register-tokens-l2-l2"
 	DeployNewL2ChainL2L1Step      = "deploy-new-l2-chain-l2-l1"
 	DeployNewL2ChainL2L2Step      = "deploy-new-l2-chain-l2-l2"
+	InstallDRBStep                = "install-drb"
 )
 
 // GetDeployInfraStepName returns the appropriate infra deployment step name based on provider

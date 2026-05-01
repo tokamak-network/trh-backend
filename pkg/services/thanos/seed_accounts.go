@@ -56,3 +56,58 @@ func DeriveRoleAccounts(mnemonic string) (admin, sequencer, batcher, proposer, c
 
 	return keys[0], keys[1], keys[2], keys[3], keys[4], nil
 }
+
+// DeriveDRBAccounts derives DRB accounts from a BIP39 mnemonic.
+// Leader uses BIP44 index 0 (same as admin). Regulars use indices 5, 6, 7.
+// Returns hex-encoded private keys (no 0x prefix).
+func DeriveDRBAccounts(mnemonic string) (leader string, regulars []string, err error) {
+	if !bip39.IsMnemonicValid(mnemonic) {
+		return "", nil, fmt.Errorf("invalid BIP39 mnemonic")
+	}
+
+	seed := bip39.NewSeed(mnemonic, "")
+	masterKey, err := bip32.NewMasterKey(seed)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to derive master key: %w", err)
+	}
+
+	path := []uint32{
+		bip32.FirstHardenedChild + 44,
+		bip32.FirstHardenedChild + 60,
+		bip32.FirstHardenedChild + 0,
+		0,
+	}
+	key := masterKey
+	for _, idx := range path {
+		key, err = key.NewChildKey(idx)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to derive child key at path index %d: %w", idx, err)
+		}
+	}
+
+	deriveKey := func(idx uint32) (string, error) {
+		child, err := key.NewChildKey(idx)
+		if err != nil {
+			return "", fmt.Errorf("failed to derive key at index %d: %w", idx, err)
+		}
+		privKey, err := crypto.ToECDSA(child.Key)
+		if err != nil {
+			return "", fmt.Errorf("failed to convert key at index %d: %w", idx, err)
+		}
+		return hex.EncodeToString(crypto.FromECDSA(privKey)), nil
+	}
+
+	leader, err = deriveKey(0)
+	if err != nil {
+		return "", nil, err
+	}
+
+	regulars = make([]string, 3)
+	for i, idx := range []uint32{5, 6, 7} {
+		regulars[i], err = deriveKey(idx)
+		if err != nil {
+			return "", nil, err
+		}
+	}
+	return leader, regulars, nil
+}

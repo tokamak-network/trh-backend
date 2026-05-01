@@ -6,12 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/core/types"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
@@ -451,20 +456,14 @@ services:
 			}
 
 			if enabled, ok := def.Modules["drb"]; ok && enabled {
-				drbIntegration, getErr := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeDRB.String())
-				if getErr != nil || drbIntegration == nil {
-					logger.Error("failed to get DRB integration for AWS auto-mark",
-						zap.String("stackId", stackId.String()), zap.Error(getErr))
-				} else {
-					metaBytes, metaErr := json.Marshal(map[string]string{"url": ""})
-					if metaErr != nil {
-						logger.Error("failed to marshal DRB metadata for AWS",
-							zap.String("stackId", stackId.String()), zap.Error(metaErr))
-					} else if err := s.integrationRepo.UpdateMetadataAfterInstalled(drbIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
-						logger.Error("failed to mark DRB as installed for AWS",
-							zap.String("stackId", stackId.String()), zap.Error(err))
-					}
-				}
+				capturedMnemonic := stackConfig.SeedPhrase
+				capturedL2RPC := chainInformation.L2RpcUrl
+				capturedChainID := uint64(chainInformation.L2ChainID)
+				capturedStackId := stackId
+				s.taskManager.AddTask(fmt.Sprintf("drb-install-%s", stackId.String()), func(ctx context.Context) {
+					s.installDRBOperators(ctx, capturedStackId, capturedMnemonic, capturedL2RPC, capturedChainID)
+				})
+				logger.Info("DRB install task queued", zap.String("stackId", stackId.String()))
 			}
 
 			if enabled, ok := def.Modules["crossTrade"]; ok && enabled {
@@ -988,4 +987,207 @@ services:
 	})
 
 	return &entities.Response{Status: 200, Message: "CrossTrade local re-deployment started"}, nil
+}
+
+// installDRBOperators deploys DRB Leader (EKS) and Regular nodes (EC2) after L2 is running.
+// Runs as a background goroutine. Follows the AA operator pattern.
+func (s *ThanosStackDeploymentService) installDRBOperators(ctx context.Context, stackId uuid.UUID, mnemonic string, l2RPCURL string, chainID uint64) {
+	logger := zap.L().With(zap.String("stackId", stackId.String()))
+
+	drbIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeDRB.String())
+	if err != nil || drbIntegration == nil {
+		logger.Error("DRB integration not found", zap.Error(err))
+		return
+	}
+
+	markFailed := func(reason string) {
+		if updateErr := s.integrationRepo.UpdateIntegrationStatusWithReason(
+			drbIntegration.ID.String(),
+			entities.DeploymentStatusFailed,
+			reason,
+		); updateErr != nil {
+			logger.Error("failed to mark DRB as failed", zap.Error(updateErr))
+		}
+	}
+
+	// Step 1: Derive accounts
+	leaderKey, regularKeys, err := DeriveDRBAccounts(mnemonic)
+	if err != nil {
+		logger.Error("DRB account derivation failed", zap.Error(err))
+		markFailed(fmt.Sprintf("account derivation failed: %v", err))
+		return
+	}
+
+	// Step 2: Fund regular accounts from admin (admin key = leader key = BIP44 idx 0)
+	if err := fundDRBRegularAccounts(ctx, l2RPCURL, leaderKey, regularKeys); err != nil {
+		logger.Error("DRB regular funding failed", zap.Error(err))
+		markFailed(fmt.Sprintf("regular funding failed: %v", err))
+		return
+	}
+
+	// Step 3: Get stack config to create SDK client
+	stack, sdkErr := s.stackRepo.GetStackByID(stackId.String())
+	if sdkErr != nil {
+		logger.Error("failed to get stack for DRB deploy", zap.Error(sdkErr))
+		markFailed(fmt.Sprintf("stack not found: %v", sdkErr))
+		return
+	}
+
+	config, marshalErr := json.Marshal(stack.Config)
+	if marshalErr != nil {
+		logger.Error("failed to marshal stack config", zap.Error(marshalErr))
+		markFailed(fmt.Sprintf("config marshal error: %v", marshalErr))
+		return
+	}
+
+	var stackConfig dtos.DeployThanosRequest
+	if unmarshalErr := json.Unmarshal(config, &stackConfig); unmarshalErr != nil {
+		logger.Error("failed to unmarshal stack config", zap.Error(unmarshalErr))
+		markFailed(fmt.Sprintf("config unmarshal error: %v", unmarshalErr))
+		return
+	}
+
+	logPath := utils.GetLogPath(stackId, "drb-install")
+	sdkClient, sdkErr := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if sdkErr != nil {
+		logger.Error("failed to create SDK client for DRB deploy", zap.Error(sdkErr))
+		markFailed(fmt.Sprintf("SDK client error: %v", sdkErr))
+		return
+	}
+
+	deployConfig := sdkClient.GetDeployConfig()
+	existingCluster := ""
+	region := ""
+	if deployConfig != nil {
+		if deployConfig.K8s != nil {
+			existingCluster = deployConfig.K8s.Namespace
+		}
+		if deployConfig.AWS != nil {
+			region = deployConfig.AWS.Region
+		}
+	}
+
+	// Step 4: Deploy DRB Leader (EKS) + Regular nodes (EC2) via SDK
+	drbOutput, err := thanos.DeployDRBFromConfig(ctx, sdkClient, &thanosSDKTypes.DeployDRBInput{
+		RPC:                     l2RPCURL,
+		ChainID:                 chainID,
+		PrivateKey:              leaderKey,
+		ExistingContractAddress: "0x4200000000000000000000000000000000000060",
+		ExistingClusterName:     existingCluster,
+		DatabaseConfig:          &thanosSDKTypes.DRBDatabaseConfig{Type: "local"},
+	})
+	if err != nil {
+		logger.Error("DRB deployment failed", zap.Error(err))
+		markFailed(fmt.Sprintf("DRB deploy failed: %v", err))
+		return
+	}
+
+	// Step 5: Activate regular nodes (depositAndActivate)
+	activateErr := thanos.ActivateRegularOperatorsFromConfig(ctx, sdkClient, l2RPCURL,
+		"0x4200000000000000000000000000000000000060", regularKeys)
+	if activateErr != nil {
+		logger.Error("DRB regular activation failed (partially installed)", zap.Error(activateErr))
+		if updateErr := s.integrationRepo.UpdateIntegrationStatusWithReason(
+			drbIntegration.ID.String(),
+			entities.DeploymentStatusFailed,
+			activateErr.Error(),
+		); updateErr != nil {
+			logger.Error("failed to mark DRB as failed after activation error", zap.Error(updateErr))
+		}
+		return
+	}
+
+	// Step 6: Mark as installed with leader URL
+	leaderURL := ""
+	if drbOutput != nil && drbOutput.DeployDRBApplicationOutput != nil {
+		leaderURL = drbOutput.DeployDRBApplicationOutput.LeaderNodeURL
+	}
+	metaBytes, err := json.Marshal(map[string]string{"url": leaderURL, "cluster": existingCluster, "region": region})
+	if err != nil {
+		logger.Error("failed to marshal DRB metadata", zap.Error(err))
+		return
+	}
+	if err := s.integrationRepo.UpdateMetadataAfterInstalled(drbIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
+		logger.Error("failed to mark DRB as installed", zap.Error(err))
+		return
+	}
+	logger.Info("DRB operators installed and activated", zap.String("leaderURL", leaderURL))
+}
+
+// fundDRBRegularAccounts sends 3 TON from admin to each regular account for DRB activation.
+func fundDRBRegularAccounts(ctx context.Context, l2RPCURL string, adminPrivKeyHex string, regularKeys []string) error {
+	client, err := ethclient.DialContext(ctx, l2RPCURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to L2 RPC: %w", err)
+	}
+	defer client.Close()
+
+	chainID, err := client.ChainID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get chain ID: %w", err)
+	}
+
+	adminKey, err := ethCrypto.HexToECDSA(adminPrivKeyHex)
+	if err != nil {
+		return fmt.Errorf("invalid admin key: %w", err)
+	}
+	adminAddr := ethCrypto.PubkeyToAddress(adminKey.PublicKey)
+
+	// 3 TON = 3e18 wei
+	amount := new(big.Int).Mul(big.NewInt(3), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
+	signer := types.LatestSignerForChainID(chainID)
+
+	for i, privKeyHex := range regularKeys {
+		regularKey, err := ethCrypto.HexToECDSA(privKeyHex)
+		if err != nil {
+			return fmt.Errorf("regular[%d]: invalid key: %w", i, err)
+		}
+		toAddr := ethCrypto.PubkeyToAddress(regularKey.PublicKey)
+
+		nonce, err := client.PendingNonceAt(ctx, adminAddr)
+		if err != nil {
+			return fmt.Errorf("regular[%d]: failed to get nonce: %w", i, err)
+		}
+		gasPrice, err := client.SuggestGasPrice(ctx)
+		if err != nil {
+			return fmt.Errorf("regular[%d]: failed to get gas price: %w", i, err)
+		}
+
+		tx := types.NewTransaction(nonce, toAddr, amount, 21000, gasPrice, nil)
+		signed, err := types.SignTx(tx, signer, adminKey)
+		if err != nil {
+			return fmt.Errorf("regular[%d]: sign error: %w", i, err)
+		}
+		if err := client.SendTransaction(ctx, signed); err != nil {
+			return fmt.Errorf("regular[%d]: send error: %w", i, err)
+		}
+
+		for {
+			receipt, err := client.TransactionReceipt(ctx, signed.Hash())
+			if err == nil {
+				if receipt.Status == 0 {
+					return fmt.Errorf("regular[%d]: funding tx reverted", i)
+				}
+				break
+			}
+			if err != ethereum.NotFound {
+				return fmt.Errorf("regular[%d]: receipt error: %w", i, err)
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(2 * time.Second):
+			}
+		}
+	}
+	return nil
 }

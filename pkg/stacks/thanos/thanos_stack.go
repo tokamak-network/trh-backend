@@ -621,6 +621,16 @@ func UninstallDRB(
 	return sdkClient.UninstallDRB(ctx)
 }
 
+// DeployDRBFromConfig deploys DRB using the pre-initialized SDK client.
+func DeployDRBFromConfig(ctx context.Context, sdkClient *thanosStack.ThanosStack, input *thanosTypes.DeployDRBInput) (*thanosTypes.DeployDRBOutput, error) {
+	return sdkClient.DeployDRB(ctx, input)
+}
+
+// ActivateRegularOperatorsFromConfig activates DRB regular operators via depositAndActivate.
+func ActivateRegularOperatorsFromConfig(ctx context.Context, sdkClient *thanosStack.ThanosStack, l2RPCURL string, contractAddr string, regularKeys []string) error {
+	return sdkClient.ActivateRegularOperators(ctx, l2RPCURL, contractAddr, regularKeys)
+}
+
 func GetDefaultContractAddresses() map[uint64]thanosConstants.DefaultContractAddress {
 	return thanosConstants.DefaultContractAddresses
 }
