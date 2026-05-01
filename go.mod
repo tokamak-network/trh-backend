@@ -23,10 +23,6 @@ require (
 	gorm.io/gorm v1.26.1
 )
 
-// dev: trh-sdk has no published version tags; requires side-by-side checkout.
-// CI must checkout both repos at the same parent directory level.
-// To remove: publish a semver tag on trh-sdk and update the require block above.
-replace github.com/tokamak-network/trh-sdk => ../trh-sdk
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
