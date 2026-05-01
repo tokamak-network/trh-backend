@@ -461,7 +461,9 @@ services:
 				capturedChainID := uint64(chainInformation.L2ChainID)
 				capturedStackId := stackId
 				s.taskManager.AddTask(fmt.Sprintf("drb-install-%s", stackId.String()), func(ctx context.Context) {
-					s.installDRBOperators(ctx, capturedStackId, capturedMnemonic, capturedL2RPC, capturedChainID)
+					taskCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+					defer cancel()
+					s.installDRBOperators(taskCtx, capturedStackId, capturedMnemonic, capturedL2RPC, capturedChainID)
 				})
 				logger.Info("DRB install task queued", zap.String("stackId", stackId.String()))
 			}
@@ -1076,6 +1078,11 @@ func (s *ThanosStackDeploymentService) installDRBOperators(ctx context.Context, 
 		}
 	}
 
+	if existingCluster == "" {
+		markFailed("K8s namespace (EKS cluster name) is empty; cannot auto-install DRB without existing cluster")
+		return
+	}
+
 	// Step 4: Deploy DRB Leader (EKS) + Regular nodes (EC2) via SDK
 	drbOutput, err := thanos.DeployDRBFromConfig(ctx, sdkClient, &thanosSDKTypes.DeployDRBInput{
 		RPC:                     l2RPCURL,
@@ -1142,8 +1149,8 @@ func fundDRBRegularAccounts(ctx context.Context, l2RPCURL string, adminPrivKeyHe
 	}
 	adminAddr := ethCrypto.PubkeyToAddress(adminKey.PublicKey)
 
-	// 3 TON = 3e18 wei
-	amount := new(big.Int).Mul(big.NewInt(3), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
+	// 3 TON base amount for depositAndActivate msg.value
+	ton3 := new(big.Int).Mul(big.NewInt(3), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
 	signer := types.LatestSignerForChainID(chainID)
 
 	for i, privKeyHex := range regularKeys {
@@ -1161,6 +1168,11 @@ func fundDRBRegularAccounts(ctx context.Context, l2RPCURL string, adminPrivKeyHe
 		if err != nil {
 			return fmt.Errorf("regular[%d]: failed to get gas price: %w", i, err)
 		}
+
+		// Send 3 TON (for depositAndActivate msg.value) + gas buffer for the activation tx.
+		// 300_000 gas * 2x safety factor covers depositAndActivate on any L2.
+		gasBuffer := new(big.Int).Mul(new(big.Int).SetUint64(300_000*2), gasPrice)
+		amount := new(big.Int).Add(new(big.Int).Set(ton3), gasBuffer)
 
 		tx := types.NewTransaction(nonce, toAddr, amount, 21000, gasPrice, nil)
 		signed, err := types.SignTx(tx, signer, adminKey)
