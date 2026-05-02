@@ -12,3 +12,6 @@ logs
 
 .idea
 .vscode.worktrees/
+
+docs/superpowers/
+docs/codex-review/
