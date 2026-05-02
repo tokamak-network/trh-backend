@@ -479,14 +479,26 @@ services:
 					capturedL1ChainID := uint64(chainInformation.L1ChainID)
 					capturedL2RPC := chainInformation.L2RpcUrl
 					capturedL2ChainID := uint64(chainInformation.L2ChainID)
-					go s.integrationMgr.AutoInstallCrossTradeAWS(
-						context.Background(),
-						stackId,
-						&capturedConfig,
-						capturedL2RPC,
-						capturedL2ChainID,
-						capturedL1ChainID,
-					)
+					capturedStackId := stackId
+					ctxCT, cancelCT := context.WithTimeout(context.Background(), 50*time.Minute)
+					go func() {
+						defer cancelCT()
+						if err := waitForL2RPC(ctxCT, capturedL2RPC, 10*time.Minute); err != nil {
+							logger.Error("CrossTrade auto-install skipped: L2 RPC not ready",
+								zap.String("stackId", capturedStackId.String()),
+								zap.String("l2rpc", capturedL2RPC),
+								zap.Error(err))
+							return
+						}
+						s.integrationMgr.AutoInstallCrossTradeAWS(
+							ctxCT,
+							capturedStackId,
+							&capturedConfig,
+							capturedL2RPC,
+							capturedL2ChainID,
+							capturedL1ChainID,
+						)
+					}()
 					logger.Info("CrossTrade auto-install goroutine launched", zap.String("stackId", stackId.String()))
 				}
 			}
@@ -1202,4 +1214,32 @@ func fundDRBRegularAccounts(ctx context.Context, l2RPCURL string, adminPrivKeyHe
 		}
 	}
 	return nil
+}
+
+// waitForL2RPC polls the L2 RPC URL until it responds to eth_blockNumber,
+// giving Kubernetes pods time to become ready after Helm deployment.
+func waitForL2RPC(ctx context.Context, rpcURL string, maxWait time.Duration) error {
+	deadline := time.Now().Add(maxWait)
+	var lastErr error
+	for {
+		client, err := ethclient.Dial(rpcURL)
+		if err == nil {
+			_, err = client.BlockNumber(ctx)
+			client.Close()
+			if err == nil {
+				return nil
+			}
+			lastErr = err
+		} else {
+			lastErr = err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("L2 RPC not ready after %v: %w", maxWait, lastErr)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(30 * time.Second):
+		}
+	}
 }
