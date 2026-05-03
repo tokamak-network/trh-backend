@@ -13,7 +13,7 @@ require (
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
-	github.com/tokamak-network/trh-sdk v1.0.5-0.20260502032106-d6738ccfa435
+	github.com/tokamak-network/trh-sdk v1.0.5-0.20260503100907-76c3060b5703
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	go.uber.org/zap v1.27.0
