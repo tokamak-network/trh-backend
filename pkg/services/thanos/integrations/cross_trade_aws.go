@@ -13,6 +13,7 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	thanosConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
+	trhSDKUtils "github.com/tokamak-network/trh-sdk/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -61,10 +62,16 @@ func BuildDefaultCrossTradeL2L1Request(
 }
 
 // BuildDefaultCrossTradeL2L2Request builds an InstallCrossChainBridgeRequest for L2_TO_L2 mode
-// with three default Sepolia L2 chains (Optimism, Base, Unichain).
+// with the custom L2 (IsDeployedNew: true) plus three default Sepolia L2 chains (Optimism, Base, Unichain).
+// The custom L2 requires L1 bridge addresses to configure setChainInfo on L1.
 func BuildDefaultCrossTradeL2L2Request(
 	l1RPC string,
 	l1ChainID uint64,
+	l2RPC string,
+	l2ChainID uint64,
+	l1StandardBridge string,
+	l1USDCBridge string,
+	l1CrossDomainMessenger string,
 	privateKey string,
 	projectID string,
 ) *dtos.InstallCrossChainBridgeRequest {
@@ -81,14 +88,28 @@ func BuildDefaultCrossTradeL2L2Request(
 		IsDeployedNew: true,
 	}
 
-	// Define three L2 Sepolia chains
+	// Custom L2: deploy new L2toL2CrossTradeProxy via L1 deposit tx
+	customL2 := &dtos.L2CrossTradeChainInput{
+		RPC:                     l2RPC,
+		ChainID:                 l2ChainID,
+		PrivateKey:              privateKey,
+		IsDeployedNew:           true,
+		ChainName:               "Custom L2 Chain",
+		CrossDomainMessenger:    "0x4200000000000000000000000000000000000007",
+		NativeTokenAddress:      "0x0000000000000000000000000000000000000000",
+		L1StandardBridgeAddress: l1StandardBridge,
+		L1USDCBridgeAddress:     l1USDCBridge,
+		L1CrossDomainMessenger:  l1CrossDomainMessenger,
+	}
+
+	l2ChainConfigs := []*dtos.L2CrossTradeChainInput{customL2}
+
+	// Three external Sepolia L2 chains (IsDeployedNew: false — use existing deployed contracts)
 	sepoliaChainIDs := []uint64{
 		thanosConstants.OptimismSepoliaChainID, // 11155420
 		thanosConstants.BaseSepoliaChainID,     // 84532
 		thanosConstants.UnichainSepoliaChainID, // 1301
 	}
-
-	l2ChainConfigs := make([]*dtos.L2CrossTradeChainInput, 0, len(sepoliaChainIDs))
 	for _, chainID := range sepoliaChainIDs {
 		addresses, exists := thanosConstants.DefaultContractAddresses[chainID]
 		if !exists {
@@ -97,7 +118,7 @@ func BuildDefaultCrossTradeL2L2Request(
 		}
 
 		l2ChainConfig := &dtos.L2CrossTradeChainInput{
-			RPC:                     "", // Will be populated per-deployment
+			RPC:                     "",
 			ChainID:                 chainID,
 			PrivateKey:              privateKey,
 			IsDeployedNew:           false,
@@ -263,9 +284,27 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		}
 	}
 
+	l1Contracts, err := trhSDKUtils.ReadDeployementConfigFromJSONFile(stack.DeploymentPath, l1ChainID)
+	if err != nil {
+		logger.Error("failed to read L1 contracts for CrossTrade L2_TO_L2",
+			zap.String("stackId", stackId.String()),
+			zap.Error(err))
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
+			pendingIntegration.ID.String(),
+			entities.DeploymentStatusFailed,
+			fmt.Sprintf("read L1 contracts for L2_TO_L2: %v", err),
+		)
+		return
+	}
+
 	l2l2Req := BuildDefaultCrossTradeL2L2Request(
 		stackConfig.L1RpcUrl,
 		l1ChainID,
+		l2RPC,
+		l2ChainID,
+		l1Contracts.L1StandardBridgeProxy,
+		l1Contracts.L1UsdcBridgeProxy,
+		l1Contracts.L1CrossDomainMessengerProxy,
 		stackConfig.AdminAccount,
 		stackId.String(),
 	)
@@ -323,9 +362,31 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		l2l2URL = l2l2Output.DeployCrossTradeApplicationOutput.URL
 	}
 
+	contracts := map[string]string{}
+	if l2l1Output != nil && l2l1Output.DeployCrossTradeContractsOutput != nil {
+		if addr := l2l1Output.DeployCrossTradeContractsOutput.L2CrossTradeProxyAddresses[l2ChainID]; addr != "" {
+			contracts["l2_cross_trade_proxy"] = addr
+		}
+		if addr := l2l1Output.DeployCrossTradeContractsOutput.L1CrossTradeProxyAddress; addr != "" {
+			contracts["l1_cross_trade_proxy"] = addr
+		}
+	}
+	if l2l2Output != nil && l2l2Output.DeployCrossTradeContractsOutput != nil {
+		if addr := l2l2Output.DeployCrossTradeContractsOutput.L2CrossTradeProxyAddresses[l2ChainID]; addr != "" {
+			contracts["l2_to_l2_cross_trade_proxy"] = addr
+		}
+		if addr := l2l2Output.DeployCrossTradeContractsOutput.L1CrossTradeProxyAddress; addr != "" {
+			contracts["l2_to_l2_l1_proxy"] = addr
+		}
+	}
+	logger.Info("CrossTrade AWS contracts extracted",
+		zap.String("stackId", stackId.String()),
+		zap.Any("contracts", contracts))
+
 	finalMetadata := map[string]interface{}{
-		"l2l1Url": l2l1URL,
-		"l2l2Url": l2l2URL,
+		"l2l1Url":   l2l1URL,
+		"l2l2Url":   l2l2URL,
+		"contracts": contracts,
 	}
 	metadataBytes, err := json.Marshal(finalMetadata)
 	if err != nil {

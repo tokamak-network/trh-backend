@@ -3,6 +3,7 @@ package integrations_test
 import (
 	"testing"
 
+	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	integrations "github.com/tokamak-network/trh-backend/pkg/services/thanos/integrations"
 	thanosConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
 )
@@ -60,22 +61,50 @@ func TestBuildDefaultCrossTradeL2L1Request(t *testing.T) {
 func TestBuildDefaultCrossTradeL2L2Request(t *testing.T) {
 	l1RPC := "https://sepolia.rpc"
 	l1ChainID := uint64(11155111)
+	l2RPC := "https://l2.rpc"
+	l2ChainID := uint64(111551119)
+	l1StandardBridge := "0xAAAA0000000000000000000000000000000000AA"
+	l1USDCBridge := "0xBBBB0000000000000000000000000000000000BB"
+	l1CrossDomainMessenger := "0xCCCC0000000000000000000000000000000000CC"
 	privateKey := "0xdeadbeef"
 	projectID := "test-project"
 
-	req := integrations.BuildDefaultCrossTradeL2L2Request(l1RPC, l1ChainID, privateKey, projectID)
+	req := integrations.BuildDefaultCrossTradeL2L2Request(
+		l1RPC, l1ChainID,
+		l2RPC, l2ChainID,
+		l1StandardBridge, l1USDCBridge, l1CrossDomainMessenger,
+		privateKey, projectID,
+	)
 
-	if len(req.L2ChainConfig) != 3 {
-		t.Errorf("L2ChainConfig len = %d, want 3", len(req.L2ChainConfig))
+	// Expect 4 chains: custom L2 + 3 external Sepolia chains
+	if len(req.L2ChainConfig) != 4 {
+		t.Errorf("L2ChainConfig len = %d, want 4", len(req.L2ChainConfig))
 	}
 	chainIDs := map[uint64]bool{}
 	for _, c := range req.L2ChainConfig {
 		chainIDs[c.ChainID] = true
-		// Each L2 chain should have addresses from DefaultContractAddresses
-		if _, exists := thanosConstants.DefaultContractAddresses[c.ChainID]; !exists {
-			t.Errorf("chain ID %d not found in DefaultContractAddresses", c.ChainID)
+	}
+
+	// Verify custom L2 is included with IsDeployedNew: true
+	var customL2 *dtos.L2CrossTradeChainInput
+	for _, c := range req.L2ChainConfig {
+		if c.ChainID == l2ChainID {
+			customL2 = c
+			break
 		}
 	}
+	if customL2 == nil {
+		t.Errorf("custom L2 chain %d not found in L2ChainConfig", l2ChainID)
+	} else {
+		if !customL2.IsDeployedNew {
+			t.Errorf("custom L2 IsDeployedNew = false, want true")
+		}
+		if customL2.L1StandardBridgeAddress != l1StandardBridge {
+			t.Errorf("custom L2 L1StandardBridgeAddress = %q, want %q", customL2.L1StandardBridgeAddress, l1StandardBridge)
+		}
+	}
+
+	// Verify all three external Sepolia chains are present
 	for _, expected := range []uint64{
 		thanosConstants.OptimismSepoliaChainID,
 		thanosConstants.BaseSepoliaChainID,
