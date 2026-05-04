@@ -297,13 +297,18 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		return
 	}
 
+	l1USDCBridge := l1Contracts.L1UsdcBridgeProxy
+	if l1USDCBridge == "" {
+		l1USDCBridge = "0x0000000000000000000000000000000000000000"
+	}
+
 	l2l2Req := BuildDefaultCrossTradeL2L2Request(
 		stackConfig.L1RpcUrl,
 		l1ChainID,
 		l2RPC,
 		l2ChainID,
 		l1Contracts.L1StandardBridgeProxy,
-		l1Contracts.L1UsdcBridgeProxy,
+		l1USDCBridge,
 		l1Contracts.L1CrossDomainMessengerProxy,
 		stackConfig.AdminAccount,
 		stackId.String(),

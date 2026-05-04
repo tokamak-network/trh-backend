@@ -1000,6 +1000,42 @@ func (h *ThanosDeploymentHandler) UninstallDRB(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+func (h *ThanosDeploymentHandler) RetriggerDRBInstall(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.RetriggerDRBInstall(c.Request.Context(), id)
+	if err != nil {
+		logger.Error("failed to retrigger DRB install", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
+func (h *ThanosDeploymentHandler) RetriggerCrossTradeAWSInstall(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.RetriggerCrossTradeAWSInstall(c.Request.Context(), id)
+	if err != nil {
+		logger.Error("failed to retrigger cross-trade AWS install", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 func (h *ThanosDeploymentHandler) CancelIntegration(c *gin.Context) {
 	stackUUID, integrationUUID, handled := parseAndValidateIntegrationIDs(c)
 	if handled {

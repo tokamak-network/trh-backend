@@ -1100,6 +1100,7 @@ func (s *ThanosStackDeploymentService) installDRBOperators(ctx context.Context, 
 		RPC:                     l2RPCURL,
 		ChainID:                 chainID,
 		PrivateKey:              leaderKey,
+		LeaderNodeInput:         &thanosSDKTypes.LeaderNodeInput{PrivateKey: leaderKey},
 		ExistingContractAddress: "0x4200000000000000000000000000000000000060",
 		ExistingClusterName:     existingCluster,
 		DatabaseConfig:          &thanosSDKTypes.DRBDatabaseConfig{Type: "local"},
@@ -1161,8 +1162,8 @@ func fundDRBRegularAccounts(ctx context.Context, l2RPCURL string, adminPrivKeyHe
 	}
 	adminAddr := ethCrypto.PubkeyToAddress(adminKey.PublicKey)
 
-	// 3 TON base amount for depositAndActivate msg.value
-	ton3 := new(big.Int).Mul(big.NewInt(3), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
+	// 1 TON base amount for depositAndActivate msg.value (contract minimum is 3 wei; matches genesis allocation)
+	ton3 := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 	signer := types.LatestSignerForChainID(chainID)
 
 	for i, privKeyHex := range regularKeys {
@@ -1184,7 +1185,17 @@ func fundDRBRegularAccounts(ctx context.Context, l2RPCURL string, adminPrivKeyHe
 		// Send 3 TON (for depositAndActivate msg.value) + gas buffer for the activation tx.
 		// 300_000 gas * 2x safety factor covers depositAndActivate on any L2.
 		gasBuffer := new(big.Int).Mul(new(big.Int).SetUint64(300_000*2), gasPrice)
-		amount := new(big.Int).Add(new(big.Int).Set(ton3), gasBuffer)
+		target := new(big.Int).Add(new(big.Int).Set(ton3), gasBuffer)
+
+		// Check existing balance; only top-up the difference to avoid insufficient-funds failures on retrigger.
+		currentBal, balErr := client.BalanceAt(ctx, toAddr, nil)
+		if balErr != nil {
+			return fmt.Errorf("regular[%d]: failed to get balance: %w", i, balErr)
+		}
+		if currentBal.Cmp(target) >= 0 {
+			continue // already funded
+		}
+		amount := new(big.Int).Sub(target, currentBal)
 
 		tx := types.NewTransaction(nonce, toAddr, amount, 21000, gasPrice, nil)
 		signed, err := types.SignTx(tx, signer, adminKey)
@@ -1214,6 +1225,139 @@ func fundDRBRegularAccounts(ctx context.Context, l2RPCURL string, adminPrivKeyHe
 		}
 	}
 	return nil
+}
+
+// RetriggerDRBInstall resets a Failed DRB integration to InProgress and re-runs
+// the DRB operator deployment goroutine. Intended for AWS stacks where the initial
+// install failed due to insufficient L2 ETH on the regular accounts.
+func (s *ThanosStackDeploymentService) RetriggerDRBInstall(ctx context.Context, stackIdStr string) (*entities.Response, error) {
+	logger := zap.L().With(zap.String("stackId", stackIdStr))
+
+	stack, err := s.stackRepo.GetStackByID(stackIdStr)
+	if err != nil || stack == nil {
+		return &entities.Response{Status: 404, Message: "stack not found"}, nil
+	}
+	if stack.Status != entities.StackStatusDeployed {
+		return &entities.Response{Status: 400, Message: "stack is not in Deployed status"}, nil
+	}
+
+	var stackConfig dtos.DeployThanosRequest
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		return &entities.Response{Status: 500, Message: "failed to unmarshal stack config"}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "drb-retrigger")
+	sdkClient, sdkErr := thanos.NewThanosSDKClient(
+		ctx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if sdkErr != nil {
+		logger.Error("DRB retrigger: failed to create SDK client", zap.Error(sdkErr))
+		return &entities.Response{Status: 500, Message: "failed to create SDK client"}, sdkErr
+	}
+
+	chainInformation, chainErr := thanos.ShowChainInformation(ctx, sdkClient)
+	if chainErr != nil || chainInformation == nil {
+		return &entities.Response{Status: 500, Message: "failed to read chain information"}, chainErr
+	}
+
+	drbIntegration, getErr := s.integrationRepo.GetIntegration(stackIdStr, enum.IntegrationTypeDRB.String())
+	if getErr != nil || drbIntegration == nil {
+		return &entities.Response{Status: 404, Message: "DRB integration record not found"}, nil
+	}
+
+	if err := s.integrationRepo.UpdateIntegrationStatus(drbIntegration.ID.String(), entities.DeploymentStatusInProgress); err != nil {
+		return &entities.Response{Status: 500, Message: "failed to reset DRB integration status"}, err
+	}
+
+	capturedStackId := stack.ID
+	capturedMnemonic := stackConfig.SeedPhrase
+	capturedL2RPC := chainInformation.L2RpcUrl
+	capturedChainID := uint64(chainInformation.L2ChainID)
+	s.taskManager.AddTask(fmt.Sprintf("drb-retrigger-%s", stackIdStr), func(taskCtx context.Context) {
+		tCtx, cancel := context.WithTimeout(taskCtx, 30*time.Minute)
+		defer cancel()
+		s.installDRBOperators(tCtx, capturedStackId, capturedMnemonic, capturedL2RPC, capturedChainID)
+	})
+	logger.Info("DRB retrigger task queued")
+	return &entities.Response{Status: 200, Message: "DRB retrigger started"}, nil
+}
+
+// RetriggerCrossTradeAWSInstall finds the latest Failed cross-trade integration for an AWS
+// stack, resets it to Pending, and re-runs the two-phase L2_TO_L1 + L2_TO_L2 auto-install.
+func (s *ThanosStackDeploymentService) RetriggerCrossTradeAWSInstall(ctx context.Context, stackIdStr string) (*entities.Response, error) {
+	log := zap.L().With(zap.String("stackId", stackIdStr))
+
+	stack, err := s.stackRepo.GetStackByID(stackIdStr)
+	if err != nil || stack == nil {
+		return &entities.Response{Status: 404, Message: "stack not found"}, nil
+	}
+	if stack.Status != entities.StackStatusDeployed {
+		return &entities.Response{Status: 400, Message: "stack is not in Deployed status"}, nil
+	}
+
+	var stackConfig dtos.DeployThanosRequest
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		return &entities.Response{Status: 500, Message: "failed to unmarshal stack config"}, err
+	}
+
+	if stack.Metadata == nil || stack.Metadata.L2RpcUrl == "" {
+		return &entities.Response{Status: 400, Message: "L2 RPC URL not found in stack metadata"}, nil
+	}
+
+	// Block if there is already an active (non-Failed) cross-trade integration.
+	activeIntegrations, err := s.integrationRepo.GetActiveIntegrations(
+		stackIdStr, enum.IntegrationTypeCrossTrade.String(),
+	)
+	if err != nil {
+		return &entities.Response{Status: 500, Message: "failed to query integrations"}, err
+	}
+	if len(activeIntegrations) > 0 {
+		return &entities.Response{Status: 400, Message: "an active cross-trade integration already exists"}, nil
+	}
+
+	// Find the most-recently-created Failed cross-trade integration and reset to Pending
+	// so that autoInstallCrossTradeAWS can pick it up.
+	ctIntegration, err := s.integrationRepo.GetIntegrationByStatus(
+		stackIdStr, enum.IntegrationTypeCrossTrade.String(), entities.DeploymentStatusFailed,
+	)
+	if err != nil || ctIntegration == nil {
+		return &entities.Response{Status: 404, Message: "no failed cross-trade integration found to retrigger"}, nil
+	}
+
+	if err := s.integrationRepo.UpdateIntegrationStatus(
+		ctIntegration.ID.String(), entities.DeploymentStatusPending,
+	); err != nil {
+		return &entities.Response{Status: 500, Message: "failed to reset cross-trade integration to Pending"}, err
+	}
+
+	capturedStackId := stack.ID
+	capturedConfig := stackConfig
+	capturedL2RPC := stack.Metadata.L2RpcUrl
+	capturedL2ChainID := uint64(stack.Metadata.L2ChainId)
+	capturedL1ChainID := uint64(stack.Metadata.L1ChainId)
+
+	s.taskManager.AddTask(fmt.Sprintf("cross-trade-retrigger-%s", stackIdStr), func(taskCtx context.Context) {
+		ctxWithTimeout, cancel := context.WithTimeout(taskCtx, 50*time.Minute)
+		defer cancel()
+		s.integrationMgr.AutoInstallCrossTradeAWS(
+			ctxWithTimeout,
+			capturedStackId,
+			&capturedConfig,
+			capturedL2RPC,
+			capturedL2ChainID,
+			capturedL1ChainID,
+		)
+	})
+
+	log.Info("CrossTrade retrigger task queued")
+	return &entities.Response{Status: 200, Message: "CrossTrade retrigger started"}, nil
 }
 
 // waitForL2RPC polls the L2 RPC URL until it responds to eth_blockNumber,
