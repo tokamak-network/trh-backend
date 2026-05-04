@@ -6,16 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/core/types"
-	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
@@ -453,19 +449,6 @@ services:
 						}
 					}
 				}
-			}
-
-			if enabled, ok := def.Modules["drb"]; ok && enabled {
-				capturedMnemonic := stackConfig.SeedPhrase
-				capturedL2RPC := chainInformation.L2RpcUrl
-				capturedChainID := uint64(chainInformation.L2ChainID)
-				capturedStackId := stackId
-				s.taskManager.AddTask(fmt.Sprintf("drb-install-%s", stackId.String()), func(ctx context.Context) {
-					taskCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
-					defer cancel()
-					s.installDRBOperators(taskCtx, capturedStackId, capturedMnemonic, capturedL2RPC, capturedChainID)
-				})
-				logger.Info("DRB install task queued", zap.String("stackId", stackId.String()))
 			}
 
 			if enabled, ok := def.Modules["crossTrade"]; ok && enabled {
@@ -1003,268 +986,15 @@ services:
 	return &entities.Response{Status: 200, Message: "CrossTrade local re-deployment started"}, nil
 }
 
-// installDRBOperators deploys DRB Leader (EKS) and Regular nodes (EC2) after L2 is running.
-// Runs as a background goroutine. Follows the AA operator pattern.
-func (s *ThanosStackDeploymentService) installDRBOperators(ctx context.Context, stackId uuid.UUID, mnemonic string, l2RPCURL string, chainID uint64) {
-	logger := zap.L().With(zap.String("stackId", stackId.String()))
-
-	drbIntegration, err := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeDRB.String())
-	if err != nil || drbIntegration == nil {
-		logger.Error("DRB integration not found", zap.Error(err))
-		return
-	}
-
-	markFailed := func(reason string) {
-		if updateErr := s.integrationRepo.UpdateIntegrationStatusWithReason(
-			drbIntegration.ID.String(),
-			entities.DeploymentStatusFailed,
-			reason,
-		); updateErr != nil {
-			logger.Error("failed to mark DRB as failed", zap.Error(updateErr))
-		}
-	}
-
-	// Step 1: Derive accounts
-	leaderKey, regularKeys, err := DeriveDRBAccounts(mnemonic)
-	if err != nil {
-		logger.Error("DRB account derivation failed", zap.Error(err))
-		markFailed(fmt.Sprintf("account derivation failed: %v", err))
-		return
-	}
-
-	// Step 2: Fund regular accounts from admin (admin key = leader key = BIP44 idx 0)
-	if err := fundDRBRegularAccounts(ctx, l2RPCURL, leaderKey, regularKeys); err != nil {
-		logger.Error("DRB regular funding failed", zap.Error(err))
-		markFailed(fmt.Sprintf("regular funding failed: %v", err))
-		return
-	}
-
-	// Step 3: Get stack config to create SDK client
-	stack, sdkErr := s.stackRepo.GetStackByID(stackId.String())
-	if sdkErr != nil {
-		logger.Error("failed to get stack for DRB deploy", zap.Error(sdkErr))
-		markFailed(fmt.Sprintf("stack not found: %v", sdkErr))
-		return
-	}
-
-	config, marshalErr := json.Marshal(stack.Config)
-	if marshalErr != nil {
-		logger.Error("failed to marshal stack config", zap.Error(marshalErr))
-		markFailed(fmt.Sprintf("config marshal error: %v", marshalErr))
-		return
-	}
-
-	var stackConfig dtos.DeployThanosRequest
-	if unmarshalErr := json.Unmarshal(config, &stackConfig); unmarshalErr != nil {
-		logger.Error("failed to unmarshal stack config", zap.Error(unmarshalErr))
-		markFailed(fmt.Sprintf("config unmarshal error: %v", unmarshalErr))
-		return
-	}
-
-	logPath := utils.GetLogPath(stackId, "drb-install")
-	sdkClient, sdkErr := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if sdkErr != nil {
-		logger.Error("failed to create SDK client for DRB deploy", zap.Error(sdkErr))
-		markFailed(fmt.Sprintf("SDK client error: %v", sdkErr))
-		return
-	}
-
-	deployConfig := sdkClient.GetDeployConfig()
-	existingCluster := ""
-	region := ""
-	if deployConfig != nil {
-		if deployConfig.K8s != nil {
-			existingCluster = deployConfig.K8s.Namespace
-		}
-		if deployConfig.AWS != nil {
-			region = deployConfig.AWS.Region
-		}
-	}
-
-	if existingCluster == "" {
-		markFailed("K8s namespace (EKS cluster name) is empty; cannot auto-install DRB without existing cluster")
-		return
-	}
-
-	// Step 4: Deploy DRB Leader (EKS) + Regular nodes (EC2) via SDK
-	drbOutput, err := thanos.DeployDRBFromConfig(ctx, sdkClient, &thanosSDKTypes.DeployDRBInput{
-		RPC:                     l2RPCURL,
-		ChainID:                 chainID,
-		PrivateKey:              leaderKey,
-		LeaderNodeInput:         &thanosSDKTypes.LeaderNodeInput{PrivateKey: leaderKey},
-		ExistingContractAddress: "0x4200000000000000000000000000000000000060",
-		ExistingClusterName:     existingCluster,
-		DatabaseConfig:          &thanosSDKTypes.DRBDatabaseConfig{Type: "local"},
-	})
-	if err != nil {
-		logger.Error("DRB deployment failed", zap.Error(err))
-		markFailed(fmt.Sprintf("DRB deploy failed: %v", err))
-		return
-	}
-
-	// Step 5: Activate regular nodes (depositAndActivate)
-	activateErr := thanos.ActivateRegularOperatorsFromConfig(ctx, sdkClient, l2RPCURL,
-		"0x4200000000000000000000000000000000000060", regularKeys)
-	if activateErr != nil {
-		logger.Error("DRB regular activation failed (partially installed)", zap.Error(activateErr))
-		if updateErr := s.integrationRepo.UpdateIntegrationStatusWithReason(
-			drbIntegration.ID.String(),
-			entities.DeploymentStatusFailed,
-			activateErr.Error(),
-		); updateErr != nil {
-			logger.Error("failed to mark DRB as failed after activation error", zap.Error(updateErr))
-		}
-		return
-	}
-
-	// Step 6: Mark as installed with leader URL
-	leaderURL := ""
-	if drbOutput != nil && drbOutput.DeployDRBApplicationOutput != nil {
-		leaderURL = drbOutput.DeployDRBApplicationOutput.LeaderNodeURL
-	}
-	metaBytes, err := json.Marshal(map[string]string{"url": leaderURL, "cluster": existingCluster, "region": region})
-	if err != nil {
-		logger.Error("failed to marshal DRB metadata", zap.Error(err))
-		return
-	}
-	if err := s.integrationRepo.UpdateMetadataAfterInstalled(drbIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
-		logger.Error("failed to mark DRB as installed", zap.Error(err))
-		return
-	}
-	logger.Info("DRB operators installed and activated", zap.String("leaderURL", leaderURL))
-}
-
-// fundDRBRegularAccounts sends 3 TON from admin to each regular account for DRB activation.
-func fundDRBRegularAccounts(ctx context.Context, l2RPCURL string, adminPrivKeyHex string, regularKeys []string) error {
-	client, err := ethclient.DialContext(ctx, l2RPCURL)
-	if err != nil {
-		return fmt.Errorf("failed to connect to L2 RPC: %w", err)
-	}
-	defer client.Close()
-
-	chainID, err := client.ChainID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get chain ID: %w", err)
-	}
-
-	adminKey, err := ethCrypto.HexToECDSA(adminPrivKeyHex)
-	if err != nil {
-		return fmt.Errorf("invalid admin key: %w", err)
-	}
-	adminAddr := ethCrypto.PubkeyToAddress(adminKey.PublicKey)
-
-	// 1 TON base amount for depositAndActivate msg.value (contract minimum is 3 wei; matches genesis allocation)
-	ton3 := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-	signer := types.LatestSignerForChainID(chainID)
-
-	for i, privKeyHex := range regularKeys {
-		regularKey, err := ethCrypto.HexToECDSA(privKeyHex)
-		if err != nil {
-			return fmt.Errorf("regular[%d]: invalid key: %w", i, err)
-		}
-		toAddr := ethCrypto.PubkeyToAddress(regularKey.PublicKey)
-
-		nonce, err := client.PendingNonceAt(ctx, adminAddr)
-		if err != nil {
-			return fmt.Errorf("regular[%d]: failed to get nonce: %w", i, err)
-		}
-		gasPrice, err := client.SuggestGasPrice(ctx)
-		if err != nil {
-			return fmt.Errorf("regular[%d]: failed to get gas price: %w", i, err)
-		}
-
-		// Send 3 TON (for depositAndActivate msg.value) + gas buffer for the activation tx.
-		// 300_000 gas * 2x safety factor covers depositAndActivate on any L2.
-		gasBuffer := new(big.Int).Mul(new(big.Int).SetUint64(300_000*2), gasPrice)
-		target := new(big.Int).Add(new(big.Int).Set(ton3), gasBuffer)
-
-		// Check existing balance; only top-up the difference to avoid insufficient-funds failures on retrigger.
-		currentBal, balErr := client.BalanceAt(ctx, toAddr, nil)
-		if balErr != nil {
-			return fmt.Errorf("regular[%d]: failed to get balance: %w", i, balErr)
-		}
-		if currentBal.Cmp(target) >= 0 {
-			continue // already funded
-		}
-		amount := new(big.Int).Sub(target, currentBal)
-
-		tx := types.NewTransaction(nonce, toAddr, amount, 21000, gasPrice, nil)
-		signed, err := types.SignTx(tx, signer, adminKey)
-		if err != nil {
-			return fmt.Errorf("regular[%d]: sign error: %w", i, err)
-		}
-		if err := client.SendTransaction(ctx, signed); err != nil {
-			return fmt.Errorf("regular[%d]: send error: %w", i, err)
-		}
-
-		for {
-			receipt, err := client.TransactionReceipt(ctx, signed.Hash())
-			if err == nil {
-				if receipt.Status == 0 {
-					return fmt.Errorf("regular[%d]: funding tx reverted", i)
-				}
-				break
-			}
-			if err != ethereum.NotFound {
-				return fmt.Errorf("regular[%d]: receipt error: %w", i, err)
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(2 * time.Second):
-			}
-		}
-	}
-	return nil
-}
-
-// RetriggerDRBInstall resets a Failed DRB integration to InProgress and re-runs
-// the DRB operator deployment goroutine. Intended for AWS stacks where the initial
-// install failed due to insufficient L2 ETH on the regular accounts.
+// RetriggerDRBInstall resets a Failed DRB integration status to InProgress.
+// DRB is now deployed via Helm (InstallDRB in trh-sdk); this endpoint only resets the status record.
 func (s *ThanosStackDeploymentService) RetriggerDRBInstall(ctx context.Context, stackIdStr string) (*entities.Response, error) {
-	logger := zap.L().With(zap.String("stackId", stackIdStr))
-
 	stack, err := s.stackRepo.GetStackByID(stackIdStr)
 	if err != nil || stack == nil {
 		return &entities.Response{Status: 404, Message: "stack not found"}, nil
 	}
 	if stack.Status != entities.StackStatusDeployed {
 		return &entities.Response{Status: 400, Message: "stack is not in Deployed status"}, nil
-	}
-
-	var stackConfig dtos.DeployThanosRequest
-	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
-		return &entities.Response{Status: 500, Message: "failed to unmarshal stack config"}, err
-	}
-
-	logPath := utils.GetLogPath(stack.ID, "drb-retrigger")
-	sdkClient, sdkErr := thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		stackConfig.RegisterCandidate,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if sdkErr != nil {
-		logger.Error("DRB retrigger: failed to create SDK client", zap.Error(sdkErr))
-		return &entities.Response{Status: 500, Message: "failed to create SDK client"}, sdkErr
-	}
-
-	chainInformation, chainErr := thanos.ShowChainInformation(ctx, sdkClient)
-	if chainErr != nil || chainInformation == nil {
-		return &entities.Response{Status: 500, Message: "failed to read chain information"}, chainErr
 	}
 
 	drbIntegration, getErr := s.integrationRepo.GetIntegration(stackIdStr, enum.IntegrationTypeDRB.String())
@@ -1276,17 +1006,7 @@ func (s *ThanosStackDeploymentService) RetriggerDRBInstall(ctx context.Context, 
 		return &entities.Response{Status: 500, Message: "failed to reset DRB integration status"}, err
 	}
 
-	capturedStackId := stack.ID
-	capturedMnemonic := stackConfig.SeedPhrase
-	capturedL2RPC := chainInformation.L2RpcUrl
-	capturedChainID := uint64(chainInformation.L2ChainID)
-	s.taskManager.AddTask(fmt.Sprintf("drb-retrigger-%s", stackIdStr), func(taskCtx context.Context) {
-		tCtx, cancel := context.WithTimeout(taskCtx, 30*time.Minute)
-		defer cancel()
-		s.installDRBOperators(tCtx, capturedStackId, capturedMnemonic, capturedL2RPC, capturedChainID)
-	})
-	logger.Info("DRB retrigger task queued")
-	return &entities.Response{Status: 200, Message: "DRB retrigger started"}, nil
+	return &entities.Response{Status: 200, Message: "DRB integration status reset to InProgress"}, nil
 }
 
 // RetriggerCrossTradeAWSInstall finds the latest Failed cross-trade integration for an AWS
