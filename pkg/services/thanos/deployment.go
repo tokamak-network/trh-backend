@@ -451,6 +451,23 @@ services:
 				}
 			}
 
+			if enabled, ok := def.Modules["drb"]; ok && enabled {
+				drbIntegration, getErr := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeDRB.String())
+				if getErr != nil || drbIntegration == nil {
+					logger.Error("failed to get DRB integration for AWS auto-mark",
+						zap.String("stackId", stackId.String()), zap.Error(getErr))
+				} else {
+					metaBytes, metaErr := json.Marshal(map[string]string{"url": ""})
+					if metaErr != nil {
+						logger.Error("failed to marshal DRB metadata for AWS",
+							zap.String("stackId", stackId.String()), zap.Error(metaErr))
+					} else if err := s.integrationRepo.UpdateMetadataAfterInstalled(drbIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
+						logger.Error("failed to mark DRB as installed for AWS",
+							zap.String("stackId", stackId.String()), zap.Error(err))
+					}
+				}
+			}
+
 			if enabled, ok := def.Modules["crossTrade"]; ok && enabled {
 				pendingCT, ctErr := s.integrationRepo.GetIntegrationByStatus(
 					stackId.String(),
