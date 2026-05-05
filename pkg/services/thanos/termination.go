@@ -119,9 +119,9 @@ func (s *ThanosStackDeploymentService) handleStackTermination(ctx context.Contex
 	defer cancel()
 	go s.tailAndIngestDeploymentLogs(ingestCtx, stack.ID, terminationDeploymentID, logPath)
 
-	err = thanos.DestroyAWSInfrastructure(ctx, sdkClient)
+	err = thanos.DestroyInfrastructure(ctx, sdkClient)
 	if err != nil {
-		logger.Error("failed to destroy AWS infrastructure",
+		logger.Error("failed to destroy infrastructure",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 

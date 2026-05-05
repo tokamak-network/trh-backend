@@ -141,15 +141,15 @@ func StartAAOperatorFromConfig(ctx context.Context, sdkClient *thanosStack.Thano
 	sdkClient.RunAAOperatorFromConfig(ctx)
 }
 
-func DestroyAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack) error {
-	logger.Info("Destroying AWS Infrastructure...")
+func DestroyInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack) error {
+	logger.Info("Destroying infrastructure...")
 
 	err := sdkClient.Destroy(ctx)
 	if err != nil {
 		return err
 	}
 
-	logger.Info("AWS Infrastructure destroyed successfully")
+	logger.Info("Infrastructure destroyed successfully")
 
 	return nil
 }
