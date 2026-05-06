@@ -195,6 +195,32 @@ func (h *ThanosDeploymentHandler) InstallBlockExplorer(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+// @Summary		Get Block Explorer config
+// @Description	Returns the sanitized block explorer config (CMC/WC + URL only) for prefilling the Update UI. DB credentials are excluded.
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/block-explorer/config [get]
+func (h *ThanosDeploymentHandler) GetBlockExplorerConfig(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.GetBlockExplorerConfig(c, id)
+	if err != nil {
+		logger.Error("failed to get block explorer config", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 // @Summary		Update Block Explorer
 // @Description	Apply new CoinMarketCap / WalletConnect settings to an installed block explorer
 // @Tags			Thanos Stack

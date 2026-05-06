@@ -278,6 +278,54 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 	}, nil
 }
 
+// GetConfig returns the sanitized block explorer config (CMC/WC + URL only)
+// for a stack's installed block-explorer integration. Database credentials are
+// excluded from the response.
+func (b *BlockExplorerIntegration) GetConfig(ctx context.Context, stackId string) (*entities.Response, error) {
+	existing, err := b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBlockExplorer.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+	if existing == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Block explorer integration is not installed",
+			Data:    nil,
+		}, nil
+	}
+
+	var stored dtos.InstallBlockExplorerRequest
+	if len(existing.Config) > 0 {
+		if err := json.Unmarshal(existing.Config, &stored); err != nil {
+			logger.Error("failed to unmarshal stored block explorer config", zap.Error(err))
+			return &entities.Response{
+				Status:  http.StatusInternalServerError,
+				Message: "Internal server error",
+				Data:    nil,
+			}, err
+		}
+	}
+
+	var url string
+	if len(existing.Info) > 0 {
+		var info map[string]string
+		if err := json.Unmarshal(existing.Info, &info); err == nil {
+			url = info["url"]
+		}
+	}
+
+	resp := dtos.SanitizeBlockExplorerConfig(&stored, url)
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    resp,
+	}, nil
+}
+
 // Update applies new CMC/WC settings to an installed block explorer.
 // DB credentials from the original install are reused — they are not exposed to
 // the caller. A deployment record is created and the helm upgrade runs in a

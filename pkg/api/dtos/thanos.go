@@ -247,6 +247,30 @@ func (r *InstallBlockExplorerRequest) Validate() error {
 	return nil
 }
 
+// BlockExplorerConfigResponse is the sanitized payload returned by
+// GET /:id/integrations/block-explorer/config. Database credentials are
+// intentionally excluded — they must never leave the backend.
+type BlockExplorerConfigResponse struct {
+	CoinmarketcapKey     string `json:"coinmarketcapKey"`
+	CoinmarketcapTokenID string `json:"coinmarketcapTokenId"`
+	WalletConnectID      string `json:"walletConnectId"`
+	URL                  string `json:"url,omitempty"`
+}
+
+// SanitizeBlockExplorerConfig builds a sanitized response from a stored
+// InstallBlockExplorerRequest, dropping DB credentials.
+func SanitizeBlockExplorerConfig(stored *InstallBlockExplorerRequest, url string) BlockExplorerConfigResponse {
+	if stored == nil {
+		return BlockExplorerConfigResponse{URL: url}
+	}
+	return BlockExplorerConfigResponse{
+		CoinmarketcapKey:     stored.CoinmarketcapKey,
+		CoinmarketcapTokenID: stored.CoinmarketcapTokenID,
+		WalletConnectID:      stored.WalletConnectID,
+		URL:                  url,
+	}
+}
+
 // UpdateBlockExplorerRequest is the payload for PUT /:id/integrations/block-explorer.
 // It carries only user-configurable settings (CoinMarketCap key/token id, WalletConnect
 // project id). DB credentials are not exposed at update time — the backend reuses the

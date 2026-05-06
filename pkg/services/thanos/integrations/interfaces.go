@@ -108,6 +108,11 @@ func (im *IntegrationManager) UpdateBlockExplorer(ctx context.Context, stackId s
 	return im.blockExplorer.Update(ctx, stackId, request)
 }
 
+// GetBlockExplorerConfig returns the sanitized block explorer config for the given stack
+func (im *IntegrationManager) GetBlockExplorerConfig(ctx context.Context, stackId string) (*entities.Response, error) {
+	return im.blockExplorer.GetConfig(ctx, stackId)
+}
+
 // InstallBridge installs a bridge for the given stack
 func (im *IntegrationManager) InstallBridge(ctx context.Context, stackId string) (*entities.Response, error) {
 	return im.bridge.Install(ctx, stackId)

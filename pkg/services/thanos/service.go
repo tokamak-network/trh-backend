@@ -186,6 +186,11 @@ func (s *ThanosStackDeploymentService) UpdateBlockExplorer(ctx context.Context, 
 	return s.integrationMgr.UpdateBlockExplorer(ctx, stackId, request)
 }
 
+// GetBlockExplorerConfig returns the sanitized block explorer config for the given stack
+func (s *ThanosStackDeploymentService) GetBlockExplorerConfig(ctx context.Context, stackId string) (*entities.Response, error) {
+	return s.integrationMgr.GetBlockExplorerConfig(ctx, stackId)
+}
+
 // InstallMonitoring installs monitoring for the given stack
 func (s *ThanosStackDeploymentService) InstallMonitoring(ctx context.Context, stackId uuid.UUID, request dtos.InstallMonitoringRequest) (*entities.Response, error) {
 	return s.integrationMgr.InstallMonitoring(ctx, stackId, request)
