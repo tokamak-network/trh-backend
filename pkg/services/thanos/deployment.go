@@ -468,6 +468,33 @@ services:
 				}
 			}
 
+			// SDK's installPresetModules() runs `helm install` for block-explorer on AWS
+			// (deploy_chain.go) but never touches the integration row. Mirror the
+			// monitoring branch above so the preset row flips from AwaitingConfig to
+			// Completed with the real ingress URL — otherwise the UI keeps showing
+			// block-explorer as not installed even though it is reachable.
+			if enabled, ok := def.Modules["blockExplorer"]; ok && enabled {
+				if chainInformation.BlockExplorer == "" {
+					logger.Warn("block-explorer URL empty after AWS deployment; skipping installed mark",
+						zap.String("stackId", stackId.String()))
+				} else {
+					blockExplorerIntegration, getErr := s.integrationRepo.GetIntegration(stackId.String(), enum.IntegrationTypeBlockExplorer.String())
+					if getErr != nil || blockExplorerIntegration == nil {
+						logger.Error("failed to get block-explorer integration for AWS auto-mark",
+							zap.String("stackId", stackId.String()), zap.Error(getErr))
+					} else {
+						metaBytes, metaErr := json.Marshal(map[string]string{"url": chainInformation.BlockExplorer})
+						if metaErr != nil {
+							logger.Error("failed to marshal block-explorer metadata for AWS",
+								zap.String("stackId", stackId.String()), zap.Error(metaErr))
+						} else if err := s.integrationRepo.UpdateMetadataAfterInstalled(blockExplorerIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
+							logger.Error("failed to mark block-explorer as installed for AWS",
+								zap.String("stackId", stackId.String()), zap.Error(err))
+						}
+					}
+				}
+			}
+
 			if enabled, ok := def.Modules["crossTrade"]; ok && enabled {
 				pendingCT, ctErr := s.integrationRepo.GetIntegrationByStatus(
 					stackId.String(),
