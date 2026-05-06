@@ -257,6 +257,7 @@ func InstallBlockExplorer(
 		DatabaseUsername:       req.DatabaseUsername,
 		DatabasePassword:       req.DatabasePassword,
 		CoinmarketcapKey:       req.CoinmarketcapKey,
+		CoinmarketcapTokenID:   req.CoinmarketcapTokenID,
 		WalletConnectProjectID: req.WalletConnectID,
 	})
 }
@@ -266,6 +267,24 @@ func UninstallBlockExplorer(
 	s *thanosStack.ThanosStack,
 ) error {
 	return s.UninstallBlockExplorer(ctx)
+}
+
+// UpdateBlockExplorer applies new CoinMarketCap / WalletConnect settings to an
+// already-installed block explorer. The integration layer must supply the
+// install-time DatabaseUsername/Password so SDK input validation passes.
+func UpdateBlockExplorer(
+	ctx context.Context,
+	s *thanosStack.ThanosStack,
+	dbUser, dbPass string,
+	req *dtos.UpdateBlockExplorerRequest,
+) (string, error) {
+	return s.UpdateBlockExplorer(ctx, &thanosStack.InstallBlockExplorerInput{
+		DatabaseUsername:       dbUser,
+		DatabasePassword:       dbPass,
+		CoinmarketcapKey:       req.CoinmarketcapKey,
+		CoinmarketcapTokenID:   req.CoinmarketcapTokenID,
+		WalletConnectProjectID: req.WalletConnectID,
+	})
 }
 
 func GetMonitoringConfig(

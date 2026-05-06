@@ -7,6 +7,7 @@ const (
 	DestroyChainStep              = "destroy-chain"
 	InstallBlockExplorerStep      = "install-block-explorer"
 	UninstallBlockExplorerStep    = "uninstall-block-explorer"
+	UpdateBlockExplorerStep       = "update-block-explorer"
 	InstallBridgeStep             = "install-bridge"
 	UninstallBridgeStep           = "uninstall-bridge"
 	InstallMonitoringStep         = "install-monitoring"

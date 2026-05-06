@@ -181,6 +181,11 @@ func (s *ThanosStackDeploymentService) UninstallBlockExplorer(ctx context.Contex
 	return s.integrationMgr.UninstallBlockExplorer(ctx, stackId)
 }
 
+// UpdateBlockExplorer applies new CMC/WC settings to an installed block explorer
+func (s *ThanosStackDeploymentService) UpdateBlockExplorer(ctx context.Context, stackId string, request dtos.UpdateBlockExplorerRequest) (*entities.Response, error) {
+	return s.integrationMgr.UpdateBlockExplorer(ctx, stackId, request)
+}
+
 // InstallMonitoring installs monitoring for the given stack
 func (s *ThanosStackDeploymentService) InstallMonitoring(ctx context.Context, stackId uuid.UUID, request dtos.InstallMonitoringRequest) (*entities.Response, error) {
 	return s.integrationMgr.InstallMonitoring(ctx, stackId, request)

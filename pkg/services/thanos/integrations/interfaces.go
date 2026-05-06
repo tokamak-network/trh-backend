@@ -103,6 +103,11 @@ func (im *IntegrationManager) UninstallBlockExplorer(ctx context.Context, stackI
 	return im.blockExplorer.Uninstall(ctx, stackId)
 }
 
+// UpdateBlockExplorer applies new CMC/WC settings to an installed block explorer
+func (im *IntegrationManager) UpdateBlockExplorer(ctx context.Context, stackId string, request dtos.UpdateBlockExplorerRequest) (*entities.Response, error) {
+	return im.blockExplorer.Update(ctx, stackId, request)
+}
+
 // InstallBridge installs a bridge for the given stack
 func (im *IntegrationManager) InstallBridge(ctx context.Context, stackId string) (*entities.Response, error) {
 	return im.bridge.Install(ctx, stackId)

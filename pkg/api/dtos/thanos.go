@@ -212,10 +212,11 @@ type DeployThanosAWSInfraRequest struct {
 }
 
 type InstallBlockExplorerRequest struct {
-	DatabaseUsername string `json:"databaseUsername"     binding:"required"`
-	DatabasePassword string `json:"databasePassword"     binding:"required"`
-	CoinmarketcapKey string `json:"coinmarketcapKey"     binding:"required"`
-	WalletConnectID  string `json:"walletConnectId"     binding:"required"`
+	DatabaseUsername     string `json:"databaseUsername"     binding:"required"`
+	DatabasePassword     string `json:"databasePassword"     binding:"required"`
+	CoinmarketcapKey     string `json:"coinmarketcapKey"     binding:"required"`
+	CoinmarketcapTokenID string `json:"coinmarketcapTokenId,omitempty"`
+	WalletConnectID      string `json:"walletConnectId"     binding:"required"`
 }
 
 func (r *InstallBlockExplorerRequest) Validate() error {
@@ -243,6 +244,22 @@ func (r *InstallBlockExplorerRequest) Validate() error {
 		return errors.New("walletConnectId is required")
 	}
 
+	return nil
+}
+
+// UpdateBlockExplorerRequest is the payload for PUT /:id/integrations/block-explorer.
+// It carries only user-configurable settings (CoinMarketCap key/token id, WalletConnect
+// project id). DB credentials are not exposed at update time — the backend reuses the
+// values stored at install.
+type UpdateBlockExplorerRequest struct {
+	CoinmarketcapKey     string `json:"coinmarketcapKey,omitempty"`
+	CoinmarketcapTokenID string `json:"coinmarketcapTokenId,omitempty"`
+	WalletConnectID      string `json:"walletConnectId,omitempty"`
+}
+
+// Validate is a no-op today — SDK input validation handles the heavy checks
+// after DB credentials are merged in at the integration layer.
+func (r *UpdateBlockExplorerRequest) Validate() error {
 	return nil
 }
 

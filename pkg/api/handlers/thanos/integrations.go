@@ -195,6 +195,43 @@ func (h *ThanosDeploymentHandler) InstallBlockExplorer(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+// @Summary		Update Block Explorer
+// @Description	Apply new CoinMarketCap / WalletConnect settings to an installed block explorer
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id		path		string								true	"Thanos Stack ID"
+// @Param			request	body		dtos.UpdateBlockExplorerRequest		true	"Update Block Explorer Request"
+// @Success		200		{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/block-explorer [put]
+func (h *ThanosDeploymentHandler) UpdateBlockExplorer(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	var request dtos.UpdateBlockExplorerRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.UpdateBlockExplorer(c, id, request)
+	if err != nil {
+		logger.Error("failed to update block explorer", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 // @Summary		Uninstall Block Explorer
 // @Description	Uninstall Block Explorer
 // @Tags			Thanos Stack

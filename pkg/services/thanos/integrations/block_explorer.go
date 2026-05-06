@@ -278,6 +278,189 @@ func (b *BlockExplorerIntegration) Uninstall(ctx context.Context, stackId string
 	}, nil
 }
 
+// Update applies new CMC/WC settings to an installed block explorer.
+// DB credentials from the original install are reused — they are not exposed to
+// the caller. A deployment record is created and the helm upgrade runs in a
+// background task.
+func (b *BlockExplorerIntegration) Update(ctx context.Context, stackId string, request dtos.UpdateBlockExplorerRequest) (*entities.Response, error) {
+	if err := request.Validate(); err != nil {
+		logger.Error("invalid update block explorer request", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid block explorer update request",
+			Data:    nil,
+		}, err
+	}
+
+	stack, err := b.stackRepo.GetStackByID(stackId)
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+	if stack.Status != entities.StackStatusDeployed {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Stack is not deployed yet",
+			Data:    nil,
+		}, nil
+	}
+
+	existing, err := b.integrationRepo.GetInstalledIntegration(stackId, enum.IntegrationTypeBlockExplorer.String())
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+	if existing == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Block explorer integration is not installed",
+			Data:    nil,
+		}, errors.New("block explorer integration not installed")
+	}
+
+	// Recover original DB credentials from the install-time stored config.
+	var installCfg dtos.InstallBlockExplorerRequest
+	if err := json.Unmarshal(existing.Config, &installCfg); err != nil {
+		logger.Error("failed to unmarshal stored block explorer config", zap.Error(err))
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	logPath := utils.GetLogPath(stack.ID, "update-block-explorer")
+	taskId := fmt.Sprintf("update-block-explorer-%s", stackId)
+	b.taskManager.AddTask(taskId, func(ctx context.Context) {
+		b.updateTask(ctx, existing.ID, stack, installCfg, request, logPath)
+	})
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Successfully",
+		Data:    nil,
+	}, nil
+}
+
+// updateTask runs the helm upgrade flow in the background.
+func (b *BlockExplorerIntegration) updateTask(
+	ctx context.Context,
+	integrationID uuid.UUID,
+	stack *entities.StackEntity,
+	installCfg dtos.InstallBlockExplorerRequest,
+	request dtos.UpdateBlockExplorerRequest,
+	logPath string,
+) {
+	taskCtx, taskCancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer taskCancel()
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		logger.Error("failed to unmarshal stack config", zap.String("stackId", stack.ID.String()), zap.Error(err))
+		return
+	}
+
+	if err := b.integrationRepo.UpdateIntegrationStatus(integrationID.String(), entities.DeploymentStatusInProgress); err != nil {
+		logger.Error("failed to update integration status", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return
+	}
+
+	configBytes, err := json.Marshal(request)
+	if err != nil {
+		logger.Error("failed to marshal block explorer update config", zap.Error(err))
+		return
+	}
+
+	deployment := &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    constants.UpdateBlockExplorerStep,
+		Status:  entities.DeploymentRunStatusInProgress,
+		LogPath: logPath,
+		Config:  configBytes,
+	}
+	if err := b.deploymentRepo.CreateDeployment(deployment); err != nil {
+		logger.Error("failed to create update deployment record", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		return
+	}
+
+	ingestCtx, cancel := context.WithCancel(taskCtx)
+	defer cancel()
+	go b.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		taskCtx,
+		logPath,
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		logger.Error("failed to create thanos sdk client", zap.Error(err))
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error())
+		return
+	}
+
+	blockExplorerUrl, err := thanos.UpdateBlockExplorer(taskCtx, sdkClient, installCfg.DatabaseUsername, installCfg.DatabasePassword, &request)
+	if err != nil {
+		logger.Error("failed to update block explorer", zap.String("plugin", enum.IntegrationTypeBlockExplorer.String()), zap.Error(err))
+		deploymentStatus := entities.DeploymentRunStatusFailed
+		if utils.IsContextCanceled(err) {
+			deploymentStatus = entities.DeploymentRunStatusStopped
+		}
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), deploymentStatus)
+		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(integrationID.String(), entities.DeploymentStatusFailed, err.Error())
+		return
+	}
+
+	// helm upgrade succeeded — chain is updated. From here, every bookkeeping step
+	// is best-effort: failure is logged but never reverts the integration to Failed,
+	// since the actual deployed state is already healthy.
+	mergedCfg := installCfg
+	mergedCfg.CoinmarketcapKey = request.CoinmarketcapKey
+	mergedCfg.CoinmarketcapTokenID = request.CoinmarketcapTokenID
+	mergedCfg.WalletConnectID = request.WalletConnectID
+	if mergedBytes, marshalErr := json.Marshal(mergedCfg); marshalErr != nil {
+		logger.Error("failed to marshal merged block explorer config", zap.Error(marshalErr))
+	} else if err := b.integrationRepo.UpdateConfig(integrationID.String(), json.RawMessage(mergedBytes)); err != nil {
+		logger.Error("failed to update block explorer integration config", zap.Error(err))
+	}
+
+	var metadataBytes []byte
+	if metaBytes, marshalErr := json.Marshal(map[string]string{"url": blockExplorerUrl}); marshalErr != nil {
+		logger.Error("failed to marshal block explorer metadata", zap.Error(marshalErr))
+	} else {
+		metadataBytes = metaBytes
+	}
+	if err := b.integrationRepo.UpdateMetadataAfterInstalled(integrationID.String(), entities.IntegrationInfo(metadataBytes)); err != nil {
+		logger.Error("failed to flip integration to Completed", zap.Error(err))
+	}
+
+	stack.Metadata.ExplorerUrl = blockExplorerUrl
+	if err := b.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
+		logger.Error("failed to update stack metadata", zap.Error(err))
+	}
+
+	_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
+}
+
 // installTask handles the actual installation process
 func (b *BlockExplorerIntegration) installTask(ctx context.Context, newIntegrationID uuid.UUID, stack *entities.StackEntity, request dtos.InstallBlockExplorerRequest, logPath string) {
 	// creates ctx with 30min timeout to prevent infinite running installations
