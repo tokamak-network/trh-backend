@@ -3,11 +3,13 @@ package thanos
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/tokamak-network/trh-backend/internal/consts"
 	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-sdk/pkg/constants"
 	thanosConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
@@ -107,6 +109,74 @@ func DeployAWSInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosS
 	logger.Info("AWS Infrastructure deployed successfully")
 
 	return nil
+}
+
+// DeployAWSStageA runs the L1-independent portion of AWS infrastructure in parallel with
+// DeployL1Contracts. L1ChainID is fetched via RPC so Stage A can start before deployConfig
+// is populated with L1 outputs.
+func DeployAWSStageA(
+	ctx context.Context,
+	sdkClient *thanosStack.ThanosStack,
+	l1Req *dtos.DeployL1ContractsRequest,
+	infraReq *dtos.DeployThanosAWSInfraRequest,
+) error {
+	l1ChainID, err := utils.GetChainIDFromRPC(l1Req.L1RpcUrl)
+	if err != nil {
+		return fmt.Errorf("failed to fetch L1 chain ID: %w", err)
+	}
+
+	chainCfg := thanosConstants.L1ChainConfigurations[l1ChainID]
+
+	backupConfig := &thanosStack.BackupConfig{Enabled: false}
+	if infraReq.BackupConfig != nil {
+		backupConfig = &thanosStack.BackupConfig{Enabled: infraReq.BackupConfig.Enabled}
+	}
+
+	stageAInput := &thanosStack.AWSStageAInput{
+		ChainName:            infraReq.ChainName,
+		L1BeaconURL:          infraReq.L1BeaconUrl,
+		BackupConfig:         backupConfig,
+		AdminPrivateKey:      l1Req.AdminAccount,
+		SequencerPrivateKey:  l1Req.SequencerAccount,
+		BatcherPrivateKey:    l1Req.BatcherAccount,
+		ProposerPrivateKey:   l1Req.ProposerAccount,
+		ChallengerPrivateKey: l1Req.ChallengerAccount,
+		L1RPCURL:             l1Req.L1RpcUrl,
+		L1ChainID:            l1ChainID,
+		EnableFaultProof:     l1Req.EnableFaultProof,
+		ChainConfiguration: &thanosTypes.ChainConfiguration{
+			BatchSubmissionFrequency: uint64(l1Req.BatchSubmissionFrequency),
+			ChallengePeriod:          uint64(l1Req.ChallengePeriod),
+			OutputRootFrequency:      uint64(l1Req.OutputRootFrequency),
+			L2BlockTime:              uint64(l1Req.L2BlockTime),
+			L1BlockTime:              12,
+		},
+		Preset:             l1Req.Preset,
+		TxmgrCellProofTime: chainCfg.TxmgrCellProofTime,
+	}
+	return sdkClient.DeployAWSStageA(ctx, stageAInput)
+}
+
+// DeployAWSStageBInfra runs the L1-dependent portion of AWS infrastructure deployment.
+// Must be called after DeployContracts has completed (status written to settings.json)
+// and after DeployAWSStageA has run (toolReadiness initialized on sdkClient).
+func DeployAWSStageBInfra(
+	ctx context.Context,
+	sdkClient *thanosStack.ThanosStack,
+	infraReq *dtos.DeployThanosAWSInfraRequest,
+) error {
+	backupEnabled := false
+	if infraReq.BackupConfig != nil {
+		backupEnabled = infraReq.BackupConfig.Enabled
+	}
+	return sdkClient.DeployAWSStageB(ctx, &thanosStack.DeployInfraInput{
+		ChainName:   infraReq.ChainName,
+		L1BeaconURL: infraReq.L1BeaconUrl,
+		Mnemonic:    infraReq.SeedPhrase,
+		BackupConfig: &thanosStack.BackupConfig{
+			Enabled: backupEnabled,
+		},
+	})
 }
 
 func DeployLocalInfrastructure(ctx context.Context, sdkClient *thanosStack.ThanosStack, req *dtos.DeployThanosAWSInfraRequest) error {

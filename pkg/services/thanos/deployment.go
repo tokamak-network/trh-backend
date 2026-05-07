@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
 	"github.com/tokamak-network/trh-backend/internal/utils"
+	"golang.org/x/sync/errgroup"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
 	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
@@ -614,6 +615,11 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 		pendingDeployments = filtered
 	}
 
+	// Parallel path: overlap L1 contracts and AWS infrastructure provisioning
+	if l1Step != nil && awsStep != nil && awsStep.Step == constants.DeployAWSInfraStep {
+		return s.executeDeploymentsAWSParallel(ctx, stack, &deploymentConfig, l1Step, awsStep)
+	}
+
 	// Start a goroutine to handle status updates
 	errChan := make(chan error, 1)
 	go func() {
@@ -787,6 +793,150 @@ func (s *ThanosStackDeploymentService) executeDeployments(ctx context.Context, s
 
 	// Wait for final status update
 	return <-errChan
+}
+
+// executeDeploymentsAWSParallel runs L1 contract deployment and AWS infrastructure
+// provisioning concurrently. Stage A of AWS infra (vpc/eks/efs/secretsmanager) starts
+// immediately alongside L1 deployment. Stage B (chain_config + k8s + helm) is gated
+// behind L1 completion, since it needs genesis.json / rollup.json outputs.
+func (s *ThanosStackDeploymentService) executeDeploymentsAWSParallel(
+	ctx context.Context,
+	stack *entities.StackEntity,
+	deploymentConfig *dtos.DeployThanosRequest,
+	l1Step, awsStep *entities.DeploymentEntity,
+) error {
+	var l1Cfg dtos.DeployL1ContractsRequest
+	if err := json.Unmarshal(l1Step.Config, &l1Cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal L1 config: %w", err)
+	}
+
+	var infraCfg dtos.DeployThanosAWSInfraRequest
+	if err := json.Unmarshal(awsStep.Config, &infraCfg); err != nil {
+		return fmt.Errorf("failed to unmarshal AWS infra config: %w", err)
+	}
+
+	// Single shared SDK client — both goroutines share in-memory deployConfig to avoid divergence
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		l1Step.LogPath,
+		toSDKNetwork(stack.Network),
+		stack.DeploymentPath,
+		deploymentConfig.RegisterCandidate,
+		deploymentConfig.AwsAccessKey,
+		deploymentConfig.AwsSecretAccessKey,
+		deploymentConfig.AwsRegion,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create SDK client: %w", err)
+	}
+
+	// Tee SDK binary output to L1 log file
+	logFile, err := os.OpenFile(l1Step.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		logger.Warn("failed to open L1 log file for binary output", zap.Error(err))
+	} else {
+		defer logFile.Close()
+		sdkClient.SetOutput(io.MultiWriter(os.Stdout, logFile))
+	}
+
+	// Mark both steps in-progress before splitting into goroutines
+	if err := s.deploymentRepo.UpdateDeploymentStatus(l1Step.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
+		return fmt.Errorf("failed to mark L1 step in-progress: %w", err)
+	}
+	if err := s.deploymentRepo.UpdateDeploymentStatus(awsStep.ID.String(), entities.DeploymentRunStatusInProgress); err != nil {
+		return fmt.Errorf("failed to mark AWS step in-progress: %w", err)
+	}
+
+	// Start log ingestion for both steps
+	l1IngestCtx, l1CancelIngest := context.WithCancel(ctx)
+	defer l1CancelIngest()
+	go s.tailAndIngestDeploymentLogs(l1IngestCtx, stack.ID, l1Step.ID, l1Step.LogPath)
+
+	awsIngestCtx, awsCancelIngest := context.WithCancel(ctx)
+	defer awsCancelIngest()
+	go s.tailAndIngestDeploymentLogs(awsIngestCtx, stack.ID, awsStep.ID, awsStep.LogPath)
+
+	parentCtx, cancel := context.WithTimeout(ctx, 75*time.Minute)
+	defer cancel()
+
+	g, gCtx := errgroup.WithContext(parentCtx)
+	l1Done := make(chan struct{})
+
+	// Goroutine A: L1 contract deployment
+	g.Go(func() error {
+		defer func() {
+			// Always close l1Done — Goroutine B selects on it for both success and failure
+			select {
+			case <-l1Done:
+			default:
+				close(l1Done)
+			}
+		}()
+		err := thanos.DeployL1Contracts(gCtx, sdkClient, &l1Cfg)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				logger.Info("L1 deployment cancelled", zap.String("deploymentId", l1Step.ID.String()))
+			} else {
+				logger.Error("L1 deployment failed",
+					zap.String("deploymentId", l1Step.ID.String()),
+					zap.Error(err))
+				_ = s.deploymentRepo.UpdateDeploymentStatus(l1Step.ID.String(), entities.DeploymentRunStatusFailed)
+			}
+			return fmt.Errorf("L1: %w", err)
+		}
+		_ = s.deploymentRepo.UpdateDeploymentStatus(l1Step.ID.String(), entities.DeploymentRunStatusSuccess)
+		return nil
+	})
+
+	// Goroutine B: AWS Stage A (L1-independent) → gate on L1 done → AWS Stage B (L1-dependent)
+	g.Go(func() error {
+		if err := thanos.DeployAWSStageA(gCtx, sdkClient, &l1Cfg, &infraCfg); err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				logger.Info("AWS Stage A cancelled", zap.String("deploymentId", awsStep.ID.String()))
+			} else {
+				logger.Error("AWS Stage A failed",
+					zap.String("deploymentId", awsStep.ID.String()),
+					zap.Error(err))
+				_ = s.deploymentRepo.UpdateDeploymentStatus(awsStep.ID.String(), entities.DeploymentRunStatusFailed)
+			}
+			return fmt.Errorf("AWS Stage A: %w", err)
+		}
+
+		// Wait for L1 completion or context cancellation
+		select {
+		case <-l1Done:
+		case <-gCtx.Done():
+			_ = s.deploymentRepo.UpdateDeploymentStatus(awsStep.ID.String(), entities.DeploymentRunStatusFailed)
+			return fmt.Errorf("AWS Stage B aborted: context cancelled before L1 completed: %w", gCtx.Err())
+		}
+
+		// Verify L1 actually succeeded (l1Done closes on both success and failure)
+		cfg, err := trhSDKUtils.ReadConfigFromJSONFile(stack.DeploymentPath)
+		if err != nil {
+			_ = s.deploymentRepo.UpdateDeploymentStatus(awsStep.ID.String(), entities.DeploymentRunStatusFailed)
+			return fmt.Errorf("AWS Stage B: failed to read deployment config: %w", err)
+		}
+		if cfg.DeployContractState == nil || cfg.DeployContractState.Status != thanosSDKTypes.DeployContractStatusCompleted {
+			_ = s.deploymentRepo.UpdateDeploymentStatus(awsStep.ID.String(), entities.DeploymentRunStatusFailed)
+			return fmt.Errorf("AWS Stage B aborted: L1 contracts did not complete successfully")
+		}
+
+		if err := thanos.DeployAWSStageBInfra(gCtx, sdkClient, &infraCfg); err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				logger.Info("AWS Stage B cancelled", zap.String("deploymentId", awsStep.ID.String()))
+			} else {
+				logger.Error("AWS Stage B failed",
+					zap.String("deploymentId", awsStep.ID.String()),
+					zap.Error(err))
+				_ = s.deploymentRepo.UpdateDeploymentStatus(awsStep.ID.String(), entities.DeploymentRunStatusFailed)
+			}
+			return fmt.Errorf("AWS Stage B: %w", err)
+		}
+		_ = s.deploymentRepo.UpdateDeploymentStatus(awsStep.ID.String(), entities.DeploymentRunStatusSuccess)
+		return nil
+	})
+
+	return g.Wait()
 }
 
 // ---------------------------------------------------------------------------
