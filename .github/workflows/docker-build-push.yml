@@ -9,6 +9,7 @@ on:
 env:
   REGISTRY: docker.io
   IMAGE_NAME: tokamaknetwork/trh-backend
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
