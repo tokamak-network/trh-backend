@@ -13,7 +13,6 @@ import (
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
 	thanosConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
-	trhSDKUtils "github.com/tokamak-network/trh-sdk/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -209,18 +208,10 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		return
 	}
 
-	l2l1Req := BuildDefaultCrossTradeL2L1Request(
-		stackConfig.L1RpcUrl,
-		l1ChainID,
-		l2RPC,
-		l2ChainID,
-		stackConfig.AdminAccount,
-		stackId.String(),
-	)
-
-	var awsCfg CrossTradeAWSConfig
-
-	logPath := fmt.Sprintf("/tmp/cross-trade-aws-%s-l2l1.log", stackId.String())
+	// Deploy L2 contracts via L1 deposit-tx + install both Helm releases (L2→L1 and L2→L2).
+	// This path does not require pre-funded L2 ETH — contrast with InstallCrossTradeBridge
+	// which uses forge --broadcast and requires L2 ETH that a fresh chain never has.
+	logPath := fmt.Sprintf("/tmp/cross-trade-aws-%s.log", stackId.String())
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
@@ -232,7 +223,7 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		stackConfig.AwsRegion,
 	)
 	if err != nil {
-		logger.Error("failed to create SDK client for L2_TO_L1",
+		logger.Error("failed to create SDK client for CrossTrade AWS",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
@@ -243,9 +234,9 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		return
 	}
 
-	l2l1Output, err := thanos.InstallCrossTradeBridge(ctx, sdkClient, l2l1Req)
+	output, err := thanos.AutoInstallCrossTradeAWS(ctx, sdkClient)
 	if err != nil {
-		logger.Error("failed to install CrossTrade L2_TO_L1",
+		logger.Error("failed to auto-install CrossTrade AWS",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
 		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
@@ -256,141 +247,24 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		return
 	}
 
-	logger.Info("CrossTrade L2_TO_L1 installed successfully",
-		zap.String("stackId", stackId.String()))
+	logger.Info("CrossTrade AWS installed successfully",
+		zap.String("stackId", stackId.String()),
+		zap.String("l2l1URL", output.L2L1DAppURL),
+		zap.String("l2l2URL", output.L2L2DAppURL))
 
-	awsCfg.L2ToL1 = l2l1Req
-	if cfgBytes, cfgErr := json.Marshal(awsCfg); cfgErr == nil {
-		if updateErr := b.integrationRepo.UpdateConfig(pendingIntegration.ID.String(), json.RawMessage(cfgBytes)); updateErr != nil {
-			logger.Error("failed to save L2_TO_L1 config",
-				zap.String("stackId", stackId.String()),
-				zap.Error(updateErr))
-			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(pendingIntegration.ID.String(), entities.DeploymentStatusFailed, updateErr.Error())
-			return
-		}
+	contracts := map[string]string{
+		"l2_cross_trade_proxy":       output.L2CrossTradeProxy,
+		"l1_cross_trade_proxy":       output.L1CrossTradeProxy,
+		"l2_to_l2_cross_trade_proxy": output.L2toL2CrossTradeProxy,
+		"l2_to_l2_l1_proxy":          output.L2toL2CrossTradeL1,
 	}
-
-	if l2l1Output != nil && l2l1Output.DeployCrossTradeApplicationOutput.URL != "" {
-		if stack.Metadata == nil {
-			stack.Metadata = &entities.StackMetadata{}
-		}
-		stack.Metadata.L2L1CrossTradeUrl = l2l1Output.DeployCrossTradeApplicationOutput.URL
-		if err := b.stackRepo.UpdateMetadata(stackId.String(), stack.Metadata); err != nil {
-			logger.Error("failed to update stack metadata after L2_TO_L1",
-				zap.String("stackId", stackId.String()),
-				zap.Error(err))
-			_ = b.integrationRepo.UpdateIntegrationStatusWithReason(pendingIntegration.ID.String(), entities.DeploymentStatusFailed, err.Error())
-			return
-		}
-	}
-
-	l1Contracts, err := trhSDKUtils.ReadDeployementConfigFromJSONFile(stack.DeploymentPath, l1ChainID)
-	if err != nil {
-		logger.Error("failed to read L1 contracts for CrossTrade L2_TO_L2",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
-		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-			pendingIntegration.ID.String(),
-			entities.DeploymentStatusFailed,
-			fmt.Sprintf("read L1 contracts for L2_TO_L2: %v", err),
-		)
-		return
-	}
-
-	l1USDCBridge := l1Contracts.L1UsdcBridgeProxy
-	if l1USDCBridge == "" {
-		l1USDCBridge = "0x0000000000000000000000000000000000000000"
-	}
-
-	l2l2Req := BuildDefaultCrossTradeL2L2Request(
-		stackConfig.L1RpcUrl,
-		l1ChainID,
-		l2RPC,
-		l2ChainID,
-		l1Contracts.L1StandardBridgeProxy,
-		l1USDCBridge,
-		l1Contracts.L1CrossDomainMessengerProxy,
-		stackConfig.AdminAccount,
-		stackId.String(),
-	)
-
-	logPath = fmt.Sprintf("/tmp/cross-trade-aws-%s-l2l2.log", stackId.String())
-	sdkClient, err = thanos.NewThanosSDKClient(
-		ctx,
-		logPath,
-		string(stack.Network),
-		stack.DeploymentPath,
-		false,
-		stackConfig.AwsAccessKey,
-		stackConfig.AwsSecretAccessKey,
-		stackConfig.AwsRegion,
-	)
-	if err != nil {
-		logger.Error("failed to create SDK client for L2_TO_L2",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
-		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-			pendingIntegration.ID.String(),
-			entities.DeploymentStatusFailed,
-			err.Error(),
-		)
-		return
-	}
-
-	l2l2Output, err := thanos.InstallCrossTradeBridge(ctx, sdkClient, l2l2Req)
-	if err != nil {
-		logger.Error("failed to install CrossTrade L2_TO_L2",
-			zap.String("stackId", stackId.String()),
-			zap.Error(err))
-		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
-			pendingIntegration.ID.String(),
-			entities.DeploymentStatusFailed,
-			err.Error(),
-		)
-		return
-	}
-
-	logger.Info("CrossTrade L2_TO_L2 installed successfully",
-		zap.String("stackId", stackId.String()))
-
-	awsCfg.L2ToL2 = l2l2Req
-	if cfgBytes, cfgErr := json.Marshal(awsCfg); cfgErr == nil {
-		_ = b.integrationRepo.UpdateConfig(pendingIntegration.ID.String(), json.RawMessage(cfgBytes))
-	}
-
-	l2l1URL := ""
-	if l2l1Output != nil {
-		l2l1URL = l2l1Output.DeployCrossTradeApplicationOutput.URL
-	}
-	l2l2URL := ""
-	if l2l2Output != nil {
-		l2l2URL = l2l2Output.DeployCrossTradeApplicationOutput.URL
-	}
-
-	contracts := map[string]string{}
-	if l2l1Output != nil && l2l1Output.DeployCrossTradeContractsOutput != nil {
-		if addr := l2l1Output.DeployCrossTradeContractsOutput.L2CrossTradeProxyAddresses[l2ChainID]; addr != "" {
-			contracts["l2_cross_trade_proxy"] = addr
-		}
-		if addr := l2l1Output.DeployCrossTradeContractsOutput.L1CrossTradeProxyAddress; addr != "" {
-			contracts["l1_cross_trade_proxy"] = addr
-		}
-	}
-	if l2l2Output != nil && l2l2Output.DeployCrossTradeContractsOutput != nil {
-		if addr := l2l2Output.DeployCrossTradeContractsOutput.L2CrossTradeProxyAddresses[l2ChainID]; addr != "" {
-			contracts["l2_to_l2_cross_trade_proxy"] = addr
-		}
-		if addr := l2l2Output.DeployCrossTradeContractsOutput.L1CrossTradeProxyAddress; addr != "" {
-			contracts["l2_to_l2_l1_proxy"] = addr
-		}
-	}
-	logger.Info("CrossTrade AWS contracts extracted",
+	logger.Info("CrossTrade AWS contracts",
 		zap.String("stackId", stackId.String()),
 		zap.Any("contracts", contracts))
 
 	finalMetadata := map[string]interface{}{
-		"l2l1Url":   l2l1URL,
-		"l2l2Url":   l2l2URL,
+		"l2l1Url":   output.L2L1DAppURL,
+		"l2l2Url":   output.L2L2DAppURL,
 		"contracts": contracts,
 	}
 	metadataBytes, err := json.Marshal(finalMetadata)
@@ -424,8 +298,8 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 	if stack.Metadata == nil {
 		stack.Metadata = &entities.StackMetadata{}
 	}
-	stack.Metadata.L2L1CrossTradeUrl = l2l1URL
-	stack.Metadata.L2L2CrossTradeUrl = l2l2URL
+	stack.Metadata.L2L1CrossTradeUrl = output.L2L1DAppURL
+	stack.Metadata.L2L2CrossTradeUrl = output.L2L2DAppURL
 	if err := b.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata after cross trade AWS",
 			zap.String("stackId", stackId.String()),

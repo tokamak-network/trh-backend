@@ -688,6 +688,14 @@ func DeployCrossTradeLocal(
 	})
 }
 
+// AutoInstallCrossTradeAWS deploys CrossTrade contracts via L1 deposit transaction (no L2 ETH
+// required) and installs both the L2→L1 and L2→L2 Helm releases on the K8s cluster.
+// This is the correct AWS path — replaces InstallCrossTradeBridge which uses forge --broadcast
+// and requires pre-funded L2 ETH that a fresh chain never has.
+func AutoInstallCrossTradeAWS(ctx context.Context, s *thanosStack.ThanosStack) (*thanosStack.AutoInstallCrossTradeAWSOutput, error) {
+	return s.AutoInstallCrossTradeAWS(ctx)
+}
+
 func InstallUptimeService(ctx context.Context, s *thanosStack.ThanosStack, req *dtos.InstallUptimeServiceRequest) (string, error) {
 	config, err := s.GetUptimeServiceConfig(ctx)
 	if err != nil {
