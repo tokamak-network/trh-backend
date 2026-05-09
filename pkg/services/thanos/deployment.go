@@ -854,7 +854,8 @@ func (s *ThanosStackDeploymentService) executeDeploymentsAWSParallel(
 
 	awsIngestCtx, awsCancelIngest := context.WithCancel(ctx)
 	defer awsCancelIngest()
-	go s.tailAndIngestDeploymentLogs(awsIngestCtx, stack.ID, awsStep.ID, awsStep.LogPath)
+	// awsStep shares the same SDK client and log file as l1Step; read from the shared path
+	go s.tailAndIngestDeploymentLogs(awsIngestCtx, stack.ID, awsStep.ID, l1Step.LogPath)
 
 	parentCtx, cancel := context.WithTimeout(ctx, 75*time.Minute)
 	defer cancel()
