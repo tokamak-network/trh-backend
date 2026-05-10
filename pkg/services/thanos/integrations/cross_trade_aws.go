@@ -293,8 +293,7 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 
 	logger.Info("CrossTrade AWS installed successfully",
 		zap.String("stackId", stackId.String()),
-		zap.String("l2l1URL", output.L2L1DAppURL),
-		zap.String("l2l2URL", output.L2L2DAppURL))
+		zap.String("dAppURL", output.DAppURL))
 
 	contracts := map[string]string{
 		"l2_cross_trade_proxy":       output.L2CrossTradeProxy,
@@ -307,8 +306,7 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		zap.Any("contracts", contracts))
 
 	finalMetadata := map[string]interface{}{
-		"l2l1Url":   output.L2L1DAppURL,
-		"l2l2Url":   output.L2L2DAppURL,
+		"url":       output.DAppURL,
 		"contracts": contracts,
 	}
 	metadataBytes, err := json.Marshal(finalMetadata)
@@ -342,8 +340,7 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 	if stack.Metadata == nil {
 		stack.Metadata = &entities.StackMetadata{}
 	}
-	stack.Metadata.L2L1CrossTradeUrl = output.L2L1DAppURL
-	stack.Metadata.L2L2CrossTradeUrl = output.L2L2DAppURL
+	stack.Metadata.CrossTradeUrl = output.DAppURL
 	if err := b.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
 		logger.Error("failed to update stack metadata after cross trade AWS",
 			zap.String("stackId", stackId.String()),
