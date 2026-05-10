@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tokamak-network/trh-backend/internal/logger"
+	"github.com/tokamak-network/trh-backend/internal/utils"
 	"github.com/tokamak-network/trh-backend/pkg/api/dtos"
+	"github.com/tokamak-network/trh-backend/pkg/constants"
 	"github.com/tokamak-network/trh-backend/pkg/domain/entities"
 	"github.com/tokamak-network/trh-backend/pkg/enum"
 	"github.com/tokamak-network/trh-backend/pkg/stacks/thanos"
@@ -211,7 +215,37 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 	// Deploy L2 contracts via L1 deposit-tx + install both Helm releases (L2→L1 and L2→L2).
 	// This path does not require pre-funded L2 ETH — contrast with InstallCrossTradeBridge
 	// which uses forge --broadcast and requires L2 ETH that a fresh chain never has.
-	logPath := fmt.Sprintf("/tmp/cross-trade-aws-%s.log", stackId.String())
+	logPath := utils.GetLogPath(stackId, "install-cross-trade-bridge")
+	if mkdirErr := os.MkdirAll(filepath.Dir(logPath), 0755); mkdirErr != nil {
+		logger.Warn("failed to create log directory for CrossTrade auto-install",
+			zap.String("stackId", stackId.String()),
+			zap.Error(mkdirErr))
+	}
+
+	deployment := &entities.DeploymentEntity{
+		ID:      uuid.New(),
+		StackID: &stack.ID,
+		Step:    constants.InstallCrossTradeBridgeStep,
+		Status:  entities.DeploymentRunStatusInProgress,
+		LogPath: logPath,
+		Config:  []byte("{}"),
+	}
+	deploymentCreated := false
+	if createErr := b.deploymentRepo.CreateDeployment(deployment); createErr != nil {
+		logger.Warn("failed to create deployment record for CrossTrade auto-install",
+			zap.String("stackId", stackId.String()),
+			zap.Error(createErr))
+	} else {
+		deploymentCreated = true
+		if f, fErr := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); fErr == nil {
+			fmt.Fprintf(f, "Chain deployment completed. Starting CrossTrade auto-installation...\n")
+			f.Close()
+		}
+		ingestCtx, cancelIngest := context.WithCancel(ctx)
+		defer cancelIngest()
+		go b.tailAndIngestLogs(ingestCtx, stack.ID, deployment.ID, logPath)
+	}
+
 	sdkClient, err := thanos.NewThanosSDKClient(
 		ctx,
 		logPath,
@@ -226,6 +260,9 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		logger.Error("failed to create SDK client for CrossTrade AWS",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
+		if deploymentCreated {
+			_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		}
 		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
 			pendingIntegration.ID.String(),
 			entities.DeploymentStatusFailed,
@@ -239,12 +276,19 @@ func (b *CrossTradeBridgeIntegration) autoInstallCrossTradeAWS(
 		logger.Error("failed to auto-install CrossTrade AWS",
 			zap.String("stackId", stackId.String()),
 			zap.Error(err))
+		if deploymentCreated {
+			_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
+		}
 		_ = b.integrationRepo.UpdateIntegrationStatusWithReason(
 			pendingIntegration.ID.String(),
 			entities.DeploymentStatusFailed,
 			err.Error(),
 		)
 		return
+	}
+
+	if deploymentCreated {
+		_ = b.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusSuccess)
 	}
 
 	logger.Info("CrossTrade AWS installed successfully",
