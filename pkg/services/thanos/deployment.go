@@ -250,7 +250,16 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 					logger.Error("failed to get integration for local auto-install", zap.String("type", intType), zap.Error(err))
 					continue
 				}
-				metaBytes, _ := json.Marshal(map[string]string{"url": url})
+				var metaBytes []byte
+				if intType == enum.IntegrationTypeMonitoring.String() {
+					metaBytes, _ = json.Marshal(map[string]string{
+						"url":      url,
+						"username": "admin",
+						"password": chainInformation.GrafanaAdminPassword,
+					})
+				} else {
+					metaBytes, _ = json.Marshal(map[string]string{"url": url})
+				}
 				if err := s.integrationRepo.UpdateMetadataAfterInstalled(integration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
 					logger.Error("failed to mark local integration as installed", zap.String("type", intType), zap.Error(err))
 				}
