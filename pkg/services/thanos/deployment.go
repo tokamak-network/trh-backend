@@ -128,7 +128,7 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 		layer1Name = "Ethereum Sepolia"
 	}
 
-	err = s.stackRepo.UpdateMetadata(stackId.String(), &entities.StackMetadata{
+	stackMeta := &entities.StackMetadata{
 		Layer1:          layer1Name,
 		Layer2:          "Thanos Stack",
 		L1ChainId:       chainInformation.L1ChainID,
@@ -138,7 +138,8 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 		ExplorerUrl:     chainInformation.BlockExplorer,
 		RollupConfigUrl: chainInformation.RollupFilePath,
 		MonitoringUrl:   chainInformation.MonitoringUrl,
-	})
+	}
+	err = s.stackRepo.UpdateMetadata(stackId.String(), stackMeta)
 	if err != nil {
 		logger.Error("failed to update stack metadata", zap.Error(err))
 		return
@@ -262,6 +263,12 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 				}
 				if err := s.integrationRepo.UpdateMetadataAfterInstalled(integration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
 					logger.Error("failed to mark local integration as installed", zap.String("type", intType), zap.Error(err))
+				}
+				if intType == enum.IntegrationTypeUptimeService.String() {
+					stackMeta.UptimeServiceUrl = url
+					if err := s.stackRepo.UpdateMetadata(stackId.String(), stackMeta); err != nil {
+						logger.Error("failed to update stack metadata with uptime service url", zap.String("stackId", stackId.String()), zap.Error(err))
+					}
 				}
 			}
 
