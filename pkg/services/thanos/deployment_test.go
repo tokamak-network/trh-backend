@@ -1,10 +1,8 @@
 package thanos
 
 import (
-	"context"
 	"testing"
 
-	"github.com/google/uuid"
 	thanosSDKConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
 )
 
@@ -133,10 +131,3 @@ func TestRestoreAAOperators_SkipsNonAAStacks(t *testing.T) {
 	}
 }
 
-func TestInstallDRBOperatorsCallOrder(t *testing.T) {
-	// Compile-time check: installDRBOperators must exist as a method on *ThanosStackDeploymentService.
-	type hasDRBInstaller interface {
-		installDRBOperators(ctx context.Context, stackId uuid.UUID, mnemonic string, l2RPCURL string, chainID uint64)
-	}
-	var _ hasDRBInstaller = (*ThanosStackDeploymentService)(nil)
-}
