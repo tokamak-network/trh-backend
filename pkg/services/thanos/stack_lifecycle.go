@@ -29,6 +29,72 @@ var activeLocalStatuses = map[entities.StackStatus]bool{
 	entities.StackStatusUpdating:  true,
 }
 
+// deployingStatuses are stack statuses that indicate a deployment is actively
+// in progress and the admin key is being used for L1 transactions.
+var deployingStatuses = map[entities.StackStatus]bool{
+	entities.StackStatusPending:  true,
+	entities.StackStatusDeploying: true,
+}
+
+// checkNoActiveDeployingStack returns a 409 response if any existing stack is
+// actively deploying to a shared L1 network (Testnet or Mainnet). Concurrent
+// deployments with the same admin key cause L1 nonce conflicts.
+//
+// LocalDevnet stacks are excluded because they deploy to an isolated local L1
+// node and cannot conflict with Testnet/Mainnet admin key transactions.
+//
+// For local-infra stacks, DB state is reconciled with Docker reality before
+// blocking to avoid false positives from stale records after manual teardown.
+func (s *ThanosStackDeploymentService) checkNoActiveDeployingStack() *entities.Response {
+	stacks, err := s.stackRepo.GetAllStacks()
+	if err != nil {
+		logger.Warn("checkNoActiveDeployingStack: failed to query stacks, skipping check", zap.Error(err))
+		return nil
+	}
+	for _, st := range stacks {
+		if !deployingStatuses[st.Status] {
+			continue
+		}
+		// LocalDevnet uses an isolated local L1 node — no nonce conflict with Testnet/Mainnet.
+		if st.Network == entities.DeploymentNetworkLocalDevnet {
+			continue
+		}
+
+		// For local infra stacks: reconcile with Docker to avoid stale-state false positives.
+		var cfg struct {
+			InfraProvider string `json:"infraProvider"`
+		}
+		if err := json.Unmarshal(st.Config, &cfg); err == nil && cfg.InfraProvider == "local" {
+			projectName := filepath.Base(st.DeploymentPath)
+			if projectName != "" && projectName != "." {
+				running, checkErr := hasRunningContainersForProject(projectName)
+				if checkErr != nil {
+					logger.Warn("checkNoActiveDeployingStack: docker check failed, treating stack as active",
+						zap.String("stackId", st.ID.String()),
+						zap.Error(checkErr))
+				} else if !running {
+					logger.Warn("checkNoActiveDeployingStack: DB shows deploying but no containers; auto-correcting to Terminated",
+						zap.String("stackId", st.ID.String()),
+						zap.String("status", string(st.Status)))
+					if updateErr := s.stackRepo.UpdateStatus(st.ID.String(), entities.StackStatusTerminated, "auto-terminated: no containers found"); updateErr != nil {
+						logger.Error("checkNoActiveDeployingStack: failed to auto-correct stale stack status", zap.Error(updateErr))
+					}
+					continue
+				}
+			}
+		}
+
+		return &entities.Response{
+			Status: http.StatusConflict,
+			Message: fmt.Sprintf(
+				"a deployment is already in progress (stackId: %s, status: %s, network: %s): wait for it to complete before starting another deployment to avoid L1 nonce conflicts",
+				st.ID, st.Status, st.Network,
+			),
+		}
+	}
+	return nil
+}
+
 // checkNoActiveLocalStack returns a 409 response if any existing local stack is
 // in an active state. Local deployments use fixed ports, so concurrent deploys
 // would cause port conflicts.
@@ -107,6 +173,10 @@ func (s *ThanosStackDeploymentService) CreateThanosStack(
 		if conflict := s.checkNoActiveLocalStack(); conflict != nil {
 			return conflict, nil
 		}
+	}
+	// Guard: block concurrent deployments to shared L1 (Testnet/Mainnet) to prevent nonce conflicts.
+	if conflict := s.checkNoActiveDeployingStack(); conflict != nil {
+		return conflict, nil
 	}
 
 	stackId := uuid.New()
