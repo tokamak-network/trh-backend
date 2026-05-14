@@ -33,6 +33,19 @@ import (
 
 // New helper method to handle deployment logic
 func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.UUID) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("deployment panicked",
+				zap.String("stackId", stackId.String()),
+				zap.Any("panic", r))
+			if updateErr := s.stackRepo.UpdateStatus(stackId.String(), entities.StackStatusFailedToDeploy, fmt.Sprintf("deployment panicked: %v", r)); updateErr != nil {
+				logger.Error("failed to update stack status after panic",
+					zap.String("stackId", stackId.String()),
+					zap.Error(updateErr))
+			}
+		}
+	}()
+
 	err := s.executeDeployments(ctx, stackId)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
