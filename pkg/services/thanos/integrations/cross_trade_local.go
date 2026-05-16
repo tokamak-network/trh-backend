@@ -31,11 +31,13 @@ type CrossTradeDAppConfig struct {
 	DeployOutput           *thanosTypes.DeployCrossTradeLocalOutput
 	L1CrossTradeProxyAddr  string
 	L2toL2CrossTradeL1Addr string
-	// L2NativeTokenName and L2NativeTokenSymbol describe the gas token of the new L2.
-	// Defaults to "Tokamak Network" / "TON" when empty (standard Thanos preset).
-	// Set to "Ethereum" / "ETH" for defi-eth presets where ETH is the fee token.
+	// L2NativeTokenName and L2NativeTokenSymbol override the display metadata when set
+	// explicitly. Leave empty to derive from FeeTokenSymbol (preferred).
 	L2NativeTokenName   string
 	L2NativeTokenSymbol string
+	// FeeTokenSymbol is the symbol of the L2 fee/gas token (e.g. "ETH", "USDT", "USDC", "TON").
+	// Drives native token metadata and L2 token maps in BuildDAppEnvConfig.
+	FeeTokenSymbol string
 }
 
 // chainConfigEntry is the per-chain JSON structure for NEXT_PUBLIC_CHAIN_CONFIG_* env vars.
@@ -65,20 +67,66 @@ func dockerizeRPCURL(rpcURL string) string {
 	return strings.ReplaceAll(r, "127.0.0.1", "host.docker.internal")
 }
 
+// buildL2L1Tokens returns the flat token map for NEXT_PUBLIC_CHAIN_CONFIG_L2_L1.
+// The fee token is always at 0x0000…0000 (native gas). USDC ERC20 predeploy is
+// included unless the fee token itself is USDC.
+func buildL2L1Tokens(feeTokenSymbol string) map[string]string {
+	sym := strings.ToUpper(feeTokenSymbol)
+	if sym == "" {
+		sym = "TON"
+	}
+	out := map[string]string{
+		sym: "0x0000000000000000000000000000000000000000",
+	}
+	if sym != "USDC" {
+		out["USDC"] = "0x4200000000000000000000000000000000000778"
+	}
+	return out
+}
+
+// buildL2L2Tokens returns the token array for NEXT_PUBLIC_CHAIN_CONFIG_L2_L2.
+// Same rules as buildL2L1Tokens, but in array-of-object format with destination_chains.
+func buildL2L2Tokens(feeTokenSymbol string, destChain uint64) []l2TokenEntry {
+	sym := strings.ToUpper(feeTokenSymbol)
+	if sym == "" {
+		sym = "TON"
+	}
+	out := []l2TokenEntry{
+		{Name: sym, Address: "0x0000000000000000000000000000000000000000", DestinationChains: []uint64{destChain}},
+	}
+	if sym != "USDC" {
+		out = append(out, l2TokenEntry{Name: "USDC", Address: "0x4200000000000000000000000000000000000778", DestinationChains: []uint64{destChain}})
+	}
+	return out
+}
+
 // BuildDAppEnvConfig generates config/.env.crosstrade for the CrossTrade dApp container (BE-07).
 // configPath: absolute or relative path to the output file (e.g. "config/.env.crosstrade").
 func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 	l2ChainIDStr := fmt.Sprintf("%d", cfg.L2ChainID)
 	l1ChainIDStr := fmt.Sprintf("%d", cfg.L1ChainID)
 
-	// Resolve native token metadata with fallback to standard Thanos (TON) values.
-	l2NativeTokenName := cfg.L2NativeTokenName
-	if l2NativeTokenName == "" {
-		l2NativeTokenName = "Tokamak Network"
+	// Resolve fee token symbol; default to TON for the standard Thanos preset.
+	feeSymbol := strings.ToUpper(cfg.FeeTokenSymbol)
+	if feeSymbol == "" {
+		feeSymbol = "TON"
 	}
+
+	// Resolve native token display metadata. Explicit L2NativeTokenName/Symbol take
+	// precedence; otherwise derive from feeSymbol.
+	l2NativeTokenName := cfg.L2NativeTokenName
 	l2NativeTokenSymbol := cfg.L2NativeTokenSymbol
-	if l2NativeTokenSymbol == "" {
-		l2NativeTokenSymbol = "TON"
+	if l2NativeTokenName == "" || l2NativeTokenSymbol == "" {
+		switch feeSymbol {
+		case "ETH":
+			l2NativeTokenName, l2NativeTokenSymbol = "Ethereum", "ETH"
+		case "USDT":
+			l2NativeTokenName, l2NativeTokenSymbol = "Tether USD", "USDT"
+		case "USDC":
+			l2NativeTokenName, l2NativeTokenSymbol = "USD Coin", "USDC"
+		default:
+			l2NativeTokenName, l2NativeTokenSymbol = "Tokamak Network", "TON"
+		}
 	}
 
 	sepoliaTokens := map[string]string{
@@ -87,20 +135,11 @@ func BuildDAppEnvConfig(configPath string, cfg *CrossTradeDAppConfig) error {
 		"USDT": "", // TODO(usdt): Add Sepolia USDT address once confirmed
 		"TON":  "",
 	}
-	// L2_L1 config uses flat map format for L2 tokens.
-	l2l1Tokens := map[string]string{
-		"ETH":  "0x0000000000000000000000000000000000000000",
-		"USDC": "0x4200000000000000000000000000000000000778", // L2 USDC predeploy
-		"USDT": "", // TODO(usdt): Add L2 USDT address once confirmed
-		"TON":  "",
-	}
-	// L2_L2 config uses array format for L2 tokens so the CrossTrade dApp can
-	// resolve destination_chains correctly when displaying the source chain selector.
-	// destination_chains points to Thanos Sepolia (the fixed bridge partner), not itself.
-	l2l2Tokens := []l2TokenEntry{
-		{Name: "ETH", Address: "0x0000000000000000000000000000000000000000", DestinationChains: []uint64{thanosSepolia}},
-		{Name: "USDC", Address: "0x4200000000000000000000000000000000000778", DestinationChains: []uint64{thanosSepolia}},
-	}
+	// L2 token maps are built dynamically from the fee token so the dApp always
+	// shows the correct native token label and the right tokens in its dropdown.
+	l2l1Tokens := buildL2L1Tokens(feeSymbol)
+	// L2_L2 config uses array format with destination_chains pointing to Thanos Sepolia.
+	l2l2Tokens := buildL2L2Tokens(feeSymbol, thanosSepolia)
 	// Thanos Sepolia tokens: ETH is at a predeploy address (TON is the native gas token).
 	// destination_chains is intentionally empty: the Thanos Sepolia L2toL2CrossTradeProxy
 	// does not have the newly deployed L2's chainId registered, so Thanos→new-L2 requests

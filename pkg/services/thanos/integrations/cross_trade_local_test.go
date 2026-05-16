@@ -186,6 +186,7 @@ func TestBuildDAppEnvConfig_DefiEthPreset(t *testing.T) {
 		L1CrossTradeProxyAddr:  "0xf3473E20F1d9EB4468C72454a27aA1C65B67AB35",
 		L2toL2CrossTradeL1Addr: "0xDa2CbF69352cB46d9816dF934402b421d93b6BC2",
 		// defi-eth preset: ETH is the native gas token
+		FeeTokenSymbol:      "ETH",
 		L2NativeTokenName:   "Ethereum",
 		L2NativeTokenSymbol: "ETH",
 	}
@@ -279,6 +280,141 @@ func TestBuildDAppEnvConfig_DefaultTonPreset(t *testing.T) {
 		if name, _ := l2Entry["native_token_name"].(string); name != "Tokamak Network" {
 			t.Errorf("default L2 native_token_name want Tokamak Network, got %q", name)
 		}
+	}
+}
+
+func TestBuildDAppEnvConfig_FeeTokenPresets(t *testing.T) {
+	zeroAddr := "0x0000000000000000000000000000000000000000"
+	usdcPredeploy := "0x4200000000000000000000000000000000000778"
+
+	cases := []struct {
+		feeToken        string
+		wantName        string
+		wantSymbol      string
+		wantNativeAddr  string
+		wantHasUSDCERC20 bool
+	}{
+		{"USDT", "Tether USD", "USDT", zeroAddr, true},
+		{"ETH", "Ethereum", "ETH", zeroAddr, true},
+		{"TON", "Tokamak Network", "TON", zeroAddr, true},
+		{"USDC", "USD Coin", "USDC", zeroAddr, false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.feeToken, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "config", ".env.crosstrade")
+
+			cfg := &integrations.CrossTradeDAppConfig{
+				L1ChainID:          11155111,
+				L2ChainID:          17001,
+				L2ChainName:        tc.feeToken + " L2",
+				L2RPCURL:           "http://localhost:8545",
+				L2BlockExplorerURL: "http://localhost:4001",
+				FeeTokenSymbol:     tc.feeToken,
+				DeployOutput: &thanosTypes.DeployCrossTradeLocalOutput{
+					L2CrossTrade:          "0xAAAA0000000000000000000000000000000000AA",
+					L2CrossTradeProxy:     "0xBBBB0000000000000000000000000000000000BB",
+					L2toL2CrossTradeL2:    "0xCCCC0000000000000000000000000000000000CC",
+					L2toL2CrossTradeProxy: "0xDDDD0000000000000000000000000000000000DD",
+				},
+				L1CrossTradeProxyAddr:  "0xf3473E20F1d9EB4468C72454a27aA1C65B67AB35",
+				L2toL2CrossTradeL1Addr: "0xDa2CbF69352cB46d9816dF934402b421d93b6BC2",
+			}
+
+			if err := integrations.BuildDAppEnvConfig(configPath, cfg); err != nil {
+				t.Fatalf("BuildDAppEnvConfig(%s): %v", tc.feeToken, err)
+			}
+
+			content, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatalf("env file not created: %v", err)
+			}
+			lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+
+			for _, prefix := range []string{"NEXT_PUBLIC_CHAIN_CONFIG_L2_L1=", "NEXT_PUBLIC_CHAIN_CONFIG_L2_L2="} {
+				for _, line := range lines {
+					if !strings.HasPrefix(line, prefix) {
+						continue
+					}
+					jsonStr := strings.TrimPrefix(line, prefix)
+					var parsed map[string]interface{}
+					if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+						t.Fatalf("%s(%s): invalid JSON: %v", prefix, tc.feeToken, err)
+					}
+					l2Entry, ok := parsed["17001"].(map[string]interface{})
+					if !ok {
+						t.Fatalf("%s(%s): missing L2 (17001) key", prefix, tc.feeToken)
+					}
+
+					// native token metadata
+					if sym, _ := l2Entry["native_token_symbol"].(string); sym != tc.wantSymbol {
+						t.Errorf("%s(%s): native_token_symbol: want %q, got %q", prefix, tc.feeToken, tc.wantSymbol, sym)
+					}
+					if name, _ := l2Entry["native_token_name"].(string); name != tc.wantName {
+						t.Errorf("%s(%s): native_token_name: want %q, got %q", prefix, tc.feeToken, tc.wantName, name)
+					}
+
+					isL2L1 := strings.Contains(prefix, "L2_L1")
+					if isL2L1 {
+						// L2L1 tokens is a map[string]string
+						tokens, ok := l2Entry["tokens"].(map[string]interface{})
+						if !ok {
+							t.Fatalf("%s(%s): tokens must be an object", prefix, tc.feeToken)
+						}
+						nativeAddr, _ := tokens[tc.wantSymbol].(string)
+						if nativeAddr != tc.wantNativeAddr {
+							t.Errorf("%s(%s): tokens[%s]: want %s, got %s", prefix, tc.feeToken, tc.wantSymbol, tc.wantNativeAddr, nativeAddr)
+						}
+						// USDC ERC20 check: look for USDC entry at the predeploy address specifically.
+						usdcERC20Addr, _ := tokens["USDC"].(string)
+						hasUSDCERC20 := usdcERC20Addr == usdcPredeploy
+						if hasUSDCERC20 && !tc.wantHasUSDCERC20 {
+							t.Errorf("%s(%s): tokens must NOT have USDC ERC20 predeploy entry when fee token is USDC", prefix, tc.feeToken)
+						}
+						if !hasUSDCERC20 && tc.wantHasUSDCERC20 {
+							t.Errorf("%s(%s): tokens must have USDC ERC20 entry at %s", prefix, tc.feeToken, usdcPredeploy)
+						}
+					} else {
+						// L2L2 tokens is []l2TokenEntry
+						tokenArr, ok := l2Entry["tokens"].([]interface{})
+						if !ok || len(tokenArr) == 0 {
+							t.Fatalf("%s(%s): tokens must be a non-empty array", prefix, tc.feeToken)
+						}
+						first, ok := tokenArr[0].(map[string]interface{})
+						if !ok {
+							t.Fatalf("%s(%s): tokens[0] must be an object", prefix, tc.feeToken)
+						}
+						if name, _ := first["name"].(string); name != tc.wantSymbol {
+							t.Errorf("%s(%s): tokens[0].name: want %q, got %q", prefix, tc.feeToken, tc.wantSymbol, name)
+						}
+						if addr, _ := first["address"].(string); addr != tc.wantNativeAddr {
+							t.Errorf("%s(%s): tokens[0].address: want %s, got %s", prefix, tc.feeToken, tc.wantNativeAddr, addr)
+						}
+						// USDC ERC20 entry: check for USDC name + predeploy address specifically.
+						hasUSDCERC20 := false
+						for _, raw := range tokenArr {
+							entry, ok := raw.(map[string]interface{})
+							if !ok {
+								continue
+							}
+							name, _ := entry["name"].(string)
+							addr, _ := entry["address"].(string)
+							if name == "USDC" && addr == usdcPredeploy {
+								hasUSDCERC20 = true
+							}
+						}
+						if hasUSDCERC20 && !tc.wantHasUSDCERC20 {
+							t.Errorf("%s(%s): tokens must NOT have USDC ERC20 predeploy entry when fee token is USDC", prefix, tc.feeToken)
+						}
+						if !hasUSDCERC20 && tc.wantHasUSDCERC20 {
+							t.Errorf("%s(%s): tokens must have USDC ERC20 entry at %s", prefix, tc.feeToken, usdcPredeploy)
+						}
+					}
+				}
+			}
+		})
 	}
 }
 

@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -382,10 +381,7 @@ func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.
 								DeployOutput:           crossTradeOutput,
 								L1CrossTradeProxyAddr:  crossTradeSepoliaL1CrossTradeProxy,
 								L2toL2CrossTradeL1Addr: crossTradeSepoliaL2toL2CrossTradeL1,
-							}
-							if strings.EqualFold(stackConfig.FeeToken, "ETH") {
-								envCfg.L2NativeTokenName = "Ethereum"
-								envCfg.L2NativeTokenSymbol = "ETH"
+								FeeTokenSymbol:         stackConfig.FeeToken,
 							}
 							envPath := filepath.Join(stack.DeploymentPath, "config", ".env.crosstrade")
 							if envErr := integrations.BuildDAppEnvConfig(envPath, envCfg); envErr != nil {
@@ -1159,10 +1155,7 @@ func (s *ThanosStackDeploymentService) RetriggerCrossTradeLocal(ctx context.Cont
 			DeployOutput:           ctOutput,
 			L1CrossTradeProxyAddr:  crossTradeSepoliaL1CrossTradeProxy,
 			L2toL2CrossTradeL1Addr: crossTradeSepoliaL2toL2CrossTradeL1,
-		}
-		if strings.EqualFold(stackConfig.FeeToken, "ETH") {
-			envCfg.L2NativeTokenName = "Ethereum"
-			envCfg.L2NativeTokenSymbol = "ETH"
+			FeeTokenSymbol:         stackConfig.FeeToken,
 		}
 		envPath := filepath.Join(stack.DeploymentPath, "config", ".env.crosstrade")
 		if envErr := integrations.BuildDAppEnvConfig(envPath, envCfg); envErr != nil {
