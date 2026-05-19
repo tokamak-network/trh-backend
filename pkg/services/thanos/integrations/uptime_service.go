@@ -372,12 +372,21 @@ func (u *UptimeServiceIntegration) installTask(ctx context.Context, newIntegrati
 		return
 	}
 
-	// Update stack metadata if needed (similar to bridge)
-	// Note: You may need to add UptimeServiceUrl field to StackMetadata if it doesn't exist
-	// For now, we'll skip this if the field doesn't exist
-	if stack.Metadata != nil {
-		stack.Metadata.UptimeServiceUrl = uptimeServiceUrl
-		if err = u.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); err != nil {
+	// Re-fetch fresh metadata to avoid overwriting concurrent writes (e.g., ExplorerUrl set by
+	// deployment.go markCompletedAndAutoInstall). The goroutine may run for up to 30 minutes,
+	// so the captured stack.Metadata snapshot is likely stale.
+	var meta *entities.StackMetadata
+	if freshStack, fetchErr := u.stackRepo.GetStackByID(stack.ID.String()); fetchErr == nil && freshStack != nil && freshStack.Metadata != nil {
+		meta = freshStack.Metadata
+	} else if stack.Metadata != nil {
+		meta = stack.Metadata
+	}
+	if meta == nil {
+		logger.Warn("no stack metadata available; skipping UptimeServiceUrl update",
+			zap.String("stackId", stack.ID.String()))
+	} else {
+		meta.UptimeServiceUrl = uptimeServiceUrl
+		if err = u.stackRepo.UpdateMetadata(stack.ID.String(), meta); err != nil {
 			logger.Error("failed to update stack metadata", zap.String("stackId", stack.ID.String()), zap.Error(err))
 			err = u.deploymentRepo.UpdateDeploymentStatus(deployment.ID.String(), entities.DeploymentRunStatusFailed)
 			if err != nil {

@@ -534,6 +534,12 @@ services:
 						} else if err := s.integrationRepo.UpdateMetadataAfterInstalled(blockExplorerIntegration.ID.String(), entities.IntegrationInfo(metaBytes)); err != nil {
 							logger.Error("failed to mark block-explorer as installed for AWS",
 								zap.String("stackId", stackId.String()), zap.Error(err))
+						} else {
+							stackMeta.ExplorerUrl = beUrl
+							if syncErr := s.stackRepo.UpdateMetadata(stackId.String(), stackMeta); syncErr != nil {
+								logger.Warn("failed to sync block-explorer URL to stack metadata",
+									zap.String("stackId", stackId.String()), zap.Error(syncErr))
+							}
 						}
 					}
 				}
