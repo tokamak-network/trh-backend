@@ -1,6 +1,7 @@
 package thanos
 
 import (
+	"errors"
 	"testing"
 
 	thanosSDKConstants "github.com/tokamak-network/trh-sdk/pkg/constants"
@@ -126,6 +127,54 @@ func TestRestoreAAOperators_SkipsNonAAStacks(t *testing.T) {
 			if wouldQueueTask != tc.shouldQueueTask {
 				t.Errorf("%s: preset=%q, feeToken=%q → NeedsAASetup=%v, want %v. %s",
 					tc.name, tc.presetID, tc.feeToken, wouldQueueTask, tc.shouldQueueTask, tc.description)
+			}
+		})
+	}
+}
+
+// TestResolveBlockExplorerURL verifies the fallback logic for the block-explorer auto-mark.
+// ShowInformation may return an empty block-explorer URL if the pod is not yet Running when
+// deployment.go calls ShowChainInformation. resolveBlockExplorerURL tries GetBlockExplorerURL
+// as a fallback so the integration can still be marked Completed.
+func TestResolveBlockExplorerURL(t *testing.T) {
+	errNotFound := errors.New("ingress not found")
+
+	tests := []struct {
+		name         string
+		chainInfoURL string
+		fallbackURL  string
+		fallbackErr  error
+		wantURL      string
+	}{
+		{
+			name:         "chainInfo has URL — no fallback needed",
+			chainInfoURL: "http://blockscout.example.com",
+			fallbackURL:  "http://other.example.com",
+			fallbackErr:  nil,
+			wantURL:      "http://blockscout.example.com",
+		},
+		{
+			name:         "chainInfo empty — fallback succeeds",
+			chainInfoURL: "",
+			fallbackURL:  "http://blockscout.example.com",
+			fallbackErr:  nil,
+			wantURL:      "http://blockscout.example.com",
+		},
+		{
+			name:         "chainInfo empty — fallback fails — empty result",
+			chainInfoURL: "",
+			fallbackURL:  "",
+			fallbackErr:  errNotFound,
+			wantURL:      "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fallback := func() (string, error) { return tc.fallbackURL, tc.fallbackErr }
+			got := resolveBlockExplorerURL(tc.chainInfoURL, fallback)
+			if got != tc.wantURL {
+				t.Errorf("resolveBlockExplorerURL(%q, ...) = %q, want %q", tc.chainInfoURL, got, tc.wantURL)
 			}
 		})
 	}

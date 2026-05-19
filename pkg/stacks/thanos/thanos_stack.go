@@ -278,6 +278,13 @@ func ShowChainInformation(
 	return sdkClient.ShowInformation(ctx)
 }
 
+// GetBlockExplorerURL returns the block-explorer URL from the K8s ingress without
+// requiring a Running pod. Used as a fallback when ShowChainInformation returns an
+// empty block-explorer URL due to pod-readiness timing.
+func GetBlockExplorerURL(ctx context.Context, sdkClient *thanosStack.ThanosStack) (string, error) {
+	return sdkClient.GetBlockExplorerURL(ctx)
+}
+
 // BuildLocalChainInformation constructs chain information for local infra deployments
 // where K8s is not available. URLs use localhost ports defined in the local compose template.
 func BuildLocalChainInformation(deploymentPath string) *thanosTypes.ChainInformation {

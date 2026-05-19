@@ -30,6 +30,21 @@ import (
 	"go.uber.org/zap"
 )
 
+// resolveBlockExplorerURL returns chainInfoURL if non-empty, otherwise calls fallback.
+// ShowChainInformation may return an empty block-explorer URL when the pod is not yet
+// Running at the time of the call (InstallBlockExplorer returns as soon as the K8s
+// ingress gets an ELB hostname, before pod readiness). The fallback calls
+// GetBlockExplorerURL which queries the ingress directly without a pod check.
+func resolveBlockExplorerURL(chainInfoURL string, fallback func() (string, error)) string {
+	if chainInfoURL != "" {
+		return chainInfoURL
+	}
+	if url, err := fallback(); err == nil {
+		return url
+	}
+	return ""
+}
+
 // New helper method to handle deployment logic
 func (s *ThanosStackDeploymentService) deploy(ctx context.Context, stackId uuid.UUID) {
 	defer func() {
@@ -500,7 +515,10 @@ services:
 			// Completed with the real ingress URL — otherwise the UI keeps showing
 			// block-explorer as not installed even though it is reachable.
 			if enabled, ok := def.Modules["blockExplorer"]; ok && enabled {
-				if chainInformation.BlockExplorer == "" {
+				beUrl := resolveBlockExplorerURL(chainInformation.BlockExplorer, func() (string, error) {
+					return thanos.GetBlockExplorerURL(ctx, sdkClient)
+				})
+				if beUrl == "" {
 					logger.Warn("block-explorer URL empty after AWS deployment; skipping installed mark",
 						zap.String("stackId", stackId.String()))
 				} else {
@@ -509,7 +527,7 @@ services:
 						logger.Error("failed to get block-explorer integration for AWS auto-mark",
 							zap.String("stackId", stackId.String()), zap.Error(getErr))
 					} else {
-						metaBytes, metaErr := json.Marshal(map[string]string{"url": chainInformation.BlockExplorer})
+						metaBytes, metaErr := json.Marshal(map[string]string{"url": beUrl})
 						if metaErr != nil {
 							logger.Error("failed to marshal block-explorer metadata for AWS",
 								zap.String("stackId", stackId.String()), zap.Error(metaErr))
