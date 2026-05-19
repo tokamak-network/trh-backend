@@ -123,6 +123,11 @@ func (im *IntegrationManager) UninstallBridge(ctx context.Context, stackId strin
 	return im.bridge.Uninstall(ctx, stackId)
 }
 
+// SyncBridgeBlockExplorer pushes the stored block explorer URL into the bridge pod
+func (im *IntegrationManager) SyncBridgeBlockExplorer(ctx context.Context, stackId string) (*entities.Response, error) {
+	return im.bridge.SyncBlockExplorerURL(ctx, stackId)
+}
+
 // InstallMonitoring installs monitoring for the given stack
 func (im *IntegrationManager) InstallMonitoring(ctx context.Context, stackId uuid.UUID, req dtos.InstallMonitoringRequest) (*entities.Response, error) {
 	return im.monitoring.Install(ctx, stackId, req)

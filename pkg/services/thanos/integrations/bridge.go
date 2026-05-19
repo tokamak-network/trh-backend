@@ -588,6 +588,76 @@ func (b *BridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integ
 	}, nil
 }
 
+// SyncBlockExplorerURL updates the bridge pod's L2 block explorer URL using the
+// URL already stored in stack metadata. Used for existing deployments where the
+// block-explorer came up after the bridge was installed.
+func (b *BridgeIntegration) SyncBlockExplorerURL(ctx context.Context, stackId string) (*entities.Response, error) {
+	stack, err := b.stackRepo.GetStackByID(stackId)
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+	if stack == nil {
+		return &entities.Response{
+			Status:  http.StatusNotFound,
+			Message: "Stack not found",
+			Data:    nil,
+		}, nil
+	}
+
+	if stack.Metadata == nil || stack.Metadata.ExplorerUrl == "" {
+		return &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "Block explorer URL is not available for this stack yet",
+			Data:    nil,
+		}, nil
+	}
+
+	stackConfig := dtos.DeployThanosRequest{}
+	if err := json.Unmarshal(stack.Config, &stackConfig); err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Internal server error",
+			Data:    nil,
+		}, err
+	}
+
+	sdkClient, err := thanos.NewThanosSDKClient(
+		ctx,
+		"",
+		string(stack.Network),
+		stack.DeploymentPath,
+		stackConfig.RegisterCandidate,
+		stackConfig.AwsAccessKey,
+		stackConfig.AwsSecretAccessKey,
+		stackConfig.AwsRegion,
+	)
+	if err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create SDK client",
+			Data:    nil,
+		}, err
+	}
+
+	if err := thanos.UpdateBridgeBlockExplorer(ctx, sdkClient, stack.Metadata.ExplorerUrl); err != nil {
+		return &entities.Response{
+			Status:  http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to update bridge block explorer URL: %s", err.Error()),
+			Data:    nil,
+		}, err
+	}
+
+	return &entities.Response{
+		Status:  http.StatusOK,
+		Message: "Bridge block explorer URL updated successfully",
+		Data:    map[string]string{"explorerUrl": stack.Metadata.ExplorerUrl},
+	}, nil
+}
+
 func (b *BridgeIntegration) Retry(ctx context.Context, stackId uuid.UUID, integrationId uuid.UUID) (*entities.Response, error) {
 	return retryIntegrationCommon(ctx, stackId, integrationId, b.integrationRepo, b.stackRepo,
 		func(stack *entities.StackEntity, integration *entities.IntegrationEntity) error {

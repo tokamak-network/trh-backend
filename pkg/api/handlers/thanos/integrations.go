@@ -158,6 +158,32 @@ func (h *ThanosDeploymentHandler) UninstallBridge(c *gin.Context) {
 	c.JSON(int(response.Status), response)
 }
 
+// @Summary		Sync Bridge Block Explorer URL
+// @Description	Pushes the stored block explorer URL from stack metadata into the bridge pod's environment
+// @Tags			Thanos Stack
+// @Accept			json
+// @Produce		json
+// @Param			id	path		string	true	"Thanos Stack ID"
+// @Success		200	{object}	entities.Response
+// @Router			/stacks/thanos/{id}/integrations/bridge/sync-block-explorer [post]
+func (h *ThanosDeploymentHandler) SyncBridgeBlockExplorer(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, &entities.Response{
+			Status:  http.StatusBadRequest,
+			Message: "id is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	response, err := h.ThanosDeploymentService.SyncBridgeBlockExplorer(c, id)
+	if err != nil {
+		logger.Error("failed to sync bridge block explorer URL", zap.Error(err), zap.String("id", id))
+	}
+	c.JSON(int(response.Status), response)
+}
+
 // @Summary		Install Block Explorer
 // @Description	Install Block Explorer
 // @Tags			Thanos Stack

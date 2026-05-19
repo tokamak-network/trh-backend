@@ -194,6 +194,7 @@ func setupThanosRoutes(router *gin.RouterGroup, server *servers.Server, jwtMiddl
 
 		// Integration management
 		adminRoutes.POST("/:id/integrations/bridge", handler.InstallBridge)
+		adminRoutes.POST("/:id/integrations/bridge/sync-block-explorer", handler.SyncBridgeBlockExplorer)
 		adminRoutes.POST("/:id/integrations/block-explorer", handler.InstallBlockExplorer)
 		adminRoutes.PUT("/:id/integrations/block-explorer", handler.UpdateBlockExplorer)
 		adminRoutes.GET("/:id/integrations/block-explorer/config", handler.GetBlockExplorerConfig)
