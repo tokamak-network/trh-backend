@@ -177,7 +177,13 @@ func (h *ThanosDeploymentHandler) SyncBridgeBlockExplorer(c *gin.Context) {
 		return
 	}
 
-	response, err := h.ThanosDeploymentService.SyncBridgeBlockExplorer(c, id)
+	var body struct {
+		ExplorerUrl string `json:"explorerUrl"`
+	}
+	// Ignore parse errors — body is optional
+	_ = c.ShouldBindJSON(&body)
+
+	response, err := h.ThanosDeploymentService.SyncBridgeBlockExplorer(c, id, body.ExplorerUrl)
 	if err != nil {
 		logger.Error("failed to sync bridge block explorer URL", zap.Error(err), zap.String("id", id))
 	}

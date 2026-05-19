@@ -171,9 +171,10 @@ func (s *ThanosStackDeploymentService) UninstallBridge(ctx context.Context, stac
 	return s.integrationMgr.UninstallBridge(ctx, stackId)
 }
 
-// SyncBridgeBlockExplorer pushes the stored block explorer URL into the bridge pod
-func (s *ThanosStackDeploymentService) SyncBridgeBlockExplorer(ctx context.Context, stackId string) (*entities.Response, error) {
-	return s.integrationMgr.SyncBridgeBlockExplorer(ctx, stackId)
+// SyncBridgeBlockExplorer pushes the block explorer URL into the bridge pod.
+// overrideUrl, if non-empty, takes precedence over the URL stored in DB.
+func (s *ThanosStackDeploymentService) SyncBridgeBlockExplorer(ctx context.Context, stackId string, overrideUrl string) (*entities.Response, error) {
+	return s.integrationMgr.SyncBridgeBlockExplorer(ctx, stackId, overrideUrl)
 }
 
 // InstallBlockExplorer installs a block explorer for the given stack

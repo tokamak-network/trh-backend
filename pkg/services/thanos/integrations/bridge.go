@@ -588,10 +588,10 @@ func (b *BridgeIntegration) Cancel(ctx context.Context, stackId uuid.UUID, integ
 	}, nil
 }
 
-// SyncBlockExplorerURL updates the bridge pod's L2 block explorer URL using the
-// URL already stored in stack metadata. Used for existing deployments where the
-// block-explorer came up after the bridge was installed.
-func (b *BridgeIntegration) SyncBlockExplorerURL(ctx context.Context, stackId string) (*entities.Response, error) {
+// SyncBlockExplorerURL updates the bridge pod's L2 block explorer URL. If
+// overrideUrl is non-empty it takes precedence over the DB value and is
+// persisted back to stack metadata on success.
+func (b *BridgeIntegration) SyncBlockExplorerURL(ctx context.Context, stackId string, overrideUrl string) (*entities.Response, error) {
 	stack, err := b.stackRepo.GetStackByID(stackId)
 	if err != nil {
 		return &entities.Response{
@@ -608,12 +608,16 @@ func (b *BridgeIntegration) SyncBlockExplorerURL(ctx context.Context, stackId st
 		}, nil
 	}
 
-	if stack.Metadata == nil || stack.Metadata.ExplorerUrl == "" {
-		return &entities.Response{
-			Status:  http.StatusBadRequest,
-			Message: "Block explorer URL is not available for this stack yet",
-			Data:    nil,
-		}, nil
+	explorerUrl := overrideUrl
+	if explorerUrl == "" {
+		if stack.Metadata == nil || stack.Metadata.ExplorerUrl == "" {
+			return &entities.Response{
+				Status:  http.StatusBadRequest,
+				Message: "Block explorer URL is not available for this stack yet. Provide it in the request body as {\"explorerUrl\": \"...\"}",
+				Data:    nil,
+			}, nil
+		}
+		explorerUrl = stack.Metadata.ExplorerUrl
 	}
 
 	stackConfig := dtos.DeployThanosRequest{}
@@ -643,7 +647,7 @@ func (b *BridgeIntegration) SyncBlockExplorerURL(ctx context.Context, stackId st
 		}, err
 	}
 
-	if err := thanos.UpdateBridgeBlockExplorer(ctx, sdkClient, stack.Metadata.ExplorerUrl); err != nil {
+	if err := thanos.UpdateBridgeBlockExplorer(ctx, sdkClient, explorerUrl); err != nil {
 		return &entities.Response{
 			Status:  http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to update bridge block explorer URL: %s", err.Error()),
@@ -651,10 +655,20 @@ func (b *BridgeIntegration) SyncBlockExplorerURL(ctx context.Context, stackId st
 		}, err
 	}
 
+	if overrideUrl != "" && (stack.Metadata == nil || stack.Metadata.ExplorerUrl != overrideUrl) {
+		if stack.Metadata == nil {
+			stack.Metadata = &entities.StackMetadata{}
+		}
+		stack.Metadata.ExplorerUrl = overrideUrl
+		if updateErr := b.stackRepo.UpdateMetadata(stack.ID.String(), stack.Metadata); updateErr != nil {
+			logger.Warn("failed to persist explorer URL to stack metadata", zap.Error(updateErr))
+		}
+	}
+
 	return &entities.Response{
 		Status:  http.StatusOK,
 		Message: "Bridge block explorer URL updated successfully",
-		Data:    map[string]string{"explorerUrl": stack.Metadata.ExplorerUrl},
+		Data:    map[string]string{"explorerUrl": explorerUrl},
 	}, nil
 }
 
