@@ -540,6 +540,10 @@ services:
 								logger.Warn("failed to sync block-explorer URL to stack metadata",
 									zap.String("stackId", stackId.String()), zap.Error(syncErr))
 							}
+							if bridgeErr := thanos.UpdateBridgeBlockExplorer(ctx, sdkClient, beUrl); bridgeErr != nil {
+								logger.Warn("failed to update bridge block explorer URL",
+									zap.String("stackId", stackId.String()), zap.Error(bridgeErr))
+							}
 						}
 					}
 				}

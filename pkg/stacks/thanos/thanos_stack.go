@@ -285,6 +285,12 @@ func GetBlockExplorerURL(ctx context.Context, sdkClient *thanosStack.ThanosStack
 	return sdkClient.GetBlockExplorerURL(ctx)
 }
 
+// UpdateBridgeBlockExplorer runs helm upgrade on the op-bridge release with the
+// resolved L2 block explorer URL so MetaMask can auto-add the chain.
+func UpdateBridgeBlockExplorer(ctx context.Context, sdkClient *thanosStack.ThanosStack, l2BlockExplorerURL string) error {
+	return sdkClient.UpdateBridgeBlockExplorer(ctx, l2BlockExplorerURL)
+}
+
 // BuildLocalChainInformation constructs chain information for local infra deployments
 // where K8s is not available. URLs use localhost ports defined in the local compose template.
 func BuildLocalChainInformation(deploymentPath string) *thanosTypes.ChainInformation {
