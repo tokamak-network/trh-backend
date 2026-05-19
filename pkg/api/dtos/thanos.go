@@ -214,9 +214,9 @@ type DeployThanosAWSInfraRequest struct {
 type InstallBlockExplorerRequest struct {
 	DatabaseUsername     string `json:"databaseUsername"     binding:"required"`
 	DatabasePassword     string `json:"databasePassword"     binding:"required"`
-	CoinmarketcapKey     string `json:"coinmarketcapKey"     binding:"required"`
+	CoinmarketcapKey     string `json:"coinmarketcapKey,omitempty"`
 	CoinmarketcapTokenID string `json:"coinmarketcapTokenId,omitempty"`
-	WalletConnectID      string `json:"walletConnectId"     binding:"required"`
+	WalletConnectID      string `json:"walletConnectId,omitempty"`
 }
 
 func (r *InstallBlockExplorerRequest) Validate() error {
@@ -233,15 +233,6 @@ func (r *InstallBlockExplorerRequest) Validate() error {
 	if !trhSdkUtils.IsValidRDSPassword(r.DatabasePassword) {
 		logger.Error("invalid database password", zap.String("databasePassword", r.DatabasePassword))
 		return errors.New("invalid database password")
-	}
-
-	if r.CoinmarketcapKey == "" {
-		logger.Error("coinmarketcapKey is required")
-		return errors.New("coinmarketcapKey is required")
-	}
-	if r.WalletConnectID == "" {
-		logger.Error("walletConnectId is required")
-		return errors.New("walletConnectId is required")
 	}
 
 	return nil
